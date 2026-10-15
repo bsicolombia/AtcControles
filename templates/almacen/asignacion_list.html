@@ -238,20 +238,24 @@
                             </td>
 
 
-                            {% for cantidad in tecnico_data.filas.ASIGNADOS %}
+                            {% for celda in tecnico_data.filas.ASIGNADOS %}
 
                                 <td class="valor asignado">
 
-                                    {% if cantidad > 0 %}
-
-                                        <strong>
-                                            {{ cantidad }}
-                                        </strong>
-
+                                    {% if celda.url %}
+                                        <a href="{{ celda.url }}" class="enlace-cantidad">
+                                            {% if celda.cantidad > 0 %}
+                                                <strong>{{ celda.cantidad }}</strong>
+                                            {% else %}
+                                                <span class="cero">0</span>
+                                            {% endif %}
+                                        </a>
                                     {% else %}
-
-                                        <span class="cero">0</span>
-
+                                        {% if celda.cantidad > 0 %}
+                                            <strong>{{ celda.cantidad }}</strong>
+                                        {% else %}
+                                            <span class="cero">0</span>
+                                        {% endif %}
                                     {% endif %}
 
                                 </td>
@@ -266,33 +270,31 @@
                         =================================================== -->
 
                         <tr class="fila-five">
-
                             <td class="concepto five">
                                 INSTALADO<br>
                                 SEGÚN FIVE
                             </td>
 
-
-                            {% for cantidad in tecnico_data.filas.FIVE %}
-
+                            {% for celda in tecnico_data.filas.FIVE %}
                                 <td class="valor">
-
-                                    {% if cantidad > 0 %}
-
-                                        <strong>
-                                            {{ cantidad }}
-                                        </strong>
-
+                                    {% if celda.url %}
+                                        <a href="{{ celda.url }}"
+                                        class="enlace-cantidad">
+                                            {% if celda.cantidad > 0 %}
+                                                <strong>{{ celda.cantidad }}</strong>
+                                            {% else %}
+                                                <span class="cero">0</span>
+                                            {% endif %}
+                                        </a>
                                     {% else %}
-
-                                        <span class="cero">0</span>
-
+                                        {% if celda.cantidad > 0 %}
+                                            <strong>{{ celda.cantidad }}</strong>
+                                        {% else %}
+                                            <span class="cero">0</span>
+                                        {% endif %}
                                     {% endif %}
-
                                 </td>
-
                             {% endfor %}
-
                         </tr>
 
 
@@ -336,34 +338,30 @@
                         =================================================== -->
 
                         <tr class="fila-debe">
-
                             <td class="concepto debe">
                                 DEBE TENER
                             </td>
 
-
-                            {% for cantidad in tecnico_data.filas.DEBE_TENER %}
-
+                            {% for celda in tecnico_data.filas.DEBE_TENER %}
                                 <td class="valor debe-valor">
-
-                                    {% if cantidad > 0 %}
-
-                                        <strong>
-                                            {{ cantidad }}
-                                        </strong>
-
+                                    {% if celda.url %}
+                                        <a href="{{ celda.url }}"
+                                        class="enlace-cantidad">
+                                            {% if celda.cantidad > 0 %}
+                                                <strong>{{ celda.cantidad }}</strong>
+                                            {% else %}
+                                                <span class="cero">0</span>
+                                            {% endif %}
+                                        </a>
                                     {% else %}
-
-                                        <span class="cero">
-                                            0
-                                        </span>
-
+                                        {% if celda.cantidad > 0 %}
+                                            <strong>{{ celda.cantidad }}</strong>
+                                        {% else %}
+                                            <span class="cero">0</span>
+                                        {% endif %}
                                     {% endif %}
-
                                 </td>
-
                             {% endfor %}
-
                         </tr>
 
 

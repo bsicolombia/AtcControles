@@ -1,0 +1,65 @@
+
+{% extends "base.html" %}
+
+{% block titulo %}Carga masiva SAP{% endblock %}
+
+{% block contenido %}
+<div class="container mt-4">
+    <h1>Carga masiva SAP</h1>
+
+    <p>
+        Cargue el Excel para comparar las órdenes, productos,
+        medidores serializados y cantidades con el sistema.
+    </p>
+
+    <div class="alert alert-info">
+        <strong>Columnas obligatorias:</strong>
+        <ul>
+            <li>numero_orden</li>
+            <li>codigo_producto</li>
+        </ul>
+        Para medidores serializados, agregue
+        <code>numero_serie</code>.
+        Para productos por cantidad, agregue <code>cantidad</code>.
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-success">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {{ form.non_field_errors }}
+
+        <div class="mb-3">
+            <label for="{{ form.archivo.id_for_label }}">
+                Archivo Excel
+            </label>
+
+            {{ form.archivo }}
+
+            {% for error in form.archivo.errors %}
+                <div class="text-danger">{{ error }}</div>
+            {% endfor %}
+
+            <small class="form-text text-muted">
+                Formato permitido: .xlsx
+            </small>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            Cargar y validar
+        </button>
+
+        <a href="{% url 'almacen:asignaciones' %}"
+           class="btn btn-secondary">
+            Cancelar
+        </a>
+    </form>
+</div>
+{% endblock %}

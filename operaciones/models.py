@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from almacen.models import UnidadSerializada, Producto
 
 class Operacion(models.Model):
     class Origen(models.TextChoices):
@@ -75,3 +76,47 @@ class Operacion(models.Model):
     fecha_modificacion = models.DateTimeField(
         auto_now=True
     )
+    
+class CargaSAP(models.Model):
+    archivo = models.FileField(upload_to="cargas_sap/")
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="cargas_sap"
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+    total_filas = models.PositiveIntegerField(default=0)
+    filas_ok = models.PositiveIntegerField(default=0)
+    filas_error = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-fecha"]
+
+
+class RegistroSAP(models.Model):
+    class Estado(models.TextChoices):
+        OK = "OK", "Conciliado"
+        ERROR = "ERROR", "Con error"
+
+    carga = models.ForeignKey(CargaSAP, on_delete=models.CASCADE, related_name="registros")
+    fila = models.PositiveIntegerField()
+
+    # Lo que vino en el Excel (se guarda tal cual, aunque sea inválido)
+    numero_orden = models.CharField(max_length=30, blank=True)
+    codigo_producto = models.CharField(max_length=30, blank=True)
+    numero_serie = models.CharField(max_length=100, blank=True)
+    cantidad = models.PositiveIntegerField(default=1)
+
+    estado = models.CharField(max_length=10, choices=Estado.choices)
+    error = models.TextField(blank=True)
+
+    # Referencias resueltas (solo si hubo coincidencia)
+    operacion = models.ForeignKey("operaciones.Operacion", null=True, blank=True,
+                                  on_delete=models.PROTECT, related_name="registros_sap")
+    tecnico = models.ForeignKey("usuarios.Tecnicos", null=True, blank=True,
+                                on_delete=models.PROTECT, related_name="registros_sap")
+    producto = models.ForeignKey(Producto, null=True, blank=True,
+                                 on_delete=models.PROTECT, related_name="registros_sap")
+    unidad_serializada = models.ForeignKey(UnidadSerializada, null=True, blank=True,
+                                           on_delete=models.PROTECT, related_name="registros_sap")
+
+    class Meta:
+        ordering = ["fila"]

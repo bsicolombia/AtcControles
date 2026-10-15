@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.http import HttpResponseRedirect
 from django.views import View
 from django.views.generic import (
     CreateView,
@@ -21,8 +22,9 @@ from django.db.models import Prefetch
 from usuarios.mixins import RolRequeridoMixin
 from usuarios.models import Tecnicos
 from usuarios.roles import ADMINISTRADOR
-
+from urllib.parse import urlencode
 from . import services
+from . import services_sap
 from .forms import (
     AsignacionForm,
     CambioEstadoForm,
@@ -43,7 +45,8 @@ from .models import (
     Producto,
     UnidadSerializada,
 )
-
+from operaciones.models import CargaSAP
+from .forms import CargaSAPForm
 
 # ============================================================
 # UTILIDADES
@@ -739,6 +742,9 @@ def _obtener_contexto_asignaciones(request):
     productos = list(productos_dict.values())
     tecnicos = []
 
+    base_unidades = reverse("almacen:unidades")
+    base_inventario = reverse("dashboard")
+
     for bloque in tecnicos_dict.values():
         filas = {
             "ASIGNADOS": [],
@@ -755,12 +761,53 @@ def _obtener_contexto_asignaciones(request):
             asignados = d["asignados"]
             five = d["five"]
             sap = d["sap"]
-            debe_tener = max(asignados - five, 0)
+            debe_tener = max(asignados - sap, 0)
 
-            filas["ASIGNADOS"].append(asignados)
-            filas["FIVE"].append(five)
-            filas["SAP"].append(sap)
-            filas["DEBE_TENER"].append(debe_tener)
+            # Datos para cada celda de la tabla.
+            # Las URL conservan el técnico y el producto.
+            def crear_celda(cantidad, tipo):
+                if p.es_serializado:
+                    estado = (
+                        UnidadSerializada.Estado.INSTALADO
+                        if tipo == "FIVE"
+                        else UnidadSerializada.Estado.ASIGNADO
+                    )
+
+                    parametros = urlencode({
+                        "tecnico": bloque["tecnico"].pk,
+                        "producto": p.pk,
+                        "estado": estado,
+                    })
+
+                    url = f"{base_unidades}?{parametros}"
+
+                else:
+                    # Para materiales por cantidad, mostrar
+                    # el resumen filtrado por técnico y producto.
+                    parametros = urlencode({
+                        "tecnico": bloque["tecnico"].pk,
+                        "q": p.codigo_producto or p.nombre,
+                    })
+
+                    url = f"{base_inventario}?{parametros}"
+
+                return {
+                    "cantidad": cantidad,
+                    "url": url,
+                }
+
+            filas["ASIGNADOS"].append(
+                crear_celda(asignados, "ASIGNADOS")
+            )
+            filas["FIVE"].append(
+                crear_celda(five, "FIVE")
+            )
+            filas["SAP"].append(
+                crear_celda(sap, "SAP")
+            )
+            filas["DEBE_TENER"].append(
+                crear_celda(debe_tener, "DEBE_TENER")
+            )
 
             productos_detalle.append({
                 "producto": p,
@@ -1139,3 +1186,67 @@ class MovimientoListView(RolRequeridoMixin, BuscarMixin, ListView):
         ctx["tipos"] = MovimientoInventario.TipoMovimiento.choices
         ctx["tipo_sel"] = self.request.GET.get("tipo", "")
         return ctx
+
+class CargaSAPView(FormPageMixin, RolRequeridoMixin, FormView):
+    form_class = CargaSAPForm
+    template_name = "almacen/carga_sap_form.html"
+    titulo = "Carga masiva SAP"
+    boton = "Cargar y validar"
+    cancel_url = reverse_lazy("almacen:asignaciones")
+
+    def form_valid(self, form):
+        try:
+            carga = services_sap.procesar_carga(
+                form.cleaned_data["archivo"],
+                self.request.user,
+            )
+
+        except services_sap.ErrorArchivo as exc:
+            form.add_error("archivo", str(exc))
+            return self.form_invalid(form)
+
+        except Exception:
+            # Registra el detalle técnico en los logs del servidor.
+            import logging
+            logging.getLogger(__name__).exception(
+                "Error procesando archivo de SAP"
+            )
+            form.add_error(
+                "archivo",
+                "No fue posible procesar el archivo. "
+                "Verifique su contenido e inténtelo nuevamente.",
+            )
+            return self.form_invalid(form)
+
+        messages.success(
+            self.request,
+            f"Carga procesada: {carga.filas_ok} conciliados y "
+            f"{carga.filas_error} con errores.",
+        )
+
+        return HttpResponseRedirect(
+            reverse(
+                "almacen:carga_sap_detalle",
+                kwargs={"pk": carga.pk},
+            )
+        )
+
+
+class CargaSAPDetalleView(
+    RolRequeridoMixin,
+    DetailView,
+):
+    model = CargaSAP
+    template_name = "almacen/carga_sap_detalle.html"
+    context_object_name = "carga"
+
+    def get_queryset(self):
+        return (
+            CargaSAP.objects
+            .prefetch_related(
+                "registros__operacion",
+                "registros__tecnico",
+                "registros__producto",
+                "registros__unidad_serializada",
+            )
+        )

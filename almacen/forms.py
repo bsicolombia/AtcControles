@@ -3,7 +3,6 @@ from django.utils import timezone
 
 from operaciones.models import Operacion
 from usuarios.models import Tecnicos
-
 from . import services
 from .models import Categoria, Inventario, Producto, UnidadSerializada
 
@@ -627,3 +626,18 @@ class MinimoForm(EstiloMixin, forms.ModelForm):
                 attrs={"min": "0", "placeholder": "Cantidad mínima"}
             )
         }
+class CargaSAPForm(forms.Form):
+    archivo = forms.FileField(
+        label="Archivo Excel de SAP (.xlsx)",
+        help_text="Seleccione un archivo Excel con las columnas requeridas.",
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data["archivo"]
+
+        if not archivo.name.lower().endswith(".xlsx"):
+            raise forms.ValidationError(
+                "El archivo debe tener formato .xlsx."
+            )
+
+        return archivo
