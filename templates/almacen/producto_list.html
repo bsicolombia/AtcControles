@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block titulo %}Materiales{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/categorias.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div><h1>Materiales</h1><p>Catálogo de lo que maneja el almacén. Un material por cada tipo y medida.</p></div>
+  <div class="acciones"><a class="btn btn-primario" href="{% url 'almacen:producto_crear' %}">Nuevo Material</a></div>
+</div>
+<form class="filtros" method="get">
+  <input class="input buscar" type="search" name="q" value="{{ request.GET.q }}" placeholder="Buscar por nombre, código, marca o medida">
+  <select class="input" name="categoria" onchange="this.form.submit()"><option value="">Todas los Materiales</option>{% for c in categorias %}<option value="{{ c.pk }}" {% if c.pk|stringformat:"s" == categoria_sel %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}</select>
+  <button class="btn" type="submit">Buscar</button>
+</form>
+<div class="tarjeta">
+{% if object_list %}
+<div class="tabla-wrap"><table>
+  <thead><tr><th>Código</th><th>Tipo Material</th><th>Material</th><th>Manejo</th><th class="num">Disponible</th><th>Estado</th><th></th></tr></thead>
+  <tbody>{% for p in object_list %}
+    <tr>
+      <td class="codigo">{{ p.codigo_producto }}</td>
+      <td><strong>{{ p.nombre_completo }}</strong>{% if p.marca %}<div class="suave">{{ p.marca }}{% if p.referencia %} · {{ p.referencia }}{% endif %}</div>{% endif %}</td>
+      <td>{{ p.categoria.nombre }}</td>
+      <td><span class="chip chip-tipo">{% if p.es_serializado %}Con código{% else %}Por cantidad{% endif %}</span></td>
+      <td class="num">{{ p.inventario.cantidad_actual|default:0 }}</td>
+      <td><span class="chip chip-{% if p.estado %}activo{% else %}inactivo{% endif %}">{% if p.estado %}Activo{% else %}Inactivo{% endif %}</span></td>
+      <td><div class="fila-acciones"><a class="btn btn-chico" href="{% url 'almacen:producto_editar' p.pk %}">Editar</a></div></td>
+    </tr>{% endfor %}
+  </tbody>
+</table></div>
+{% else %}<div class="vacio"><strong>No hay productos</strong>Cree un producto para poder registrar ingresos.</div>{% endif %}
+{% include "_paginacion.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,318 @@
+/* =========================================================
+   inventario.css  ·  ATC CONTROLES
+   Usa las variables de base.css (azul marino + turquesa)
+   ========================================================= */
+
+/* ---------- Cabecera ---------- */
+
+.cabecera {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 22px;
+}
+
+.cabecera h1 {
+    color: var(--azul-950);
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.4px;
+}
+
+.cabecera p {
+    max-width: 640px;
+    margin-top: 6px;
+    color: var(--texto-suave);
+    font-size: 14px;
+}
+
+
+/* ---------- Filtros ---------- */
+
+.filtros {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    background: var(--blanco);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    box-shadow: var(--sombra);
+}
+
+.buscar-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 420px;
+}
+
+.buscar-wrap svg {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 17px;
+    height: 17px;
+    color: #94a3b5;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.input {
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-pequeno);
+    outline: none;
+    background: #fff;
+    color: var(--texto);
+    font-size: 14px;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.input::placeholder { color: #a3b2c2; }
+.input:hover { border-color: #c3d0de; }
+
+.input:focus {
+    border-color: var(--azul-600);
+    box-shadow: 0 0 0 3px rgba(27, 94, 155, 0.14);
+}
+
+.buscar {
+    width: 100%;
+    padding-left: 38px;
+}
+
+.filtro-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-pequeno);
+    background: #fff;
+    color: var(--texto);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s ease, border-color .15s ease;
+}
+
+.filtro-check:hover {
+    background: var(--azul-50);
+    border-color: #c3d0de;
+}
+
+.check {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--azul-800);
+}
+
+
+/* ---------- Tarjeta y tabla ---------- */
+
+.tarjeta {
+    overflow: hidden;
+}
+
+.tabla-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.tabla-wrap table {
+    min-width: 1080px;
+    font-size: 13px;
+}
+
+.tabla-wrap thead th {
+    padding: 12px 12px;
+    background: #eef3f8;
+    color: #3f5368;
+    font-size: 12px;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.tabla-wrap tbody td {
+    padding: 13px 12px;
+    line-height: 1.3;
+}
+
+.num {
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Fila con stock bajo: marca lateral roja suave */
+.tabla-wrap tbody tr.fila-bajo {
+    background: #fffafa;
+}
+
+.tabla-wrap tbody tr.fila-bajo td:first-child {
+    box-shadow: inset 3px 0 0 var(--rojo);
+}
+
+.tabla-wrap tbody tr.fila-bajo:hover {
+    background: var(--rojo-suave);
+}
+
+
+/* ---------- Celdas ---------- */
+
+.material {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--azul-100);
+    color: var(--azul-700);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.col-producto {
+    min-width: 220px;
+}
+
+.col-producto strong {
+    display: block;
+    color: var(--azul-950);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.codigo {
+    margin-top: 2px;
+    color: var(--texto-suave);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+}
+
+.dato-principal {
+    color: var(--azul-950);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.dato-inventario {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--azul-600);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.col-acciones {
+    text-align: right;
+    white-space: nowrap;
+}
+
+
+/* ---------- Botones chicos y chips ---------- */
+
+.btn-chico {
+    min-height: 28px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.chip-bajo {
+    background: var(--rojo-suave);
+    color: #9c2230;
+}
+
+
+/* ---------- Vacío ---------- */
+
+.vacio {
+    padding: 44px 20px;
+    color: var(--texto-suave);
+    font-size: 14px;
+    text-align: center;
+}
+
+.vacio strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--texto);
+    font-size: 16px;
+}
+
+
+/* ---------- Paginación dentro de la tarjeta ---------- */
+
+.tarjeta .paginacion {
+    margin-top: 0;
+    padding: 14px;
+    border-top: 1px solid var(--borde-suave);
+}
+
+
+/* ---------- Accesibilidad ---------- */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 850px) {
+    .cabecera { flex-direction: column; }
+    .cabecera .acciones { width: 100%; }
+
+    .filtros { flex-wrap: wrap; }
+    .buscar-wrap { flex: 1 1 100%; max-width: none; }
+}
+
+@media (max-width: 480px) {
+    .cabecera h1 { font-size: 22px; }
+    .filtro-check,
+    .filtros .btn { flex: 1; justify-content: center; }
+}
+.inventario-ok {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+.inventario-error {
+    background-color: #f8d7da;
+    color: #842029;
+}
+
+.tabla-wrap {
+    max-height: 600px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.tabla-wrap thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.tabla-wrap thead th {
+    background-color: #ffffff;
+}

@@ -1,0 +1,101 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>
+        {% block titulo %}Inicio{% endblock %} · ATC CONTROLES
+    </title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+{% block body %}
+{% with u=request.resolver_match.url_name %}
+<div class="app">
+  <aside class="lateral" aria-label="Navegación principal">
+    <a href="{% url 'dashboard' %}" class="marca">
+      <span class="marca-logo">
+        <img src="{% static 'img/LOGOBSI.png' %}" alt="BSI">
+      </span>
+      <span class="marca-texto">
+        <span class="marca-nombre">ATC CONTROLES</span>
+        <span class="marca-sub">Control de almacén</span>
+      </span>
+    </a>
+    <nav class="nav">
+      <a href="{% url 'almacen:inicio' %}" class="{% if u == 'inicio' %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Inicio</a>
+
+      <div class="nav-grupo">Resumen General</div>
+      <a href="{% url 'dashboard' %}" class="{% if 'dashboard' in u or 'minimo' in u %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Resumen Material</a>
+      <a href="{% url 'almacen:unidades' %}" class="{% if 'unidad' in u %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Material Con Serial</a>
+      <div class="nav-grupo">Asignacion</div>      
+      <a href="{% url 'almacen:asignaciones' %}" class="{% if 'asignacion' in u %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Asignaciones</a>
+      <div class="nav-grupo">Registro Materiales</div>
+      <a href="{% url 'almacen:ingreso_crear' %}" class="{% if 'ingreso' in u %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>Ingresar Material Registrado</a>
+      <a href="{% url 'almacen:productos' %}" class="{% if 'producto' in u %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>Registrar Material Nuevo</a>
+      <div class="nav-grupo">Movimientos</div>
+      <a href="{% url 'almacen:movimientos' %}" class="{% if 'movimiento' in u %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>Movimientos</a>
+      <div class="nav-grupo">Grupos por Material</div>
+      <a href="{% url 'almacen:categorias' %}" class="{% if 'categoria' in u %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Materiales</a>
+      <div class="nav-grupo">Tecnicos</div>
+      <a href="{% url 'tecnicos:lista' %}" class="{% if request.resolver_match.app_name == 'tecnicos' %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/></svg>Técnicos</a>
+
+      {% if es_admin %}
+      <div class="nav-grupo">Administración</div>
+      <a href="{% url 'admin:index' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Panel de Django</a>
+      {% endif %}
+    </nav>
+    <div class="usuario">
+      <div class="avatar" aria-hidden="true">{{ request.user.username|slice:":1"|upper }}</div>
+      <div class="usuario-datos">
+        <div class="usuario-nombre">{{ request.user.get_full_name|default:request.user.username }}</div>
+        <div class="usuario-rol">{{ rol_actual }}</div>
+      </div>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn-salir" type="submit">Salir</button></form>
+    </div>
+  </aside>
+  <div class="velo" id="velo"></div>
+
+  <div class="principal">
+    <div class="topbar-movil">
+      <button id="abrir-menu" type="button" aria-label="Abrir menú">☰</button> ATC CONTROLES
+    </div>
+    <main class="contenido">
+      {% if messages %}
+      <div class="mensajes" role="status">
+        {% for m in messages %}<div class="mensaje {{ m.tags }}"><span>{{ m }}</span><button type="button" data-cerrar aria-label="Cerrar">×</button></div>{% endfor %}
+      </div>
+      {% endif %}
+      {% block contenido %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endwith %}
+{% endblock %}
+<script src="{% static 'js/act.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

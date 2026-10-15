@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block titulo %}Registrar operación · {{ tecnico.tecnico_apellido_nombres }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/formulario.css' %}">
+<link rel="stylesheet" href="{% static 'css/tecnico_asignaciones.css' %}">
+{% endblock %}
+
+{% block contenido %}
+
+<header class="cabecera">
+    <div>
+        <h1>{{ tecnico.tecnico_apellido_nombres }}</h1>
+
+        <div class="tecnico-datos">
+            <span>CC {{ tecnico.tecnico_cedula }}</span>
+
+            {% if tecnico.supervisor %}
+                <span>Supervisor: {{ tecnico.supervisor }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="acciones">
+        <a class="btn btn-secundario" href="{% url 'almacen:asignaciones' %}">
+            Volver
+        </a>
+    </div>
+</header>
+
+{% if pendientes %}
+
+<form method="post" id="form-instalar" novalidate>
+    {% csrf_token %}
+
+    <section class="tarjeta">
+        <div class="tarjeta-cab">
+            <h2>Datos de la operación</h2>
+        </div>
+
+        <div class="tarjeta-cuerpo">
+
+            <div class="rejilla-3">
+
+                <div class="campo {% if form.fecha_instalacion.errors %}campo-error{% endif %}">
+                    {{ form.fecha_instalacion.label_tag }}
+                    {{ form.fecha_instalacion }}
+
+                    {% if form.fecha_instalacion.errors %}
+                        <div class="error">
+                            {{ form.fecha_instalacion.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="campo {% if form.tipo_operacion.errors %}campo-error{% endif %}">
+                    {{ form.tipo_operacion.label_tag }}
+                    {{ form.tipo_operacion }}
+
+                    {% if form.tipo_operacion.errors %}
+                        <div class="error">
+                            {{ form.tipo_operacion.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="campo {% if form.numero_cuenta_contrato.errors %}campo-error{% endif %}">
+                    {{ form.numero_cuenta_contrato.label_tag }}
+                    {{ form.numero_cuenta_contrato }}
+
+                    {% if form.numero_cuenta_contrato.errors %}
+                        <div class="error">
+                            {{ form.numero_cuenta_contrato.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="campo {% if form.numero_orden.errors %}campo-error{% endif %}">
+                    {{ form.numero_orden.label_tag }}
+                    {{ form.numero_orden }}
+
+                    {% if form.numero_orden.errors %}
+                        <div class="error">
+                            {{ form.numero_orden.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="campo {% if form.ubicacion.errors %}campo-error{% endif %}">
+                    {{ form.ubicacion.label_tag }}
+                    {{ form.ubicacion }}
+
+                    {% if form.ubicacion.errors %}
+                        <div class="error">
+                            {{ form.ubicacion.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+            </div>
+
+            <div class="campo" style="margin-bottom: 0;">
+                {{ form.observaciones.label_tag }}
+                {{ form.observaciones }}
+
+                {% if form.observaciones.errors %}
+                    <div class="error">
+                        {{ form.observaciones.errors }}
+                    </div>
+                {% endif %}
+            </div>
+
+        </div>
+    </section>
+
+    <section class="tarjeta">
+
+        <div class="tarjeta-cab">
+            <h2>Material en poder del técnico</h2>
+
+            <button
+                type="button"
+                class="btn btn-secundario btn-chico"
+                id="llenar-todo"
+            >
+                Marcar todo como instalado
+            </button>
+        </div>
+
+        <div class="tabla-instalar">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Entregado</th>
+                        <th class="num">Pendiente</th>
+                        <th class="num">Instalar</th>
+                        <th>
+                            <span class="sr-only">Devolver</span>
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for a in pendientes %}
+                    <tr>
+                        <td>
+                            <strong>{{ a.producto.nombre_completo }}</strong>
+
+                            {% if a.unidad_serializada %}
+                                <div class="codigo">
+                                    {{ a.unidad_serializada.codigo }}
+                                </div>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {{ a.fecha_asignacion|date:"d/m/Y" }}
+                        </td>
+
+                        <td class="num">
+                            {{ a.cantidad_pendiente }}
+                        </td>
+
+                        <td class="num">
+                            {% if a.unidad_serializada_id %}
+
+                                <label class="marca-inst">
+                                    <input
+                                        class="check"
+                                        type="checkbox"
+                                        name="inst_{{ a.pk }}"
+                                        {% if a.marcado %}checked{% endif %}
+                                    >
+                                    Instalada
+                                </label>
+
+                            {% else %}
+
+                                <input
+                                    class="input input-cant"
+                                    type="number"
+                                    name="cant_{{ a.pk }}"
+                                    min="0"
+                                    max="{{ a.cantidad_pendiente }}"
+                                    data-max="{{ a.cantidad_pendiente }}"
+                                    value="{{ a.valor }}"
+                                    placeholder="0"
+                                >
+
+                            {% endif %}
+                        </td>
+
+                        <td class="col-acciones">
+                            <button
+                                type="submit"
+                                form="devolver-{{ a.pk }}"
+                                class="btn btn-secundario btn-chico"
+                                onclick="return confirm('¿Devolver {{ a.producto.nombre_completo|escapejs }} al almacén?')"
+                            >
+                                Devolver
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="form-acciones tarjeta-pie">
+            <a
+                class="btn btn-secundario"
+                href="{% url 'almacen:asignaciones' %}"
+            >
+                Cancelar
+            </a>
+
+            <button type="submit" class="btn btn-primario">
+                Registrar operación
+            </button>
+        </div>
+
+    </section>
+</form>
+
+{% for a in pendientes %}
+<form
+    id="devolver-{{ a.pk }}"
+    method="post"
+    action="{% url 'almacen:asignacion_devolver' a.pk %}"
+>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.path }}">
+</form>
+{% endfor %}
+
+{% else %}
+
+<div class="tarjeta">
+    <div class="vacio">
+        <strong>Este técnico no tiene material pendiente</strong>
+        Todo lo asignado ya fue instalado o devuelto.
+    </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('llenar-todo')?.addEventListener('click', function () {
+    document.querySelectorAll('input[data-max]').forEach(function (input) {
+        input.value = input.dataset.max;
+    });
+
+    document.querySelectorAll('input[type="checkbox"][name^="inst_"]').forEach(function (checkbox) {
+        checkbox.checked = true;
+    });
+});
+</script>
+{% endblock %}
+

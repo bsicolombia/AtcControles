@@ -1,0 +1,1141 @@
+from collections import OrderedDict
+from .models import RemisionIngreso
+from django.contrib import messages
+from django.db import transaction
+from django.db.models import F, Q
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views import View
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
+from django.db.models import Prefetch
+from usuarios.mixins import RolRequeridoMixin
+from usuarios.models import Tecnicos
+from usuarios.roles import ADMINISTRADOR
+
+from . import services
+from .forms import (
+    AsignacionForm,
+    CambioEstadoForm,
+    CategoriaForm,
+    IngresoForm,
+    InstalacionForm,
+    InstalacionMasivaForm,
+    InventarioAlmacenForm,
+    MinimoForm,
+    ProductoForm,
+    UnidadForm,
+)
+from .models import (
+    Asignacion,
+    Categoria,
+    Inventario,
+    MovimientoInventario,
+    Producto,
+    UnidadSerializada,
+)
+
+
+# ============================================================
+# UTILIDADES
+# ============================================================
+class BuscarMixin:
+    """Búsqueda ?q=; código exacto y otros campos parciales."""
+
+    paginate_by = 20
+    campos_busqueda = ()
+
+    def filtrar(self, qs):
+        q = self.request.GET.get("q", "").strip()
+
+        if q and self.campos_busqueda:
+            cond = Q()
+
+            for campo in self.campos_busqueda:
+                if campo == "codigo":
+                    # Coincidencia exacta para el código
+                    cond |= Q(codigo__iexact=q)
+                else:
+                    # Búsqueda parcial para los demás campos
+                    cond |= Q(**{f"{campo}__icontains": q})
+
+            qs = qs.filter(cond)
+
+        return qs
+
+    def get_queryset(self):
+        return self.filtrar(super().get_queryset())
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        params = self.request.GET.copy()
+        params.pop("page", None)
+        ctx["qs"] = params.urlencode()
+        return ctx
+class FormPageMixin:
+    """Usa el template genérico form.html (salvo que la vista defina otro)."""
+
+    template_name = "form.html"
+    cancel_url = None
+    titulo = ""
+    boton = "Guardar"
+    subtitulo = ""
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx.update(
+            titulo=self.titulo,
+            boton=self.boton,
+            subtitulo=self.subtitulo,
+            cancel_url=self.cancel_url or reverse("dashboard"),
+        )
+        return ctx
+
+
+# ============================================================
+# DASHBOARD
+# ============================================================
+
+class DashboardView(RolRequeridoMixin, TemplateView):
+    template_name = "dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        E = UnidadSerializada.Estado
+
+        conteo = {
+            estado: UnidadSerializada.objects.filter(estado=estado).count()
+            for estado in E.values
+        }
+        total = sum(conteo.values())
+
+        ctx["unidades"] = [
+            {
+                "estado": estado,
+                "nombre": E(estado).label,
+                "n": conteo[estado],
+                "pct": round(conteo[estado] * 100 / total, 1) if total else 0,
+            }
+            for estado in (E.DISPONIBLE, E.ASIGNADO, E.INSTALADO, E.DAÑADO, E.BAJA)
+        ]
+        ctx["total_unidades"] = total
+
+        ctx["bajo_stock"] = (
+            Inventario.objects
+            .filter(
+                cantidad_minima__gt=0,
+                cantidad_actual__lte=F("cantidad_minima"),
+                producto__estado=True,
+            )
+            .select_related("producto")[:8]
+        )
+
+        productos = (
+            Producto.objects
+            .filter(estado=True)
+            .select_related("inventario")
+            .prefetch_related("unidades_serializadas")
+            .order_by("nombre")
+        )
+
+        productos_stock = []
+        for producto in productos:
+            if producto.es_serializado:
+                cantidad_disponible = (
+                    producto.unidades_serializadas
+                    .filter(estado=E.DISPONIBLE)
+                    .count()
+                )
+            else:
+                cantidad_disponible = (
+                    producto.inventario.cantidad_actual
+                    if hasattr(producto, "inventario")
+                    else 0
+                )
+            productos_stock.append(
+                {"producto": producto, "cantidad_disponible": cantidad_disponible}
+            )
+        ctx["productos_stock"] = productos_stock
+
+        ctx["materiales"] = (
+            Inventario.objects
+            .filter(
+                producto__tipo_inventario=Producto.TipoInventario.CANTIDAD,
+                producto__estado=True,
+            )
+            .select_related("producto")[:8]
+        )
+
+        ctx["pendientes"] = (
+            Asignacion.objects.filter(estado=Asignacion.Estado.ASIGNADA).count()
+        )
+        ctx["productos_activos"] = Producto.objects.filter(estado=True).count()
+
+        ctx["ultimos"] = (
+            MovimientoInventario.objects
+            .select_related("producto", "unidad_serializada", "usuario")[:8]
+        )
+
+        return ctx
+
+
+# ============================================================
+# CATEGORÍAS
+# ============================================================
+
+class CategoriaListView(RolRequeridoMixin, BuscarMixin, ListView):
+    model = Categoria
+    template_name = "almacen/categoria_list.html"
+    campos_busqueda = ("nombre", "prefijo")
+
+
+class CategoriaFormMixin(FormPageMixin, RolRequeridoMixin):
+    roles_permitidos = (ADMINISTRADOR,)
+
+    model = Categoria
+    form_class = CategoriaForm
+    success_url = reverse_lazy("almacen:categorias")
+    cancel_url = reverse_lazy("almacen:categorias")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Categoría guardada.")
+        return super().form_valid(form)
+
+
+class CategoriaCreateView(CategoriaFormMixin, CreateView):
+    titulo = "Nuevo material"
+    boton = "Guardar material"
+
+
+class CategoriaUpdateView(CategoriaFormMixin, UpdateView):
+    titulo = "Editar categoría"
+    boton = "Guardar cambios"
+
+
+# ============================================================
+# PRODUCTOS
+# ============================================================
+
+class ProductoListView(RolRequeridoMixin, BuscarMixin, ListView):
+    model = Producto
+    template_name = "almacen/producto_list.html"
+    campos_busqueda = (
+        "nombre",
+        "codigo_producto",
+        "marca",
+        "referencia",
+        "medida",
+        "categoria__nombre",
+    )
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related("categoria", "inventario")
+
+        cat = self.request.GET.get("categoria")
+        if cat:
+            qs = qs.filter(categoria_id=cat)
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["categorias"] = Categoria.objects.filter(estado=True)
+        ctx["categoria_sel"] = self.request.GET.get("categoria", "")
+        return ctx
+
+
+class ProductoFormMixin(FormPageMixin, RolRequeridoMixin):
+    model = Producto
+    form_class = ProductoForm
+    success_url = reverse_lazy("almacen:productos")
+    cancel_url = reverse_lazy("almacen:productos")
+
+    def form_valid(self, form):
+        resp = super().form_valid(form)
+        Inventario.objects.get_or_create(producto=self.object)
+        messages.success(self.request, "Producto guardado.")
+        return resp
+
+
+class ProductoCreateView(ProductoFormMixin, CreateView):
+    titulo = "Nuevo material"
+    boton = "Guardar material"
+    subtitulo = (
+        "Un material por cada tipo y medida: "
+        "«Codo 1/2» y «Codo 1/4» son material distintos."
+    )
+
+
+class ProductoUpdateView(ProductoFormMixin, UpdateView):
+    titulo = "Editar material"
+    boton = "Guardar cambios"
+
+
+# ============================================================
+# INVENTARIO
+# ============================================================
+
+class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
+    model = Inventario
+    template_name = "almacen/inventario_list.html"
+    campos_busqueda = (
+        "producto__nombre",
+        "producto__codigo_producto",
+        "producto__medida",
+        "producto__categoria__nombre",
+    )
+
+    def get_queryset(self):
+        qs = (
+            super().get_queryset()
+            .select_related("producto", "producto__categoria")
+        )
+
+        if self.request.GET.get("bajo"):
+            qs = qs.filter(
+                cantidad_minima__gt=0,
+                cantidad_actual__lte=F("cantidad_minima"),
+            )
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        tecnico_sel = self.request.GET.get("tecnico", "").strip()
+
+        ctx["tecnicos_lista"] = Tecnicos.objects.all().order_by(
+            "tecnico_apellido_nombres"
+        )
+        ctx["tecnico_sel"] = tecnico_sel
+
+        # Solo construye el consolidado cuando se elige un técnico.
+        if tecnico_sel and tecnico_sel.isdigit():
+            ctx.update(_obtener_contexto_asignaciones(self.request))
+
+        return ctx
+
+
+class InventarioAlmacenUpdateView(RolRequeridoMixin, UpdateView):
+    """Edición manual del inventario de almacén (antes era una función sin rol)."""
+
+    model = Inventario
+    form_class = InventarioAlmacenForm
+    template_name = "almacen/inventario_almacen_editar.html"
+    context_object_name = "inventario"
+    success_url = reverse_lazy("almacen:inventario")
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("producto")
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            f"Inventario de almacén de {form.instance.producto.nombre_completo} "
+            "actualizado correctamente.",
+        )
+        return super().form_valid(form)
+
+
+class MinimoUpdateView(FormPageMixin, RolRequeridoMixin, UpdateView):
+    model = Inventario
+    form_class = MinimoForm
+    success_url = reverse_lazy("almacen:inventario")
+    cancel_url = reverse_lazy("almacen:inventario")
+
+    titulo = "Stock mínimo"
+    boton = "Guardar mínimo"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["subtitulo"] = self.object.producto.nombre_completo
+        return ctx
+
+
+# ============================================================
+# INGRESOS
+# ============================================================
+
+# ============================================================
+# INGRESOS
+# ============================================================
+
+class IngresoView(FormPageMixin, RolRequeridoMixin, FormView):
+    form_class = IngresoForm
+    template_name = "almacen/ingreso_form.html"
+    success_url = reverse_lazy("almacen:unidades")
+    cancel_url = reverse_lazy("almacen:inventario")
+
+    titulo = "Registrar ingreso"
+    boton = "Registrar ingreso"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Pasamos todas las remisiones existentes para alimentar el buscador/select
+        ctx["remisiones_existentes"] = RemisionIngreso.objects.all().order_by("-fecha_registro")[:50]
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request.POST, request.FILES)
+        if form.is_valid():
+            return self.form_valid(form)
+        return self.render_to_response(self.get_context_data(form=form))
+
+    def form_valid(self, form):
+        d = form.cleaned_data
+        producto = d["producto"]
+        num_orden = d["numero_orden"]
+        imagen = d.get("comprobante_imagen")
+
+        try:
+            with transaction.atomic():
+                # Buscar o crear la remisión
+                remision, creada = RemisionIngreso.objects.get_or_create(
+                    numero_remision=num_orden,
+                    defaults={
+                        "comprobante_imagen": imagen,
+                        "usuario": self.request.user,
+                    }
+                )
+
+                # Si ya existía pero subieron foto nueva, la guardamos
+                if not creada and imagen and not remision.comprobante_imagen:
+                    remision.comprobante_imagen = imagen
+                    remision.save()
+
+                # Registrar el ingreso asociando la remisión
+                unidades = services.registrar_ingreso(
+                    producto=producto,
+                    cantidad=d["cantidad"],
+                    usuario=self.request.user,
+                    fecha_ingreso=timezone.localdate(),
+                    seriales=d.get("seriales", []),
+                    observacion=d["observacion"],
+                    remision=remision
+                )
+
+        except services.ErrorInventario as e:
+            form.add_error(None, str(e))
+            return self.render_to_response(self.get_context_data(form=form))
+
+        messages.success(
+            self.request,
+            f"Ingreso registrado con éxito asociado a la remisión {num_orden}."
+        )
+        return super().form_valid(form)
+
+# ============================================================
+# UNIDADES SERIALIZADAS
+# ============================================================
+class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
+    model = UnidadSerializada
+    template_name = "almacen/unidad_list.html"
+
+    campos_busqueda = (
+        "codigo",
+        "numero_serie",
+        "marca",
+        "referencia",
+        "producto__nombre",
+        "producto__codigo_producto",
+        "remision__numero_remision",
+    )
+
+    def get_queryset(self):
+        tecnico_id = self.request.GET.get("tecnico", "").strip()
+
+        asignaciones_qs = Asignacion.objects.select_related(
+            "tecnico",
+            "operacion",
+            "producto",
+        ).order_by("-fecha_modificacion", "-id")
+
+        qs = (
+            super()
+            .get_queryset()
+            .select_related("producto", "remision")
+        )
+
+        # Si se selecciona un técnico, mostrar únicamente las unidades
+        # asignadas actualmente o instaladas por ese técnico.
+        if tecnico_id:
+            qs = qs.filter(
+                (
+                    Q(
+                        estado=UnidadSerializada.Estado.ASIGNADO,
+                        asignaciones__tecnico_id=tecnico_id,
+                        asignaciones__estado=Asignacion.Estado.ASIGNADA,
+                    )
+                    | Q(
+                        estado=UnidadSerializada.Estado.INSTALADO,
+                        asignaciones__tecnico_id=tecnico_id,
+                        asignaciones__estado=Asignacion.Estado.INSTALADA,
+                    )
+                )
+            ).distinct()
+
+            asignaciones_qs = asignaciones_qs.filter(
+                tecnico_id=tecnico_id
+            )
+
+        qs = qs.prefetch_related(
+            Prefetch(
+                "asignaciones",
+                queryset=asignaciones_qs,
+                to_attr="asignaciones_lista",
+            )
+        )
+
+        estado = self.request.GET.get("estado", "").strip()
+        if estado:
+            qs = qs.filter(estado=estado)
+
+        producto = self.request.GET.get("producto", "").strip()
+        if producto:
+            qs = qs.filter(producto_id=producto)
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        ctx["estados"] = UnidadSerializada.Estado.choices
+        ctx["estado_sel"] = self.request.GET.get("estado", "")
+        ctx["producto_sel"] = self.request.GET.get("producto", "")
+        ctx["tecnico_sel"] = self.request.GET.get("tecnico", "")
+
+        ctx["tecnicos_lista"] = Tecnicos.objects.order_by(
+            "tecnico_apellido_nombres"
+        )
+
+        ctx["productos"] = Producto.objects.filter(
+            tipo_inventario=Producto.TipoInventario.SERIALIZADO,
+            estado=True,
+        ).order_by("nombre")
+
+        ctx["estados_editables"] = list(services.TRANSICIONES)
+
+        ctx["hay_instaladas"] = self.get_queryset().filter(
+            estado=UnidadSerializada.Estado.INSTALADO
+        ).exists()
+
+        for unidad in ctx["object_list"]:
+            unidad.asignacion_relevante = None
+
+            if unidad.estado == UnidadSerializada.Estado.ASIGNADO:
+                estado_asignacion = Asignacion.Estado.ASIGNADA
+
+            elif unidad.estado == UnidadSerializada.Estado.INSTALADO:
+                estado_asignacion = Asignacion.Estado.INSTALADA
+
+            else:
+                continue
+
+            unidad.asignacion_relevante = next(
+                (
+                    asignacion
+                    for asignacion in unidad.asignaciones_lista
+                    if asignacion.estado == estado_asignacion
+                ),
+                None,
+            )
+
+        return ctx
+
+
+class UnidadDetailView(RolRequeridoMixin, DetailView):
+    model = UnidadSerializada
+    template_name = "almacen/unidad_detail.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["asignaciones"] = self.object.asignaciones.select_related("tecnico")
+        ctx["movimientos"] = self.object.movimientos.select_related("usuario")
+        return ctx
+
+
+class UnidadEstadoView(FormPageMixin, RolRequeridoMixin, FormView):
+    form_class = CambioEstadoForm
+    cancel_url = reverse_lazy("almacen:unidades")
+    success_url = reverse_lazy("almacen:unidades")
+
+    titulo = "Cambiar estado"
+    boton = "Guardar estado"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.unidad = get_object_or_404(
+            UnidadSerializada.objects.select_related("producto"),
+            pk=kwargs["pk"],
+        )
+
+        if self.unidad.estado not in services.TRANSICIONES:
+            messages.error(
+                request,
+                f"La unidad {self.unidad.codigo} "
+                f"está en «{self.unidad.get_estado_display()}» "
+                "y su estado no se cambia desde aquí.",
+            )
+            return redirect("almacen:unidades")
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["unidad"] = self.unidad
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["subtitulo"] = (
+            f"{self.unidad.codigo} · "
+            f"estado actual: {self.unidad.get_estado_display()}"
+        )
+        return ctx
+
+    def form_valid(self, form):
+        try:
+            services.cambiar_estado(
+                unidad=self.unidad,
+                nuevo_estado=form.cleaned_data["estado"],
+                usuario=self.request.user,
+                motivo=form.cleaned_data["motivo"],
+            )
+        except services.ErrorInventario as e:
+            form.add_error(None, str(e))
+            return self.form_invalid(form)
+
+        messages.success(
+            self.request, f"Estado de {self.unidad.codigo} actualizado."
+        )
+        return super().form_valid(form)
+
+
+class UnidadUpdateView(FormPageMixin, RolRequeridoMixin, UpdateView):
+    model = UnidadSerializada
+    form_class = UnidadForm
+
+    titulo = "Editar unidad"
+    boton = "Guardar cambios"
+
+    def get_success_url(self):
+        return reverse("almacen:unidad_detalle", args=[self.object.pk])
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["cancel_url"] = self.get_success_url()
+        ctx["subtitulo"] = self.object.codigo
+        return ctx
+
+
+# ============================================================
+# ASIGNACIONES · CONSOLIDADO
+# ============================================================
+
+def _datos_vacios():
+    return {"asignados": 0, "five": 0, "sap": 0, "debe_tener": 0}
+
+def _obtener_contexto_asignaciones(request):
+    """Arma el consolidado técnico × producto."""
+
+    q = request.GET.get("q", "").strip()
+    estado_sel = request.GET.get("estado", "").strip()
+    tecnico_sel = request.GET.get("tecnico", "").strip()
+
+    qs = (
+        Asignacion.objects
+        .select_related(
+            "tecnico",
+            "producto",
+            "producto__categoria",
+            "unidad_serializada",
+            "operacion",
+        )
+        .order_by("-fecha_asignacion", "-id")
+    )
+
+    # Filtro por técnico seleccionado
+    if tecnico_sel.isdigit():
+        qs = qs.filter(tecnico_id=int(tecnico_sel))
+
+    # Filtro por estado
+    if estado_sel:
+        qs = qs.filter(estado=estado_sel)
+
+    # Búsqueda por cédula, nombre, producto y demás campos
+    # Búsqueda por cédula, nombre, producto, código o serial
+    if q:
+        filtros = (
+            Q(tecnico__tecnico_cedula__icontains=q)
+            | Q(tecnico__tecnico_apellido_nombres__icontains=q)
+            | Q(producto__nombre__icontains=q)
+            | Q(producto__codigo_producto__icontains=q)
+            | Q(producto__marca__icontains=q)
+            | Q(producto__referencia__icontains=q)
+            | Q(producto__medida__icontains=q)
+            | Q(producto__color__icontains=q)
+            | Q(producto__presentacion__icontains=q)
+            | Q(operacion__numero_orden__icontains=q)
+            | Q(operacion__numero_cuenta_contrato__icontains=q)
+            | Q(unidad_serializada__codigo__icontains=q)
+            | Q(unidad_serializada__numero_serie__icontains=q)
+        )
+
+        # Comprobar si la búsqueda corresponde al serial de un medidor.
+        unidades_encontradas = UnidadSerializada.objects.filter(
+            Q(codigo__iexact=q) | Q(numero_serie__iexact=q)
+        )
+
+        unidad = unidades_encontradas.first()
+
+        if unidad:
+            # Mostrar únicamente la asignación vigente del medidor.
+            qs = qs.filter(
+                unidad_serializada=unidad,
+                estado__in=[
+                    Asignacion.Estado.ASIGNADA,
+                    Asignacion.Estado.INSTALADA,
+                ],
+            )
+        else:
+            qs = qs.filter(filtros)
+            
+    productos_dict = OrderedDict()
+    tecnicos_dict = OrderedDict()
+
+    for a in qs:
+        productos_dict.setdefault(a.producto_id, a.producto)
+
+        bloque = tecnicos_dict.setdefault(
+            a.tecnico_id,
+            {"tecnico": a.tecnico, "productos": {}},
+        )
+
+        datos = bloque["productos"].setdefault(
+            a.producto_id,
+            _datos_vacios(),
+        )
+
+        # Una asignación devuelta ya no está en poder del técnico.
+        if a.estado == Asignacion.Estado.DEVUELTA:
+            continue
+
+        datos["asignados"] += a.cantidad or 0
+
+        # Cantidades instaladas
+        if a.estado == Asignacion.Estado.INSTALADA:
+            datos["five"] += a.cantidad or 0
+        else:
+            datos["five"] += a.cantidad_instalada or 0
+
+    productos = list(productos_dict.values())
+    tecnicos = []
+
+    for bloque in tecnicos_dict.values():
+        filas = {
+            "ASIGNADOS": [],
+            "FIVE": [],
+            "SAP": [],
+            "DEBE_TENER": [],
+        }
+
+        productos_detalle = []
+
+        for p in productos:
+            d = bloque["productos"].get(p.pk, _datos_vacios())
+
+            asignados = d["asignados"]
+            five = d["five"]
+            sap = d["sap"]
+            debe_tener = max(asignados - five, 0)
+
+            filas["ASIGNADOS"].append(asignados)
+            filas["FIVE"].append(five)
+            filas["SAP"].append(sap)
+            filas["DEBE_TENER"].append(debe_tener)
+
+            productos_detalle.append({
+                "producto": p,
+                "asignados": asignados,
+                "five": five,
+                "sap": sap,
+                "debe_tener": debe_tener,
+            })
+
+        tecnicos.append({
+            "tecnico": bloque["tecnico"],
+            "filas": filas,
+            "productos_detalle": productos_detalle,
+        })
+
+    return {
+        "tecnicos": tecnicos,
+        "productos": productos,
+        "estados": Asignacion.Estado.choices,
+        "estado_sel": estado_sel,
+        "q": q,
+        "tecnico_sel": tecnico_sel,
+    }
+    
+class AsignacionListView(RolRequeridoMixin, TemplateView):
+    template_name = "almacen/asignacion_list.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        ctx.update(_obtener_contexto_asignaciones(self.request))
+
+        ctx["tecnicos_lista"] = Tecnicos.objects.order_by(
+            "tecnico_apellido_nombres"
+        )
+
+        return ctx
+
+# ============================================================
+# ASIGNACIONES · CREAR
+# ============================================================
+
+class AsignacionCreateView(FormPageMixin, RolRequeridoMixin, FormView):
+    form_class = AsignacionForm
+    template_name = "almacen/asignacion_form.html"
+
+    success_url = reverse_lazy("almacen:asignaciones")
+    cancel_url = reverse_lazy("almacen:asignaciones")
+
+    titulo = "Nueva asignación"
+    boton = "Entregar al técnico"
+    subtitulo = (
+        "Entrega de material o de una unidad serializada a un técnico."
+    )
+
+    def form_valid(self, form):
+        d = form.cleaned_data
+
+        try:
+            services.asignar(
+                producto=d["producto"],
+                tecnico=d["tecnico"],
+                usuario=self.request.user,
+                cantidad=d["cantidad"],
+                unidad=d.get("unidad"),
+                fecha=d["fecha_asignacion"],
+                observaciones=d["observaciones"],
+            )
+        except services.ErrorInventario as e:
+            form.add_error(None, str(e))
+            return self.form_invalid(form)
+
+        messages.success(self.request, "Asignación registrada.")
+        return super().form_valid(form)
+
+
+# ============================================================
+# INSTALAR / DEVOLVER · PANTALLA DEL TÉCNICO (varios materiales)
+# ============================================================
+
+class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
+    """
+    Un técnico, un formulario: se escribe la operación una sola vez
+    y las cantidades (o unidades) instaladas de cada material.
+    Cada fila tiene además su botón de devolver.
+    """
+
+    template_name = "almacen/asignacion_instalar.html"
+
+    def _cargar(self):
+        self.tecnico = get_object_or_404(Tecnicos, pk=self.kwargs["pk"])
+        pendientes = (
+            Asignacion.objects
+            .filter(tecnico=self.tecnico, estado=Asignacion.Estado.ASIGNADA)
+            .select_related("producto", "unidad_serializada", "operacion")
+            .order_by("producto__nombre", "producto__medida", "id")
+        )
+        self.pendientes = [a for a in pendientes if a.cantidad_pendiente > 0]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        self._cargar()
+
+        # Si hubo error, conserva lo que el usuario había escrito.
+        if self.request.method == "POST":
+            for a in self.pendientes:
+                a.valor = self.request.POST.get(f"cant_{a.pk}", "")
+                a.marcado = bool(self.request.POST.get(f"inst_{a.pk}"))
+
+        ctx["tecnico"] = self.tecnico
+        ctx["pendientes"] = self.pendientes
+        ctx["form"] = kwargs.get("form") or InstalacionMasivaForm()
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self._cargar()
+        form = InstalacionMasivaForm(request.POST)
+
+        items = []
+        errores = []
+
+        for a in self.pendientes:
+            nombre = a.producto.nombre_completo
+
+            # Unidad con código: casilla "Instalada".
+            if a.unidad_serializada_id:
+                if request.POST.get(f"inst_{a.pk}"):
+                    items.append((a, None))
+                continue
+
+            raw = request.POST.get(f"cant_{a.pk}", "").strip()
+            if not raw:
+                continue
+
+            try:
+                cant = int(raw)
+            except ValueError:
+                errores.append(f"{nombre}: la cantidad no es válida.")
+                continue
+
+            if cant <= 0:
+                continue
+
+            if cant > a.cantidad_pendiente:
+                errores.append(
+                    f"{nombre}: solo tiene {a.cantidad_pendiente} pendiente(s)."
+                )
+                continue
+
+            items.append((a, cant))
+
+        if not items and not errores:
+            errores.append("Indique al menos un material para instalar.")
+
+        if errores or not form.is_valid():
+            for e in errores:
+                messages.error(request, e)
+            return self.render_to_response(self.get_context_data(form=form))
+
+        d = form.cleaned_data
+
+        # Todo o nada: la orden y todas las instalaciones van juntas.
+        try:
+            with transaction.atomic():
+                op = services.obtener_o_crear_operacion(
+                    numero_orden=d["numero_orden"],
+                    cuenta_contrato=d["numero_cuenta_contrato"],
+                    tipo=d["tipo_operacion"],
+                    tecnico=self.tecnico,
+                    usuario=request.user,
+                    fecha=d["fecha_instalacion"],
+                )
+                for a, cant in items:
+                    services.instalar(
+                        asignacion=a,
+                        usuario=request.user,
+                        cantidad=cant,
+                        fecha_instalacion=d["fecha_instalacion"],
+                        operacion=op,
+                        observaciones=d["observaciones"],
+                    )
+        except services.ErrorInventario as e:
+            messages.error(request, str(e))
+            return self.render_to_response(self.get_context_data(form=form))
+
+        messages.success(
+            request,
+            f"Instalación registrada en la orden {op.numero_orden} "
+            f"({len(items)} material(es)).",
+        )
+        return redirect("almacen:tecnico_asignaciones", pk=self.tecnico.pk)
+
+
+# ============================================================
+# INSTALAR · UNA SOLA ASIGNACIÓN
+# ============================================================
+
+class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
+    form_class = InstalacionForm
+    template_name = "almacen/asignacion_instalar.html"
+
+    titulo = "Registrar instalación"
+    boton = "Registrar instalación"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.asignacion = get_object_or_404(
+            Asignacion.objects.select_related(
+                "tecnico", "producto", "unidad_serializada"
+            ),
+            pk=kwargs["pk"],
+        )
+
+        if self.asignacion.estado != Asignacion.Estado.ASIGNADA:
+            messages.error(
+                request,
+                "Esta asignación ya no está pendiente de instalar.",
+            )
+            return redirect("almacen:asignaciones")
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_success_url(self):
+        return reverse(
+            "almacen:tecnico_asignaciones", args=[self.asignacion.tecnico_id]
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["asignacion"] = self.asignacion
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        a = self.asignacion
+
+        detalle = (
+            a.unidad_serializada.codigo
+            if a.unidad_serializada
+            else f"{a.cantidad_pendiente} × {a.producto.nombre_completo}"
+        )
+
+        ctx["asignacion"] = a
+        ctx["subtitulo"] = f"{detalle} · asignado a {a.tecnico}"
+        ctx["cancel_url"] = self.get_success_url()
+        return ctx
+
+    def form_valid(self, form):
+        d = form.cleaned_data
+        cantidad = d.get("cantidad")
+
+        try:
+            with transaction.atomic():
+                op = services.obtener_o_crear_operacion(
+                    numero_orden=d["numero_orden"],
+                    cuenta_contrato=d["numero_cuenta_contrato"],
+                    tipo=d["tipo_operacion"],
+                    tecnico=self.asignacion.tecnico,
+                    usuario=self.request.user,
+                    fecha=d["fecha_instalacion"],
+                )
+                services.instalar(
+                    asignacion=self.asignacion,
+                    usuario=self.request.user,
+                    cantidad=cantidad,
+                    fecha_instalacion=d["fecha_instalacion"],
+                    operacion=op,
+                    observaciones=d["observaciones"],
+                )
+        except services.ErrorInventario as e:
+            messages.error(self.request, str(e))
+            return redirect("almacen:asignaciones")
+
+        if cantidad:
+            self.asignacion.refresh_from_db()
+            restan = self.asignacion.cantidad_pendiente
+            messages.success(
+                self.request,
+                f"Instaladas {cantidad} × "
+                f"{self.asignacion.producto.nombre_completo}. "
+                f"Al técnico le quedan {restan} por instalar.",
+            )
+        else:
+            messages.success(self.request, "Instalación registrada.")
+
+        return super().form_valid(form)
+
+
+# ============================================================
+# DEVOLVER ASIGNACIÓN
+# ============================================================
+
+class AsignacionDevolverView(RolRequeridoMixin, View):
+
+    def post(self, request, pk):
+        asignacion = get_object_or_404(Asignacion, pk=pk)
+
+        try:
+            services.devolver(asignacion=asignacion, usuario=request.user)
+            messages.success(
+                request,
+                "Devolución registrada: el material volvió al almacén.",
+            )
+        except services.ErrorInventario as e:
+            messages.error(request, str(e))
+
+        siguiente = request.POST.get("next", "")
+        if siguiente and url_has_allowed_host_and_scheme(
+            siguiente, allowed_hosts={request.get_host()}
+        ):
+            return redirect(siguiente)
+
+        return redirect("almacen:asignaciones")
+
+
+# ============================================================
+# UNIDADES DISPONIBLES · JSON
+# ============================================================
+
+class UnidadesDisponiblesJson(RolRequeridoMixin, View):
+    """Alimenta el selector de unidades del formulario de asignación."""
+
+    def get(self, request):
+        producto = request.GET.get("producto")
+
+        data = {"serializado": False, "stock": 0, "unidades": []}
+
+        if producto:
+            p = get_object_or_404(Producto, pk=producto)
+            inv = Inventario.objects.filter(producto=p).first()
+
+            data["serializado"] = p.es_serializado
+            data["stock"] = inv.cantidad_actual if inv else 0
+
+            if p.es_serializado:
+                data["unidades"] = [
+                    {
+                        "id": u.id,
+                        "texto": u.codigo + (f" · {u.medida}" if u.medida else ""),
+                    }
+                    for u in UnidadSerializada.objects
+                    .filter(producto=p, estado=UnidadSerializada.Estado.DISPONIBLE)
+                    .order_by("codigo")
+                ]
+
+        return JsonResponse(data)
+
+
+# ============================================================
+# MOVIMIENTOS / KARDEX
+# ============================================================
+
+class MovimientoListView(RolRequeridoMixin, BuscarMixin, ListView):
+    model = MovimientoInventario
+    template_name = "almacen/movimiento_list.html"
+    campos_busqueda = (
+        "producto__nombre",
+        "producto__codigo_producto",
+        "unidad_serializada__codigo",
+        "usuario__username",
+        "observacion",
+    )
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related(
+            "producto", "unidad_serializada", "usuario"
+        )
+
+        tipo = self.request.GET.get("tipo")
+        if tipo:
+            qs = qs.filter(tipo_movimiento=tipo)
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["tipos"] = MovimientoInventario.TipoMovimiento.choices
+        ctx["tipo_sel"] = self.request.GET.get("tipo", "")
+        return ctx

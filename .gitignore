@@ -1,0 +1,21 @@
+.env
+db.sqlite3
+__pycache__/
+*.pyc
+venv/
+
+# Archivos estáticos generados por Django
+staticfiles/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Entorno virtual
+venv/
+.venv/
+
+# Variables de entorno
+.env
+
+media/

@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block titulo %}Existencias{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/inventario.css' %}">
+
+<style>
+  .filtros-inventario {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .filtros-inventario .buscar-wrap {
+    flex: 1 1 250px;
+    min-width: 180px;
+  }
+
+  .filtros-inventario select {
+    flex: 1 1 230px;
+    min-width: 190px;
+    max-width: 330px;
+  }
+
+  .resumen-tecnico {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-borde, #e2e8f0);
+    background: var(--color-fondo-secundario, #f8fafc);
+  }
+
+  .resumen-tecnico h2 {
+    margin: 0 0 5px;
+    font-size: 15px;
+  }
+
+  .resumen-tecnico p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  .tabla-tecnico th,
+  .tabla-tecnico td {
+    padding: 11px 14px;
+    vertical-align: middle;
+  }
+
+  .tabla-tecnico th {
+    white-space: nowrap;
+  }
+
+  .tabla-tecnico .producto-nombre {
+    min-width: 200px;
+  }
+
+  .tabla-tecnico .cantidad {
+    text-align: center;
+    min-width: 95px;
+  }
+
+  .tabla-tecnico .cantidad strong {
+    font-size: 13px;
+  }
+
+  .tabla-tecnico .pendiente {
+    color: #b45309;
+    font-weight: 700;
+  }
+
+  .tabla-tecnico .sin-cantidad {
+    color: #94a3b8;
+  }
+
+  .tecnico-vacio {
+    padding: 28px 16px;
+    text-align: center;
+  }
+
+  .tecnico-vacio strong {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .tecnico-vacio p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  @media (max-width: 600px) {
+    .filtros-inventario select {
+      max-width: none;
+      flex-basis: 100%;
+    }
+
+    .tabla-tecnico .producto-nombre {
+      min-width: 170px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block contenido %}
+
+<header class="cabecera">
+  <div>
+    <h1>Resumen de Materiales</h1>
+    <p>
+      Consulta las existencias de bodega y controla los materiales
+      asignados a cada técnico.
+    </p>
+  </div>
+
+  <div class="acciones">
+    <a class="btn btn-primario"
+       href="{% url 'almacen:ingreso_crear' %}">
+      Registrar ingreso
+    </a>
+  </div>
+</header>
+
+<!-- FILTROS -->
+<form class="filtros filtros-inventario" method="get">
+
+  <div class="buscar-wrap">
+    <svg viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="2"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/>
+      <path d="M21 21l-4.3-4.3"/>
+    </svg>
+
+    <input
+      class="input buscar"
+      type="search"
+      name="q"
+      value="{{ request.GET.q }}"
+      placeholder="Buscar producto, código o técnico"
+    >
+  </div>
+
+  <select
+    class="input"
+    name="tecnico"
+    onchange="this.form.submit()"
+  >
+    <option value="">Ningun Tecnico Seleccionado</option>
+
+    {% for t in tecnicos_lista %}
+      <option
+        value="{{ t.pk }}"
+        {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}
+      >
+        {{ t.tecnico_apellido_nombres }}
+        {% if t.tecnico_cedula %}
+          — CC {{ t.tecnico_cedula }}
+        {% endif %}
+      </option>
+    {% endfor %}
+  </select>
+
+  <label class="filtro-check">
+    <input
+      class="check"
+      type="checkbox"
+      name="bajo"
+      value="1"
+      {% if request.GET.bajo %}checked{% endif %}
+    >
+    Solo stock bajo
+  </label>
+
+  <button class="btn btn-secundario" type="submit">
+    Buscar
+  </button>
+
+  {% if request.GET.q or tecnico_sel or request.GET.bajo %}
+    <a
+      class="btn btn-secundario"
+      href="{% url 'almacen:inventario' %}"
+    >
+      Limpiar
+    </a>
+  {% endif %}
+
+</form>
+
+<!-- ======================================================
+     VISTA POR TÉCNICO
+====================================================== -->
+
+{% if tecnico_sel %}
+
+  <div class="tarjeta">
+
+    <div class="resumen-tecnico">
+      <h2>Materiales del técnico</h2>
+      <p>
+        Cantidades asignadas, instaladas y pendientes de instalación.
+      </p>
+    </div>
+
+    {% if tecnicos and productos %}
+
+      <div class="tabla-wrap">
+        <table class="tabla-tecnico">
+
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="cantidad">Asignado</th>
+              <th class="cantidad">Instalado Five</th>
+              <th class="cantidad">Instalado SAP</th>
+              <th class="cantidad">Debe tener</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for tecnico_data in tecnicos %}
+
+              {% for item in tecnico_data.productos_detalle %}
+
+                {% if item.asignados > 0 or item.five > 0 or item.sap > 0 %}
+
+                  <tr>
+                    <td class="producto-nombre">
+                      <strong>
+                        {{ item.producto.nombre_completo }}
+                      </strong>
+
+                      <div class="codigo">
+                        {{ item.producto.codigo_producto }}
+                      </div>
+                    </td>
+
+                    <td class="cantidad">
+                      {% if item.asignados > 0 %}
+                        <strong>{{ item.asignados }}</strong>
+                      {% else %}
+                        <span class="sin-cantidad">0</span>
+                      {% endif %}
+                    </td>
+
+                    <td class="cantidad">
+                      {% if item.five > 0 %}
+                        <strong>{{ item.five }}</strong>
+                      {% else %}
+                        <span class="sin-cantidad">0</span>
+                      {% endif %}
+                    </td>
+
+                    <td class="cantidad">
+                      {% if item.sap > 0 %}
+                        <strong>{{ item.sap }}</strong>
+                      {% else %}
+                        <span class="sin-cantidad">0</span>
+                      {% endif %}
+                    </td>
+
+                    <td class="cantidad">
+                      {% if item.debe_tener > 0 %}
+                        <strong class="pendiente">
+                          {{ item.debe_tener }}
+                        </strong>
+                      {% else %}
+                        <strong>0</strong>
+                      {% endif %}
+                    </td>
+                  </tr>
+
+                {% endif %}
+
+              {% endfor %}
+
+            {% endfor %}
+          </tbody>
+
+        </table>
+      </div>
+
+    {% else %}
+
+      <div class="tecnico-vacio">
+        <strong>Sin materiales asignados</strong>
+        <p>
+          Este técnico no tiene asignaciones para los filtros actuales.
+        </p>
+      </div>
+
+    {% endif %}
+
+  </div>
+
+<!-- ======================================================
+     INVENTARIO GENERAL
+====================================================== -->
+
+{% else %}
+
+  <div class="tarjeta">
+
+    {% if object_list %}
+
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th>Tipo Material</th>
+              <th class="num">Total<br>recibido</th>
+              <th class="num">Disponible<br>almacén</th>
+              <th class="num">Asignado<br>técnico</th>
+              <th class="num">En poder<br>técnicos</th>
+              <th class="num">Instalado<br>SAP</th>
+              <th class="num">Instalado<br>Five</th>
+              <th class="num">Inventario<br>almacén</th>
+              <th class="num">Mínimo</th>
+              <th>Alerta</th>
+              <th><span class="sr-only">Acciones</span></th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for i in object_list %}
+
+              <tr class="{% if i.bajo_stock %}fila-bajo{% endif %}">
+
+                <td>
+                  <span class="material">
+                    {{ i.producto.categoria.nombre }}
+                  </span>
+                </td>
+
+                <td class="col-producto">
+  <strong>{{ i.producto.nombre }}</strong>
+  {% if i.producto.marca %}
+    {{ i.producto.marca }}
+  {% endif %}
+  {% if i.producto.medida %}
+    {{ i.producto.medida }}
+  {% endif %}
+</td>
+
+                <td class="num">{{ i.total }}</td>
+
+                <td class="num">
+                  <strong class="dato-principal">
+                    {{ i.cantidad_actual }}
+                  </strong>
+                </td>
+
+                <td class="num">
+                  {% if i.total_asignado > 0 %}
+                    <strong>{{ i.total_asignado }}</strong>
+                  {% else %}
+                    <span class="cero">0</span>
+                  {% endif %}
+                </td>
+
+                <td class="num">
+                  {% if i.en_poder_tecnicos > 0 %}
+                    <strong>{{ i.en_poder_tecnicos }}</strong>
+                  {% else %}
+                    <span class="cero">0</span>
+                  {% endif %}
+                </td>
+
+                <td class="num">
+                  <span class="suave">—</span>
+                </td>
+
+                <td class="num">
+                  {% if i.instalado_five > 0 %}
+                    <strong>{{ i.instalado_five }}</strong>
+                  {% else %}
+                    <span class="cero">0</span>
+                  {% endif %}
+                </td>
+
+                <td class="num {% if i.inventario_almacen == i.cantidad_actual %}inventario-ok{% else %}inventario-error{% endif %}">
+                  <strong class="dato-inventario">
+                    {{ i.inventario_almacen }}
+                  </strong>
+
+                  <a
+                    class="btn btn-secundario btn-chico"
+                    href="{% url 'almacen:inventario_almacen_editar' i.pk %}"
+                  >
+                    Editar
+                  </a>
+                </td>
+
+                <td class="num">{{ i.cantidad_minima }}</td>
+
+                <td>
+                  {% if i.bajo_stock %}
+                    <span class="chip chip-bajo">Stock bajo</span>
+                  {% else %}
+                    <span class="suave">—</span>
+                  {% endif %}
+                </td>
+
+                <td class="col-acciones">
+                  <a
+                    class="btn btn-secundario btn-chico"
+                    href="{% url 'almacen:minimo_editar' i.pk %}"
+                  >
+                    Mínimo
+                  </a>
+                </td>
+
+              </tr>
+
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    {% else %}
+
+      <div class="vacio">
+        <strong>Sin existencias para mostrar</strong>
+        Registre un ingreso o cambie los filtros.
+      </div>
+
+    {% endif %}
+
+    {% include "_paginacion.html" %}
+
+  </div>
+
+{% endif %}
+
+{% endblock %}

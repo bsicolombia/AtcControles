@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block titulo %}Técnicos{% endblock %}
+
+{% block contenido %}
+
+<div class="cabecera">
+
+    <div>
+        <h1>Técnicos</h1>
+
+        <p>
+            Personal al que se le entrega material.
+        </p>
+    </div>
+
+    {% if es_admin %}
+
+        <div class="acciones">
+
+            <a
+                class="btn"
+                href="{% url 'tecnicos:carga_masiva' %}"
+            >
+                Carga masiva
+            </a>
+
+            <a
+                class="btn btn-primario"
+                href="{% url 'tecnicos:crear' %}"
+            >
+                Nuevo técnico
+            </a>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+
+<form class="filtros" method="get">
+
+    <input
+        class="input buscar"
+        type="search"
+        name="q"
+        value="{{ request.GET.q }}"
+        placeholder="Buscar por nombre, cédula o supervisor"
+    >
+
+    <button
+        class="btn"
+        type="submit"
+    >
+        Buscar
+    </button>
+
+</form>
+
+
+<div class="tarjeta">
+
+    {% if object_list %}
+
+        <div class="tabla-wrap">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>Técnico</th>
+                        <th>Cédula</th>
+                        <th>Supervisor</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for t in object_list %}
+
+                        <tr>
+
+                            <td>
+                                <strong>
+                                    {{ t.tecnico_apellido_nombres }}
+                                </strong>
+                            </td>
+
+                            <td class="codigo">
+                                {{ t.tecnico_cedula }}
+                            </td>
+
+                            <td>
+                                {{ t.supervisor }}
+                            </td>
+
+                            <td>
+
+                                <span class="chip chip-{% if t.activo %}activo{% else %}inactivo{% endif %}">
+
+                                    {% if t.activo %}
+                                        Activo
+                                    {% else %}
+                                        Inactivo
+                                    {% endif %}
+
+                                </span>
+
+                            </td>
+
+                            <td>
+
+                                <div class="fila-acciones">
+
+                                    {% if es_admin %}
+
+                                        <a
+                                            class="btn btn-chico"
+                                            href="{% url 'tecnicos:editar' t.pk %}"
+                                        >
+                                            Editar
+                                        </a>
+
+                                    {% endif %}
+
+                                </div>
+
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% else %}
+
+        <div class="vacio">
+
+            <strong>No hay técnicos</strong>
+
+            {% if es_admin %}
+
+                Cree el primero o utilice la carga masiva
+                para registrar varios técnicos.
+
+            {% else %}
+
+                Pídale al administrador que registre los técnicos.
+
+            {% endif %}
+
+        </div>
+
+    {% endif %}
+
+
+    {% include "_paginacion.html" %}
+
+</div>
+
+{% endblock %}

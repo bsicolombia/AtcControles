@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/formularios.css' %}">
+{% endblock %}
+
+{% block contenido %}
+
+<div class="cabecera">
+    <div>
+        <h1>{{ titulo }}</h1>
+
+        {% if subtitulo %}
+            <p>{{ subtitulo }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<form method="post" class="tarjeta form-caja" novalidate>
+
+    <div class="tarjeta-cuerpo">
+
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="alerta-form">
+                {% for e in form.non_field_errors %}
+                    {{ e }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="form-grid">
+
+            {% for field in form %}
+
+                <div
+                    class="campo
+                    {% if field.name in 'observaciones observacion numeros_serie' %}
+                        ancho
+                    {% endif %}
+                    {% if field.field.widget.input_type == 'textarea' %}
+                        ancho
+                    {% endif %}
+                    {% if field.field.widget.input_type == 'checkbox' %}
+                        campo-check
+                    {% endif %}"
+                    id="campo-{{ field.name }}"
+                >
+
+                    {% if field.field.widget.input_type == 'checkbox' %}
+
+                        {{ field }}
+
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }}
+                        </label>
+
+                    {% else %}
+
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }}
+                        </label>
+
+                        {{ field }}
+
+                    {% endif %}
+
+                    {% if field.help_text %}
+                        <span class="ayuda">
+                            {{ field.help_text }}
+                        </span>
+                    {% endif %}
+
+                    {% for e in field.errors %}
+                        <span class="error-campo">
+                            {{ e }}
+                        </span>
+                    {% endfor %}
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+        <div class="form-pie">
+
+            <button
+                type="submit"
+                class="btn btn-primario"
+            >
+                {{ boton }}
+            </button>
+
+            <a
+                href="{{ cancel_url }}"
+                class="btn"
+            >
+                Cancelar
+            </a>
+
+        </div>
+
+    </div>
+
+</form>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const producto = document.getElementById("id_producto");
+
+    const marca = document.getElementById("id_marca");
+    const medida = document.getElementById("id_medida");
+    const referencia = document.getElementById("id_referencia");
+
+    const campoSeriales = document.getElementById(
+        "campo-numeros_serie"
+    );
+
+    const seriales = document.getElementById(
+        "id_numeros_serie"
+    );
+
+    const cantidad = document.getElementById(
+        "id_cantidad"
+    );
+
+
+    function actualizarProducto() {
+
+        const opcion =
+            producto.options[producto.selectedIndex];
+
+        if (!opcion || !opcion.value) {
+
+            marca.value = "";
+            medida.value = "";
+            referencia.value = "";
+
+            campoSeriales.style.display = "none";
+
+            return;
+        }
+
+
+        /*
+         * Los datos vienen de atributos data-*
+         * colocados por el widget del formulario.
+         */
+
+        marca.value =
+            opcion.dataset.marca || "";
+
+        medida.value =
+            opcion.dataset.medida || "";
+
+        referencia.value =
+            opcion.dataset.referencia || "";
+
+
+        /*
+         * Detectar si es serializado.
+         */
+
+        const serializado =
+            opcion.dataset.serializado === "true";
+
+
+        if (serializado) {
+
+            campoSeriales.style.display = "";
+
+            seriales.required = true;
+
+        } else {
+
+            campoSeriales.style.display = "none";
+
+            seriales.required = false;
+
+            seriales.value = "";
+        }
+    }
+
+
+    producto.addEventListener(
+        "change",
+        actualizarProducto
+    );
+
+
+    actualizarProducto();
+
+});
+</script>
+
+{% endblock %}

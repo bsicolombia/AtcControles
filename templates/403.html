@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titulo %}Sin permiso{% endblock %}
+{% block contenido %}
+<div class="centro"><div>
+  <h1>No tiene permiso para esta sección</h1>
+  <p class="suave">Su rol ({{ rol_actual|default:"sin rol asignado" }}) no incluye esta acción. Si cree que es un error, pídale al administrador que revise su rol.</p>
+  <p><a class="btn btn-primario" href="{% url 'dashboard' %}">Volver al inicio</a></p>
+</div></div>
+{% endblock %}

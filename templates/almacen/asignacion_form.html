@@ -1,0 +1,35 @@
+{% extends "form.html" %}
+{% block extra_js %}
+<script>
+(function () {
+  var prod = document.getElementById("id_producto");
+  var unidad = document.getElementById("id_unidad");
+  var campoU = document.getElementById("campo-unidad");
+  var cant = document.getElementById("id_cantidad");
+  var url = "{% url 'almacen:api_unidades' %}";
+  var previa = unidad.value;
+
+  function cargar() {
+    if (!prod.value) { campoU.style.display = "none"; return; }
+    fetch(url + "?producto=" + prod.value).then(function (r) { return r.json(); }).then(function (d) {
+      var ayuda = campoU.querySelector(".ayuda");
+      if (d.serializado) {
+        campoU.style.display = "";
+        cant.value = 1; cant.readOnly = true;
+        unidad.innerHTML = '<option value="">Elija un código</option>';
+        d.unidades.forEach(function (u) {
+          var o = document.createElement("option"); o.value = u.id; o.textContent = u.texto;
+          if (String(u.id) === previa) o.selected = true; unidad.appendChild(o);
+        });
+        if (!d.unidades.length) ayuda.textContent = "No hay unidades disponibles de este producto.";
+      } else {
+        campoU.style.display = "none"; unidad.value = ""; cant.readOnly = false;
+        cant.max = d.stock; 
+      }
+    });
+  }
+  prod.addEventListener("change", function () { previa = ""; cargar(); });
+  cargar();
+})();
+</script>
+{% endblock %}

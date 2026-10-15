@@ -1,0 +1,204 @@
+/* =========================================================
+   formulario.css  ·  ATC CONTROLES
+   Formularios simples (editar inventario, mínimo, etc.)
+   Usa las variables de base.css (azul marino + turquesa)
+   ========================================================= */
+
+/* ---------- Cabecera ---------- */
+
+.cabecera {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 22px;
+}
+
+.cabecera h1 {
+    color: var(--azul-950);
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.4px;
+}
+
+.cabecera p {
+    max-width: 640px;
+    margin-top: 6px;
+    color: var(--texto-suave);
+    font-size: 14px;
+}
+
+
+/* ---------- Tarjeta del formulario ---------- */
+
+.form-tarjeta {
+    max-width: 560px;
+    overflow: hidden;
+}
+
+.tarjeta-cab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--borde-suave);
+    background: linear-gradient(180deg, #fff 0%, var(--azul-50) 100%);
+    border-top: 3px solid var(--azul-800);
+}
+
+.tarjeta-cab h2 {
+    color: var(--azul-950);
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.codigo {
+    margin-top: 3px;
+    color: var(--texto-suave);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+}
+
+.tarjeta-cuerpo {
+    padding: 24px;
+}
+
+
+/* ---------- Campos ---------- */
+
+.campo {
+    margin-bottom: 20px;
+}
+
+.campo label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--texto);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Cubre los inputs que genera Django aunque no tengan clase */
+.campo input[type="text"],
+.campo input[type="number"],
+.campo input[type="email"],
+.campo input[type="password"],
+.campo input[type="date"],
+.campo select,
+.campo textarea,
+.input {
+    display: block;
+    width: 100%;
+    height: 46px;
+    padding: 10px 14px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-pequeno);
+    outline: none;
+    background: #fff;
+    color: var(--texto);
+    font-size: 15px;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.campo textarea {
+    height: auto;
+    min-height: 100px;
+    resize: vertical;
+}
+
+.campo input:hover,
+.campo select:hover,
+.campo textarea:hover {
+    border-color: #c3d0de;
+}
+
+.campo input:focus,
+.campo select:focus,
+.campo textarea:focus,
+.input:focus {
+    border-color: var(--azul-600);
+    box-shadow: 0 0 0 3px rgba(27, 94, 155, 0.14);
+}
+
+.ayuda {
+    display: block;
+    margin-top: 6px;
+    color: var(--texto-suave);
+    font-size: 12px;
+}
+
+
+/* ---------- Errores ---------- */
+
+.campo-error input,
+.campo-error select,
+.campo-error textarea {
+    border-color: var(--rojo);
+}
+
+.campo-error input:focus,
+.campo-error select:focus,
+.campo-error textarea:focus {
+    box-shadow: 0 0 0 3px rgba(207, 63, 76, 0.14);
+}
+
+.error,
+.alerta-form {
+    margin-top: 8px;
+    color: #9c2230;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.error ul,
+.alerta-form ul,
+.errorlist {
+    list-style: none;
+}
+
+.alerta-form {
+    margin: 0 0 20px;
+    padding: 11px 14px;
+    border: 1px solid #f0c0c5;
+    border-left: 4px solid var(--rojo);
+    border-radius: 8px;
+    background: #fdf1f2;
+}
+
+
+/* ---------- Acciones ---------- */
+
+.form-acciones {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 26px;
+    padding-top: 20px;
+    border-top: 1px solid var(--borde-suave);
+}
+
+.form-acciones .btn {
+    min-height: 42px;
+    padding: 8px 20px;
+    font-size: 14px;
+}
+
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 760px) {
+    .cabecera { flex-direction: column; }
+    .cabecera .acciones { width: 100%; }
+}
+
+@media (max-width: 480px) {
+    .tarjeta-cuerpo { padding: 18px; }
+    .tarjeta-cab { padding: 15px 18px; }
+
+    .form-acciones { flex-direction: column-reverse; }
+    .form-acciones .btn { width: 100%; }
+}

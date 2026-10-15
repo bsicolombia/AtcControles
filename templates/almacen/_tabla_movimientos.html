@@ -1,0 +1,87 @@
+{% if movimientos %}
+<div class="tabla-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha y hora</th>
+        <th>Responsable de la acción</th>
+        <th>Tipo de movimiento</th>
+        <th>Producto</th>
+        <th>Código de unidad</th>
+        <th class="num">Cantidad</th>
+        <th>Detalle de la acción</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for m in movimientos %}
+      <tr>
+        <!-- Fecha y hora del movimiento -->
+        <td class="suave num">
+          {{ m.fecha|date:"d/m/Y H:i" }}
+        </td>
+
+        <!-- Persona responsable -->
+        <td>
+          <strong>
+            {{ m.usuario.get_full_name|default:m.usuario.username }}
+          </strong>
+        </td>
+
+        <!-- Tipo de movimiento -->
+        <td>
+          <span class="chip chip-{{ m.tipo_movimiento|lower }}">
+            {{ m.get_tipo_movimiento_display }}
+          </span>
+        </td>
+
+        <!-- Información del producto -->
+        <td>
+          <strong>{{ m.producto.nombre_completo }}</strong>
+          <div class="suave">
+            {{ m.producto.codigo_producto }}
+          </div>
+        </td>
+
+        <!-- Código de la unidad serializada -->
+        <td>
+          {% if m.unidad_serializada %}
+            <a
+              class="codigo"
+              href="{% url 'almacen:unidad_detalle' m.unidad_serializada.pk %}"
+            >
+              {{ m.unidad_serializada.codigo }}
+            </a>
+          {% else %}
+            <span class="suave">No aplica</span>
+          {% endif %}
+        </td>
+
+        <!-- Cantidad del movimiento -->
+        <td class="num">
+          {{ m.cantidad }}
+        </td>
+
+        <!-- Observaciones -->
+        <td class="suave">
+          {% if m.observacion %}
+            {{ m.observacion|truncatechars:100 }}
+          {% else %}
+            <span>Sin observaciones</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<div class="vacio">
+  <strong>Sin movimientos registrados</strong>
+  <p>
+    Cuando se registren ingresos, asignaciones, instalaciones
+    o devoluciones, aparecerán aquí con su fecha y responsable.
+  </p>
+</div>
+{% endif %}

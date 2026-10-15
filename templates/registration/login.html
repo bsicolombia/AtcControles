@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block titulo %}Iniciar sesión{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+{% endblock %}
+
+{% block body %}
+<div class="login">
+
+  <!-- Lado izquierdo: imagen + mensaje -->
+  <section class="login-lado" style="--login-img: url('{% static 'img/login.png' %}');">
+    <div class="login-marca">ATC CONTROLES</div>
+
+    <div class="login-info">
+      <h2>Cada medidor, regulador y válvula, con su historia.</h2>
+      <p>Ingreso, asignación a técnicos e instalación de cada unidad, en un solo lugar.</p>
+    </div>
+
+    <div class="login-lado-pie">Acceso para almacenistas y administradores</div>
+  </section>
+
+  <!-- Lado derecho: formulario -->
+  <section class="login-form-lado">
+    <form method="post" class="login-form" novalidate>
+      {% csrf_token %}
+
+      <img class="login-logo" src="{% static 'img/LOGOBSI.png' %}" alt="BSI">
+
+      <h1>Iniciar sesión</h1>
+      <p class="suave">Ingrese con su usuario del sistema.</p>
+
+      {% if form.errors %}
+        <div class="alerta-form" role="alert">
+          Usuario o contraseña incorrectos. Revise los datos e intente de nuevo.
+        </div>
+      {% endif %}
+
+      <div class="campo">
+        <label for="id_username">Usuario</label>
+        <input class="input" type="text" name="username" id="id_username"
+               autocomplete="username" autofocus required>
+      </div>
+
+      <div class="campo">
+        <label for="id_password">Contraseña</label>
+        <input class="input" type="password" name="password" id="id_password"
+               autocomplete="current-password" required>
+      </div>
+
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn" type="submit">Entrar</button>
+    </form>
+  </section>
+
+</div>
+{% endblock %}

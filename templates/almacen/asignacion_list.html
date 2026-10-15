@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block titulo %}Asignaciones{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/asignaciones.css' %}">
+{% endblock %}
+
+{% block contenido %}
+
+<div class="cabecera">
+
+    <div>
+        <h1>Asignaciones</h1>
+
+        <p>
+            Control consolidado del material entregado a cada técnico,
+            instalaciones registradas y material que debe conservar.
+        </p>
+    </div>
+
+    <div class="acciones">
+        <a
+            class="btn btn-primario"
+            href="{% url 'almacen:asignacion_crear' %}"
+        >
+            + Nueva asignación
+        </a>
+    </div>
+
+</div>
+
+
+<!-- ============================================================
+     FILTROS
+============================================================ -->
+<form class="filtros" method="get">
+
+    <!-- Buscar -->
+    <div class="filtro-busqueda">
+        <input
+            class="input buscar"
+            type="search"
+            name="q"
+            value="{{ q }}"
+            placeholder="Buscar técnico, cédula, producto, código, cuenta contrato"
+        >
+    </div>
+
+    <!-- Filtrar por técnico -->
+    <select
+    class="input select-tecnico"
+    name="tecnico"
+    onchange="this.form.submit()"
+>
+    <option value="">Ningun Tecnico Seleccionado</option>
+
+    {% for tecnico in tecnicos_lista %}
+        <option
+            value="{{ tecnico.pk }}"
+            {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
+                selected
+            {% endif %}
+        >
+            {{ tecnico.tecnico_apellido_nombres }}
+        </option>
+    {% endfor %}
+</select>
+
+    <!-- Filtrar por estado -->
+    <select
+        class="input select-estado"
+        name="estado"
+        onchange="this.form.submit()"
+    >
+        <option value="">Todos los estados</option>
+
+        {% for v, l in estados %}
+            <option
+                value="{{ v }}"
+                {% if v == estado_sel %}selected{% endif %}
+            >
+                {{ l }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <button class="btn" type="submit">
+        Buscar
+    </button>
+
+    {% if q or estado_sel or tecnico_sel %}
+    <a
+        class="btn btn-limpiar"
+        href="{% url 'almacen:asignaciones' %}"
+    >
+        Limpiar
+    </a>
+{% endif %}
+
+</form>
+
+
+
+<!-- ============================================================
+     TABLA CONSOLIDADA
+============================================================ -->
+
+<div class="tarjeta tarjeta-asignaciones">
+
+    {% if tecnicos and productos %}
+
+        <div class="tabla-consolidada">
+
+            <table>
+
+                <!-- ==================================================
+                     CABECERA
+                =================================================== -->
+
+                <thead>
+
+                    <tr>
+
+                        <th class="col-tecnico">
+                            TÉCNICO
+                        </th>
+
+                        <th class="col-concepto">
+                            ASIGNACIÓN
+                        </th>
+
+
+                        {% for producto in productos %}
+
+                            <th
+                                class="col-producto"
+                                title="{{ producto.nombre_completo }}"
+                            >
+
+                                <div class="producto-header">
+
+                                    <strong>
+                                        {{ producto.nombre }}
+                                    </strong>
+
+                                    {% if producto.medida %}
+                                        <span>{{ producto.medida }}</span>
+                                    {% endif %}
+
+                                    {% if producto.color %}
+                                        <span>{{ producto.color }}</span>
+                                    {% endif %}
+
+                                    {% if producto.presentacion %}
+                                        <span>{{ producto.presentacion }}</span>
+                                    {% endif %}
+
+                                    <small>
+                                        {{ producto.codigo_producto }}
+                                    </small>
+
+                                </div>
+
+                            </th>
+
+                        {% endfor %}
+
+                    </tr>
+
+                </thead>
+
+
+                <!-- ==================================================
+                     CUERPO
+                =================================================== -->
+
+                <tbody>
+
+                    {% for tecnico_data in tecnicos %}
+
+                        <!-- ==================================================
+                             ASIGNADOS
+                        =================================================== -->
+
+                        <tr class="fila-asignados">
+
+                            <!-- Reemplaza TODO el <td class="tecnico-nombre" rowspan="4"> ... </td> de la fila "fila-asignados" -->
+
+                            <td class="tecnico-nombre" rowspan="4">
+
+                                <div class="tecnico-card">
+
+                                    <div class="tecnico-top">
+                                        <div class="tecnico-avatar">
+                                            {{ tecnico_data.tecnico.tecnico_apellido_nombres|slice:":1"|upper }}
+                                        </div>
+
+                                        <div class="tecnico-datos">
+                                            <strong class="tecnico-titulo">
+                                                {{ tecnico_data.tecnico.tecnico_apellido_nombres }}
+                                            </strong>
+
+                                            {% if tecnico_data.tecnico.tecnico_cedula %}
+                                                <span class="chip-cedula">
+                                                    CC {{ tecnico_data.tecnico.tecnico_cedula }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    {% if tecnico_data.tecnico.supervisor %}
+                                        <div class="tecnico-supervisor">
+                                            <span class="label">Supervisor</span>
+                                            <span class="valor-sup">{{ tecnico_data.tecnico.supervisor }}</span>
+                                        </div>
+                                    {% endif %}
+
+                                    <a class="btn-gestionar-nuevo"
+                                    href="{% url 'almacen:tecnico_asignaciones' tecnico_data.tecnico.pk %}">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M7 7h13l-3-3M17 17H4l3 3"/>
+                                        </svg>
+                                        Instalar / Devolver
+                                    </a>
+
+                                </div>
+
+                            </td>
+
+
+                            <td class="concepto asignados">
+                                ASIGNADOS
+                            </td>
+
+
+                            {% for cantidad in tecnico_data.filas.ASIGNADOS %}
+
+                                <td class="valor asignado">
+
+                                    {% if cantidad > 0 %}
+
+                                        <strong>
+                                            {{ cantidad }}
+                                        </strong>
+
+                                    {% else %}
+
+                                        <span class="cero">0</span>
+
+                                    {% endif %}
+
+                                </td>
+
+                            {% endfor %}
+
+                        </tr>
+
+
+                        <!-- ==================================================
+                             FIVE
+                        =================================================== -->
+
+                        <tr class="fila-five">
+
+                            <td class="concepto five">
+                                INSTALADO<br>
+                                SEGÚN FIVE
+                            </td>
+
+
+                            {% for cantidad in tecnico_data.filas.FIVE %}
+
+                                <td class="valor">
+
+                                    {% if cantidad > 0 %}
+
+                                        <strong>
+                                            {{ cantidad }}
+                                        </strong>
+
+                                    {% else %}
+
+                                        <span class="cero">0</span>
+
+                                    {% endif %}
+
+                                </td>
+
+                            {% endfor %}
+
+                        </tr>
+
+
+                        <!-- ==================================================
+                             SAP
+                        =================================================== -->
+
+                        <tr class="fila-sap">
+
+                            <td class="concepto sap">
+                                INSTALADOS<br>
+                                POR SAP
+                            </td>
+
+
+                            {% for cantidad in tecnico_data.filas.SAP %}
+
+                                <td class="valor">
+
+                                    {% if cantidad > 0 %}
+
+                                        <strong>
+                                            {{ cantidad }}
+                                        </strong>
+
+                                    {% else %}
+
+                                        <span class="cero">0</span>
+
+                                    {% endif %}
+
+                                </td>
+
+                            {% endfor %}
+
+                        </tr>
+
+
+                        <!-- ==================================================
+                             DEBE TENER
+                        =================================================== -->
+
+                        <tr class="fila-debe">
+
+                            <td class="concepto debe">
+                                DEBE TENER
+                            </td>
+
+
+                            {% for cantidad in tecnico_data.filas.DEBE_TENER %}
+
+                                <td class="valor debe-valor">
+
+                                    {% if cantidad > 0 %}
+
+                                        <strong>
+                                            {{ cantidad }}
+                                        </strong>
+
+                                    {% else %}
+
+                                        <span class="cero">
+                                            0
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+                            {% endfor %}
+
+                        </tr>
+
+
+                        <!-- ==================================================
+                             SEPARADOR
+                        =================================================== -->
+
+                        <tr class="separador-tecnico">
+
+                            <td
+                                colspan="100"
+                            ></td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+    {% else %}
+
+        <div class="vacio">
+
+            <div class="vacio-icono">
+                📦
+            </div>
+
+            <strong>
+                No hay asignaciones
+            </strong>
+
+            <span>
+                Asigne material o una unidad a un técnico
+                para comenzar a controlar sus existencias.
+            </span>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block titulo %}Unidades con código{% endblock %}
+
+{% block contenido %}
+
+<div class="cabecera">
+  <div>
+    <h1>Unidades con código</h1>
+    <p>
+      Cada medidor, regulador y válvula tiene su código y su historia:
+      asignación, instalación y ubicación.
+    </p>
+  </div>
+
+  <div class="acciones">
+    <a class="btn btn-primario"
+       href="{% url 'almacen:ingreso_crear' %}">
+      Registrar ingreso
+    </a>
+  </div>
+</div>
+
+<!-- FILTROS -->
+<form class="filtros" method="get">
+
+  <!-- Búsqueda general -->
+  <input
+    class="input buscar"
+    type="search"
+    name="q"
+    value="{{ request.GET.q }}"
+    placeholder="Buscar código, serial, producto, marca, medida, técnico, cédula o remisión..."
+    autocomplete="off"
+  >
+
+  <!-- Técnico -->
+  <select
+    class="input"
+    name="tecnico"
+    onchange="this.form.submit()"
+  >
+    <option value="">Todos los técnicos</option>
+
+    {% for t in tecnicos_lista %}
+      <option
+        value="{{ t.pk }}"
+        {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}
+      >
+        {{ t.tecnico_apellido_nombres }}
+        {% if t.tecnico_cedula %}
+          — CC {{ t.tecnico_cedula }}
+        {% endif %}
+      </option>
+    {% endfor %}
+  </select>
+
+  <!-- Producto -->
+  <select
+    class="input"
+    name="producto"
+    onchange="this.form.submit()"
+  >
+    <option value="">Todos los productos</option>
+
+    {% for p in productos %}
+      <option
+        value="{{ p.pk }}"
+        {% if p.pk|stringformat:"s" == producto_sel %}selected{% endif %}
+      >
+        {{ p.nombre_completo }}
+      </option>
+    {% endfor %}
+  </select>
+
+  <!-- Estado -->
+  <select
+    class="input"
+    name="estado"
+    onchange="this.form.submit()"
+  >
+    <option value="">Todos los estados</option>
+
+    {% for v, l in estados %}
+      <option
+        value="{{ v }}"
+        {% if v == estado_sel %}selected{% endif %}
+      >
+        {{ l }}
+      </option>
+    {% endfor %}
+  </select>
+
+  <!-- Único botón para borrar filtros -->
+  {% if request.GET.q or tecnico_sel or producto_sel or estado_sel %}
+    <a
+      class="btn btn-secundario"
+      href="{% url 'almacen:unidades' %}"
+    >
+      Borrar filtros
+    </a>
+  {% endif %}
+
+</form>
+
+<!-- AVISO DEL TÉCNICO -->
+{% if tecnico_sel %}
+  <div class="tarjeta" style="margin-bottom: 16px; padding: 14px 18px;">
+    <strong>Unidades del técnico seleccionado</strong>
+    <p class="suave" style="margin: 5px 0 0;">
+      Se muestran las unidades relacionadas con el técnico seleccionado,
+      según su asignación y estado.
+    </p>
+  </div>
+{% endif %}
+
+<!-- TABLA DE UNIDADES -->
+<div class="tarjeta">
+
+  {% if object_list %}
+
+    <div class="tabla-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Remisión / Ingreso</th>
+            <th>Material</th>
+            <th>Código</th>
+            <th>Serial</th>
+            <th>Marca</th>
+            <th>Medida</th>
+            <th>Ubicación / Responsable</th>
+            <th>Estado</th>
+            <th>Último cambio</th>
+
+            {% if hay_instaladas %}
+              <th>Orden</th>
+              <th>Cuenta contrato</th>
+            {% endif %}
+
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for u in object_list %}
+            <tr>
+
+              <!-- REMISIÓN / FECHA DE INGRESO -->
+              <td>
+                {% if u.remision %}
+                  {% if u.remision.comprobante_imagen %}
+                    <a
+                      href="{{ u.remision.comprobante_imagen.url }}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Ver comprobante de remisión"
+                    >
+                      {{ u.remision.numero_remision }}
+                    </a>
+                  {% else %}
+                    {{ u.remision.numero_remision }}
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+
+                <div class="suave">
+                  {{ u.fecha_ingreso|date:"d/m/Y" }}
+                </div>
+              </td>
+
+              <!-- MATERIAL -->
+              <td>
+                {{ u.producto.nombre }}
+              </td>
+
+              <!-- CÓDIGO -->
+              <td>
+                <a
+                  class="codigo"
+                  href="{% url 'almacen:unidad_detalle' u.pk %}"
+                >
+                  <strong>{{ u.codigo }}</strong>
+                </a>
+              </td>
+
+              <!-- SERIAL -->
+              <td class="codigo">
+                {{ u.numero_serie|default:"—" }}
+              </td>
+
+              <!-- MARCA -->
+              <td>
+                {{ u.marca|default:"—" }}
+              </td>
+
+              <!-- MEDIDA -->
+              <td>
+                {{ u.medida|default:"—" }}
+              </td>
+
+              <!-- UBICACIÓN / RESPONSABLE -->
+              <td>
+                {% if u.estado == "DISPONIBLE" %}
+                  Almacén
+
+                {% elif u.estado == "ASIGNADO" %}
+                  {% if u.asignacion_relevante %}
+                    {{ u.asignacion_relevante.tecnico.tecnico_apellido_nombres }}
+                  {% else %}
+                    <span class="suave">Sin técnico registrado</span>
+                  {% endif %}
+
+                {% elif u.estado == "INSTALADO" %}
+                  {% if u.asignacion_relevante %}
+                    {{ u.asignacion_relevante.tecnico.tecnico_apellido_nombres }}
+                    <div class="suave">
+                      Técnico de la instalación
+                    </div>
+                  {% else %}
+                    Instalado — técnico no registrado
+                  {% endif %}
+
+                {% elif u.estado == "DANADO" %}
+                  Almacén
+
+                {% elif u.estado == "BAJA" %}
+                  Devuelto / Fuera de servicio
+
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <!-- ESTADO -->
+              <td>
+                <span class="chip chip-{{ u.estado|lower }}">
+                  {{ u.get_estado_display }}
+                </span>
+              </td>
+
+              <!-- ÚLTIMO CAMBIO -->
+              <td class="num suave">
+                {% if u.fecha_cambio_estado %}
+                  {{ u.fecha_cambio_estado|date:"d/m/Y H:i" }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <!-- ORDEN Y CUENTA CONTRATO -->
+              {% if hay_instaladas %}
+
+                <td class="codigo">
+                  {% if u.estado == "INSTALADO" %}
+                    {% if u.asignacion_relevante and u.asignacion_relevante.operacion %}
+                      {{ u.asignacion_relevante.operacion.numero_orden|default:"—" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+                <td class="codigo">
+                  {% if u.estado == "INSTALADO" %}
+                    {% if u.asignacion_relevante and u.asignacion_relevante.operacion %}
+                      {{ u.asignacion_relevante.operacion.numero_cuenta_contrato|default:"—" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+              {% endif %}
+
+              <!-- ACCIONES -->
+              <td class="texto-derecha">
+                {% if u.estado in estados_editables %}
+                  <a
+                    class="btn btn-pequeno btn-secundario"
+                    href="{% url 'almacen:unidad_estado' u.pk %}"
+                  >
+                    Cambiar estado
+                  </a>
+                {% endif %}
+              </td>
+
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  {% else %}
+
+    <div class="vacio">
+      <strong>No hay unidades con estos filtros</strong>
+      Registre un ingreso de un producto con código para crearlas.
+    </div>
+
+  {% endif %}
+
+  {% include "_paginacion.html" %}
+
+</div>
+
+{% endblock %}

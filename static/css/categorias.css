@@ -1,0 +1,682 @@
+/* =========================================================
+   MATERIALES / CATEGORÍAS - ATC CONTROLES
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   CABECERA
+   --------------------------------------------------------- */
+
+.cabecera {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.cabecera h1 {
+    margin: 0;
+    color: #263238;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.cabecera p {
+    margin: 7px 0 0;
+    color: #718078;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.acciones {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+
+/* ---------------------------------------------------------
+   FILTROS
+   --------------------------------------------------------- */
+
+.filtros {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    margin-bottom: 18px;
+    padding: 14px;
+
+    background: #ffffff;
+    border: 1px solid #e1e8e4;
+    border-radius: 10px;
+}
+
+.filtros .buscar {
+    flex: 1;
+    min-width: 0;
+}
+
+.input {
+    width: 100%;
+    box-sizing: border-box;
+
+    height: 40px;
+    padding: 9px 12px;
+
+    border: 1px solid #d5ddd8;
+    border-radius: 8px;
+
+    background: #ffffff;
+    color: #263238;
+
+    font-family: "Figtree", sans-serif;
+    font-size: 14px;
+
+    outline: none;
+
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+.input:focus {
+    border-color: #52b788;
+    box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.14);
+}
+
+.input::placeholder {
+    color: #9aa7a1;
+}
+
+
+/* ---------------------------------------------------------
+   TARJETA
+   --------------------------------------------------------- */
+
+.tarjeta {
+    width: 100%;
+    box-sizing: border-box;
+
+    background: #ffffff;
+
+    border: 1px solid #e1e8e4;
+    border-radius: 10px;
+
+    box-shadow: 0 2px 8px rgba(38, 50, 56, 0.04);
+
+    overflow: hidden;
+}
+
+
+/* ---------------------------------------------------------
+   TABLA
+   --------------------------------------------------------- */
+
+.tabla-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.tabla-wrap table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+
+/* ---------------------------------------------------------
+   ENCABEZADO DE TABLA
+   --------------------------------------------------------- */
+
+.tabla-wrap thead {
+    background: #f4f7f5;
+}
+
+.tabla-wrap th {
+    height: 46px;
+
+    padding: 10px 16px;
+
+    border-bottom: 1px solid #dfe7e2;
+
+    color: #52615a;
+
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+
+/* Anchos */
+
+.tabla-wrap th:nth-child(1) {
+    width: 38%;
+}
+
+.tabla-wrap th:nth-child(2) {
+    width: 25%;
+}
+
+.tabla-wrap th:nth-child(3) {
+    width: 18%;
+}
+
+.tabla-wrap th:nth-child(4) {
+    width: 19%;
+}
+
+
+/* ---------------------------------------------------------
+   FILAS
+   --------------------------------------------------------- */
+
+.tabla-wrap tbody tr {
+    border-bottom: 1px solid #edf1ef;
+    transition: background 0.15s ease;
+}
+
+.tabla-wrap tbody tr:last-child {
+    border-bottom: none;
+}
+
+.tabla-wrap tbody tr:hover {
+    background: #f8faf9;
+}
+
+.tabla-wrap td {
+    padding: 13px 16px;
+
+    color: #45534c;
+
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+
+/* ---------------------------------------------------------
+   NOMBRE
+   --------------------------------------------------------- */
+
+.tabla-wrap td strong {
+    display: block;
+
+    color: #263238;
+
+    font-size: 14px;
+    font-weight: 700;
+}
+
+
+/* ---------------------------------------------------------
+   PREFIJO
+   --------------------------------------------------------- */
+
+.codigo {
+    color: #2d6a4f !important;
+
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px !important;
+    font-weight: 600;
+}
+
+
+/* ---------------------------------------------------------
+   CHIPS DE ESTADO
+   --------------------------------------------------------- */
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 68px;
+    height: 26px;
+    box-sizing: border-box;
+
+    padding: 4px 10px;
+
+    border-radius: 999px;
+
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.chip-activo {
+    background: #d8f3dc;
+    color: #1b6b46;
+}
+
+.chip-inactivo {
+    background: #f1f3f2;
+    color: #707b76;
+}
+
+
+/* ---------------------------------------------------------
+   ACCIONES DE FILA
+   --------------------------------------------------------- */
+
+.fila-acciones {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+}
+
+
+/* ---------------------------------------------------------
+   BOTONES
+   --------------------------------------------------------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    box-sizing: border-box;
+
+    min-height: 40px;
+    padding: 9px 16px;
+
+    border: 1px solid #d5ddd8;
+    border-radius: 8px;
+
+    background: #ffffff;
+    color: #52615a;
+
+    font-family: "Figtree", sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+
+    text-decoration: none;
+
+    cursor: pointer;
+
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease,
+        transform 0.15s ease;
+}
+
+.btn:hover {
+    background: #f4f7f5;
+    border-color: #bcc9c2;
+}
+
+
+/* Botón principal */
+
+.btn-primario {
+    border-color: #2d6a4f;
+    background: #2d6a4f;
+    color: #ffffff;
+}
+
+.btn-primario:hover {
+    border-color: #24563f;
+    background: #24563f;
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+
+/* Botón pequeño */
+
+.btn-chico {
+    min-height: 32px;
+    padding: 6px 12px;
+
+    border-radius: 7px;
+
+    font-size: 12px;
+}
+
+
+/* ---------------------------------------------------------
+   ESTADO VACÍO
+   --------------------------------------------------------- */
+
+.vacio {
+    min-height: 180px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    gap: 7px;
+
+    padding: 30px;
+
+    text-align: center;
+
+    color: #718078;
+    font-size: 13px;
+}
+
+.vacio strong {
+    color: #263238;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.vacio::before {
+    content: "📦";
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 46px;
+    height: 46px;
+
+    margin-bottom: 5px;
+
+    border-radius: 12px;
+
+    background: #d8f3dc;
+
+    font-size: 21px;
+}
+
+
+/* ---------------------------------------------------------
+   PAGINACIÓN
+   --------------------------------------------------------- */
+
+.tarjeta > .paginacion,
+.tarjeta .paginacion {
+    padding: 14px 16px;
+
+    border-top: 1px solid #edf1ef;
+}
+
+
+/* ---------------------------------------------------------
+   RESPONSIVE
+   --------------------------------------------------------- */
+
+@media (max-width: 760px) {
+
+    .cabecera {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .acciones {
+        width: 100%;
+    }
+
+    .acciones .btn {
+        width: 100%;
+    }
+
+    .filtros {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filtros .buscar {
+        width: 100%;
+    }
+
+    .filtros .btn {
+        width: 100%;
+    }
+
+    .tabla-wrap {
+        overflow-x: auto;
+    }
+
+    .tabla-wrap table {
+        min-width: 650px;
+    }
+}
+
+
+@media (max-width: 480px) {
+
+    .cabecera h1 {
+        font-size: 22px;
+    }
+
+    .cabecera p {
+        font-size: 13px;
+    }
+
+    .tarjeta {
+        border-radius: 8px;
+    }
+}
+
+/* ==============================
+   PRODUCTOS / LISTADOS
+   ============================== */
+
+.cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 18px;
+}
+
+.cabecera h1 {
+    margin: 0;
+    color: #263238;
+    font-size: 25px;
+}
+
+.cabecera p {
+    margin: 5px 0 0;
+    color: #718078;
+    font-size: 13px;
+}
+
+.filtros {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.input {
+    height: 38px;
+    padding: 0 11px;
+    border: 1px solid #d5ddd8;
+    border-radius: 7px;
+    background: #fff;
+    color: #263238;
+}
+
+.buscar {
+    flex: 1;
+    min-width: 180px;
+}
+
+.tarjeta {
+    background: #fff;
+    border: 1px solid #e1e8e4;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.tabla-wrap {
+    width: 100%;
+    overflow: hidden;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+th,
+td {
+    padding: 10px 9px;
+    border-bottom: 1px solid #edf1ef;
+    text-align: left;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+th {
+    background: #f4f8f5;
+    color: #52615a;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+
+tbody tr:hover {
+    background: #f8fbf9;
+}
+
+.codigo {
+    color: #2d6a4f;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.suave {
+    margin-top: 3px;
+    color: #7b8781;
+    font-size: 11px;
+}
+
+.num {
+    text-align: right;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+}
+
+.chip {
+    display: inline-block;
+    padding: 4px 7px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.chip-tipo {
+    background: #edf6f1;
+    color: #2d6a4f;
+}
+
+.chip-activo {
+    background: #d8f3dc;
+    color: #276749;
+}
+
+.chip-inactivo {
+    background: #f1f3f2;
+    color: #707a75;
+}
+
+.fila-acciones {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid #d5ddd8;
+    border-radius: 7px;
+    background: #fff;
+    color: #405047;
+    text-decoration: none;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.btn:hover {
+    background: #f1f7f3;
+}
+
+.btn-primario {
+    background: #2d6a4f;
+    border-color: #2d6a4f;
+    color: #fff;
+}
+
+.btn-chico {
+    min-height: 28px;
+    padding: 0 9px;
+    font-size: 11px;
+}
+
+/* Ancho de columnas */
+.tabla-wrap th:nth-child(1),
+.tabla-wrap td:nth-child(1) { width: 13%; }
+
+.tabla-wrap th:nth-child(2),
+.tabla-wrap td:nth-child(2) { width: 25%; }
+
+.tabla-wrap th:nth-child(3),
+.tabla-wrap td:nth-child(3) { width: 15%; }
+
+.tabla-wrap th:nth-child(4),
+.tabla-wrap td:nth-child(4) { width: 14%; }
+
+.tabla-wrap th:nth-child(5),
+.tabla-wrap td:nth-child(5) { width: 10%; }
+
+.tabla-wrap th:nth-child(6),
+.tabla-wrap td:nth-child(6) { width: 11%; }
+
+.tabla-wrap th:nth-child(7),
+.tabla-wrap td:nth-child(7) { width: 12%; }
+
+/* Evita que textos largos dañen la tabla */
+td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vacio {
+    padding: 35px 20px;
+    text-align: center;
+    color: #718078;
+}
+
+.vacio strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #263238;
+}
+
+/* Pantallas pequeñas */
+@media (max-width: 800px) {
+    .filtros,
+    .cabecera {
+        flex-wrap: wrap;
+    }
+
+    .filtros .input,
+    .filtros .btn {
+        flex: 1;
+    }
+
+    th,
+    td {
+        padding: 8px 6px;
+        font-size: 11px;
+    }
+
+    .chip {
+        font-size: 10px;
+    }
+}

@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/formularios.css' %}">
+
+<style>
+    .ingreso-contenedor {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .ingreso-card {
+        overflow: hidden;
+    }
+
+    .ingreso-campo {
+        margin-bottom: 20px;
+    }
+
+    /* Información del producto */
+    .producto-info {
+        display: none;
+        margin-top: 14px;
+        padding: 15px 17px;
+        border: 1px solid #dce8e1;
+        border-radius: 10px;
+        background: #f7fbf8;
+    }
+
+    .producto-info.visible {
+        display: block;
+    }
+
+    .producto-info-titulo {
+        margin: 0 0 13px;
+        color: #2d6a4f;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .producto-datos {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px 20px;
+    }
+
+    .producto-dato {
+        min-width: 0;
+    }
+
+    .producto-dato small {
+        display: block;
+        margin-bottom: 3px;
+        color: #7a8881;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .producto-dato span {
+        display: block;
+        color: #263238;
+        font-size: 13px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    /* Aviso código interno */
+    .aviso-codigo {
+        display: none;
+        margin-top: 12px;
+        padding: 10px 13px;
+        border: 1px solid #cfe6d6;
+        border-radius: 8px;
+        background: #edf8f0;
+        color: #2d6a4f;
+        font-size: 12px;
+    }
+
+    .aviso-codigo.visible {
+        display: block;
+    }
+
+    /* Cantidad */
+    .cantidad-campo {
+        max-width: 250px;
+    }
+
+    /* Números de serie */
+    .seriales-box {
+        display: none;
+        margin-top: 18px;
+        padding: 15px 17px;
+        border: 1px solid #dce8e1;
+        border-radius: 10px;
+        background: #fafcfb;
+    }
+
+    .seriales-box.visible {
+        display: block;
+    }
+
+    .seriales-titulo {
+        margin: 0 0 10px;
+        color: #263238;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .seriales-ayuda {
+        margin-top: 6px;
+        color: #718078;
+        font-size: 12px;
+    }
+
+    .seriales-box textarea {
+        min-height: 110px;
+        resize: vertical;
+        font-family: "IBM Plex Mono", monospace;
+        line-height: 1.6;
+    }
+
+    .seriales-contador {
+        margin-top: 7px;
+        color: #6f7d76;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    /* Observaciones */
+    .observaciones-campo textarea {
+        min-height: 90px;
+        resize: vertical;
+    }
+
+    /* Errores */
+    .error-campo {
+        display: block;
+        margin-top: 5px;
+        color: #b42318;
+        font-size: 12px;
+    }
+
+    .form-pie {
+        margin-top: 24px;
+    }
+
+    @media (max-width: 700px) {
+        .producto-datos {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .cantidad-campo {
+            max-width: none;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .producto-datos {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block contenido %}
+
+<div class="cabecera">
+    <div>
+        <h1>{{ titulo }}</h1>
+
+        {% if subtitulo %}
+            <p>{{ subtitulo }}</p>
+        {% endif %}
+    </div>
+</div>
+
+
+<div class="ingreso-contenedor">
+
+    <!-- IMPORTANTE: enctype="multipart/form-data" añadido para que la foto viaje correctamente -->
+    <form method="post"
+          enctype="multipart/form-data"
+          class="tarjeta form-caja ingreso-card"
+          novalidate>
+
+        {% csrf_token %}
+
+        <div class="tarjeta-cuerpo">
+
+            {% if form.non_field_errors %}
+                <div class="alerta-form">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+
+            <!-- ==========================================
+                  NÚMERO DE ORDEN / REMISIÓN
+                 ========================================== -->
+
+            <div class="campo ingreso-campo">
+                <label for="{{ form.numero_orden.id_for_label }}">
+                    {{ form.numero_orden.label }}
+                </label>
+
+                <!-- Usamos un datalist para mostrar las existentes y permitir escribir una nueva -->
+                <input type="text" 
+                    name="numero_orden" 
+                    id="{{ form.numero_orden.id_for_label }}" 
+                    list="lista_remisiones" 
+                    class="input"
+                    value="{{ form.numero_orden.value|default:'' }}"
+                    placeholder="Escriba o seleccione una remisión..."
+                    maxlength="30" required>
+
+                <datalist id="lista_remisiones">
+                    {% for remision in remisiones_existentes %}
+                        <option value="{{ remision.numero_remision }}">
+                    {% endfor %}
+                </datalist>
+
+                {% if form.numero_orden.help_text %}
+                    <span class="ayuda">{{ form.numero_orden.help_text }}</span>
+                {% endif %}
+
+                {% for error in form.numero_orden.errors %}
+                    <span class="error-campo">{{ error }}</span>
+                {% endfor %}
+            </div>
+
+
+            <!-- ==========================================
+                  FOTO / COMPROBANTE DE REMISIÓN
+                 ========================================== -->
+
+            <div class="campo ingreso-campo">
+                <label for="{{ form.comprobante_imagen.id_for_label }}">
+                    {{ form.comprobante_imagen.label }}
+                </label>
+
+                {{ form.comprobante_imagen }}
+
+                {% if form.comprobante_imagen.help_text %}
+                    <span class="ayuda">{{ form.comprobante_imagen.help_text }}</span>
+                {% endif %}
+
+                {% for error in form.comprobante_imagen.errors %}
+                    <span class="error-campo">{{ error }}</span>
+                {% endfor %}
+            </div>
+
+
+            <!-- ==========================================
+                 FECHA
+                 ========================================== -->
+
+            <div class="campo ingreso-campo">
+                <label for="{{ form.fecha_ingreso.id_for_label }}">
+                    {{ form.fecha_ingreso.label }}
+                </label>
+
+                {{ form.fecha_ingreso }}
+
+                {% if form.fecha_ingreso.help_text %}
+                    <span class="ayuda">{{ form.fecha_ingreso.help_text }}</span>
+                {% endif %}
+
+                {% for error in form.fecha_ingreso.errors %}
+                    <span class="error-campo">{{ error }}</span>
+                {% endfor %}
+            </div>
+
+
+            <!-- ==========================================
+                 PRODUCTO
+                 ========================================== -->
+
+            <div class="campo ingreso-campo">
+                <label for="{{ form.producto.id_for_label }}">
+                    {{ form.producto.label }}
+                </label>
+
+                {{ form.producto }}
+
+                {% if form.producto.help_text %}
+                    <span class="ayuda">{{ form.producto.help_text }}</span>
+                {% endif %}
+
+                {% for error in form.producto.errors %}
+                    <span class="error-campo">{{ error }}</span>
+                {% endfor %}
+
+
+                <!-- Información automática -->
+                <div id="producto-info" class="producto-info">
+                    <p class="producto-info-titulo">Información del producto</p>
+
+                    <div class="producto-datos">
+                        <div class="producto-dato">
+                            <small>Nombre</small>
+                            <span id="info-nombre">—</span>
+                        </div>
+
+                        <div class="producto-dato">
+                            <small>Código</small>
+                            <span id="info-codigo">—</span>
+                        </div>
+
+                        <div class="producto-dato">
+                            <small>Marca</small>
+                            <span id="info-marca">—</span>
+                        </div>
+
+                        <div class="producto-dato">
+                            <small>Referencia</small>
+                            <span id="info-referencia">—</span>
+                        </div>
+
+                        <div class="producto-dato">
+                            <small>Medida</small>
+                            <span id="info-medida">—</span>
+                        </div>
+
+                        <div class="producto-dato">
+                            <small>Unidad de medida</small>
+                            <span id="info-unidad">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aviso para productos serializados -->
+                <div id="codigo-automatico" class="aviso-codigo">
+                    <strong>Código interno:</strong>
+                    el sistema generará automáticamente un código
+                    para cada unidad que ingrese.
+                </div>
+            </div>
+
+
+            <!-- ==========================================
+                 CANTIDAD
+                 ========================================== -->
+
+            <div class="campo ingreso-campo cantidad-campo">
+                <label for="{{ form.cantidad.id_for_label }}">
+                    {{ form.cantidad.label }}
+                </label>
+
+                {{ form.cantidad }}
+
+                {% if form.cantidad.help_text %}
+                    <span class="ayuda">{{ form.cantidad.help_text }}</span>
+                {% endif %}
+
+                {% for error in form.cantidad.errors %}
+                    <span class="error-campo">{{ error }}</span>
+                {% endfor %}
+            </div>
+
+
+            <!-- ==========================================
+                 NÚMEROS DE SERIE FÍSICOS
+                 ========================================== -->
+
+            <div id="seriales-seccion" class="seriales-box">
+                <p class="seriales-titulo">Números de serie físicos</p>
+
+                <div class="campo">
+                    <label for="{{ form.numeros_serie.id_for_label }}">
+                        {{ form.numeros_serie.label }}
+                    </label>
+
+                    {{ form.numeros_serie }}
+
+                    <div class="seriales-ayuda">Escriba un número de serie por línea.</div>
+
+                    <div id="contador-seriales" class="seriales-contador">
+                        0 seriales ingresados
+                    </div>
+
+                    {% for error in form.numeros_serie.errors %}
+                        <span class="error-campo">{{ error }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+
+            <!-- ==========================================
+                 OBSERVACIONES
+                 ========================================== -->
+
+            <div class="campo ingreso-campo observaciones-campo">
+                <label for="{{ form.observacion.id_for_label }}">
+                    {{ form.observacion.label }}
+                </label>
+
+                {{ form.observacion }}
+
+                {% if form.observacion.help_text %}
+                    <span class="ayuda">{{ form.observacion.help_text }}</span>
+                {% endif %}
+
+                {% for error in form.observacion.errors %}
+                    <span class="error-campo">{{ error }}</span>
+                {% endfor %}
+            </div>
+
+
+            <!-- ==========================================
+                 BOTONES
+                 ========================================== -->
+
+            <div class="form-pie">
+                <button type="submit" class="btn btn-primario">
+                    {{ boton }}
+                </button>
+
+                <a href="{{ cancel_url }}" class="btn">
+                    Cancelar
+                </a>
+            </div>
+
+        </div>
+
+    </form>
+
+</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const producto = document.getElementById("id_producto");
+    const cantidad = document.getElementById("id_cantidad");
+    const seriales = document.getElementById("id_numeros_serie");
+    const productoInfo = document.getElementById("producto-info");
+    const codigoAutomatico = document.getElementById("codigo-automatico");
+    const serialesSeccion = document.getElementById("seriales-seccion");
+    const contadorSeriales = document.getElementById("contador-seriales");
+
+    const infoNombre = document.getElementById("info-nombre");
+    const infoCodigo = document.getElementById("info-codigo");
+    const infoMarca = document.getElementById("info-marca");
+    const infoReferencia = document.getElementById("info-referencia");
+    const infoMedida = document.getElementById("info-medida");
+    const infoUnidad = document.getElementById("info-unidad");
+
+    function texto(valor) {
+        return valor && valor.trim() ? valor.trim() : "No registrado";
+    }
+
+    function actualizarContador() {
+        if (!seriales || !contadorSeriales) return;
+
+        const lineas = seriales.value
+            .split("\n")
+            .map(linea => linea.trim())
+            .filter(linea => linea !== "");
+
+        const total = lineas.length;
+        contadorSeriales.textContent = total === 1 ? "1 serial ingresado" : total + " seriales ingresados";
+
+        if (cantidad && cantidad.value && total > 0) {
+            const esperado = parseInt(cantidad.value, 10);
+            if (!Number.isNaN(esperado) && esperado !== total) {
+                contadorSeriales.textContent += " · se esperan " + esperado;
+            }
+        }
+    }
+
+    function limpiarInformacion() {
+        if (productoInfo) productoInfo.classList.remove("visible");
+        if (codigoAutomatico) codigoAutomatico.classList.remove("visible");
+        if (serialesSeccion) serialesSeccion.classList.remove("visible");
+        if (seriales) seriales.required = false;
+
+        [infoNombre, infoCodigo, infoMarca, infoReferencia, infoMedida, infoUnidad].forEach(el => {
+            if (el) el.textContent = "—";
+        });
+        actualizarContador();
+    }
+
+    function actualizarProducto() {
+        if (!producto) return;
+        const opcion = producto.options[producto.selectedIndex];
+
+        if (!opcion || !opcion.value) {
+            limpiarInformacion();
+            return;
+        }
+
+        if (infoNombre) infoNombre.textContent = texto(opcion.dataset.nombre);
+        if (infoCodigo) infoCodigo.textContent = texto(opcion.dataset.codigo);
+        if (infoMarca) infoMarca.textContent = texto(opcion.dataset.marca);
+        if (infoReferencia) infoReferencia.textContent = texto(opcion.dataset.referencia);
+        if (infoMedida) infoMedida.textContent = texto(opcion.dataset.medida);
+        if (infoUnidad) infoUnidad.textContent = texto(opcion.dataset.unidadMedida);
+
+        if (productoInfo) productoInfo.classList.add("visible");
+
+        const serializado = opcion.dataset.serializado === "true";
+        const requiereSerial = opcion.dataset.requiereSerial === "true";
+
+        if (codigoAutomatico) {
+            codigoAutomatico.classList.toggle("visible", serializado);
+        }
+
+        if (serialesSeccion && seriales) {
+            serialesSeccion.classList.toggle("visible", requiereSerial);
+            seriales.required = requiereSerial;
+            if (!requiereSerial) seriales.value = "";
+        }
+        actualizarContador();
+    }
+
+    if (producto) producto.addEventListener("change", actualizarProducto);
+    if (seriales) seriales.addEventListener("input", actualizarContador);
+    if (cantidad) cantidad.addEventListener("input", actualizarContador);
+
+    actualizarProducto();
+});
+</script>
+
+{% endblock %}

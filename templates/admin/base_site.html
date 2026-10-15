@@ -1,0 +1,12 @@
+{% extends "admin/base.html" %}
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | ACT CONTROLES{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  :root { --primary: #0e2a3a; --secondary: #1479a6; --accent: #1479a6; --primary-fg: #fff; --header-color: #fff; --header-branding-color: #fff; --link-fg: #0f5f84; --link-hover-color: #1479a6; --button-bg: #1479a6; --button-hover-bg: #0f5f84; --default-button-bg: #1479a6; --default-button-hover-bg: #0f5f84; }
+  #header { background: #0e2a3a; }
+  #branding h1 { font-weight: 800; letter-spacing: .02em; }
+  div.breadcrumbs { background: #16384c; }
+</style>
+{% endblock %}
+{% block branding %}<h1 id="site-name"><a href="{% url 'admin:index' %}">ACT CONTROLES · Administración</a></h1>{% endblock %}
+{% block nav-global %}<a href="{% url 'dashboard' %}" style="color:#fff;font-weight:600;margin-left:20px">← Volver al sistema</a>{% endblock %}

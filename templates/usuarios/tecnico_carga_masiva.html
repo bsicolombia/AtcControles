@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block titulo %}Carga masiva de técnicos{% endblock %}
+
+{% block contenido %}
+
+<div class="cabecera">
+    <div>
+        <h1>Carga masiva de técnicos</h1>
+        <p>
+            Registre varios técnicos mediante un archivo Excel.
+        </p>
+    </div>
+
+    <div class="acciones">
+        <a
+            class="btn"
+            href="{% url 'tecnicos:lista' %}"
+        >
+            Volver a técnicos
+        </a>
+    </div>
+</div>
+
+
+<div class="tarjeta carga-masiva">
+
+    <div class="carga-info">
+
+        <div>
+            <h2>1. Descargue la plantilla</h2>
+
+            <p>
+                Utilice la plantilla oficial para evitar errores
+                en los nombres de las columnas.
+            </p>
+
+            <a
+                class="btn btn-primario"
+                href="{% url 'tecnicos:plantilla' %}"
+            >
+                Descargar plantilla Excel
+            </a>
+        </div>
+
+
+        <div class="separador"></div>
+
+
+        <div>
+            <h2>2. Diligencie el archivo</h2>
+
+            <p>
+                El Excel debe contener únicamente estas columnas:
+            </p>
+
+            <div class="tabla-formato">
+
+                <div class="formato-celda encabezado">
+                    SUPERVISOR
+                </div>
+
+                <div class="formato-celda encabezado">
+                    CEDULA
+                </div>
+
+                <div class="formato-celda encabezado">
+                    APELLIDOS Y NOMBRES
+                </div>
+
+            </div>
+
+            <p class="texto-ayuda">
+                La columna ACTIVO no se incluye.
+                Los técnicos cargados quedarán activos
+                automáticamente.
+            </p>
+        </div>
+
+    </div>
+
+
+    <div class="separador-horizontal"></div>
+
+
+    <div>
+        <h2>3. Cargar archivo</h2>
+
+        <p class="texto-ayuda">
+            Seleccione el archivo Excel diligenciado.
+            El sistema validará las cédulas antes de guardar.
+        </p>
+
+        <form
+            method="post"
+            enctype="multipart/form-data"
+            class="formulario-carga"
+        >
+
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="mensaje-error">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+
+            <div class="campo-formulario">
+
+                <label for="{{ form.archivo.id_for_label }}">
+                    {{ form.archivo.label }}
+                </label>
+
+                {{ form.archivo }}
+
+                {% if form.archivo.help_text %}
+                    <small>
+                        {{ form.archivo.help_text }}
+                    </small>
+                {% endif %}
+
+                {% for error in form.archivo.errors %}
+                    <div class="error-campo">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+
+            </div>
+
+
+            <div class="acciones-formulario">
+
+                <a
+                    class="btn"
+                    href="{% url 'tecnicos:lista' %}"
+                >
+                    Cancelar
+                </a>
+
+                <button
+                    type="submit"
+                    class="btn btn-primario"
+                >
+                    Importar técnicos
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<style>
+
+    .carga-masiva {
+        max-width: 950px;
+        margin: 0 auto;
+    }
+
+    .carga-info {
+        display: grid;
+        grid-template-columns: 1fr 1px 1fr;
+        gap: 28px;
+        align-items: start;
+    }
+
+    .carga-info h2,
+    .carga-masiva h2 {
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-size: 18px;
+        color: var(--texto);
+    }
+
+    .carga-info p {
+        color: var(--texto-suave);
+        line-height: 1.6;
+        margin-top: 0;
+        margin-bottom: 18px;
+    }
+
+    .separador {
+        width: 1px;
+        height: 100%;
+        background: #e2e8ec;
+    }
+
+    .separador-horizontal {
+        height: 1px;
+        background: #e2e8ec;
+        margin: 30px 0;
+    }
+
+    .tabla-formato {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.5fr;
+        border: 1px solid #dce5e9;
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 18px 0;
+    }
+
+    .formato-celda {
+        padding: 12px;
+        border-right: 1px solid #dce5e9;
+        border-bottom: 1px solid #dce5e9;
+        font-size: 13px;
+    }
+
+    .formato-celda:last-child {
+        border-right: none;
+    }
+
+    .formato-celda.encabezado {
+        background: var(--verde);
+        color: white;
+        font-weight: 700;
+        text-align: center;
+    }
+
+    .texto-ayuda {
+        color: var(--texto-suave);
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .formulario-carga {
+        max-width: 650px;
+    }
+
+    .campo-formulario {
+        margin-bottom: 25px;
+    }
+
+    .campo-formulario label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: var(--texto);
+    }
+
+    .campo-formulario small {
+        display: block;
+        margin-top: 7px;
+        color: var(--texto-suave);
+        font-size: 13px;
+    }
+
+    .error-campo {
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: 7px;
+        background: #fdecec;
+        color: #b42318;
+        font-size: 13px;
+    }
+
+    .mensaje-error {
+        margin-bottom: 20px;
+        padding: 14px;
+        border-radius: 8px;
+        background: #fdecec;
+        color: #b42318;
+    }
+
+    .acciones-formulario {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding-top: 10px;
+    }
+
+    @media (max-width: 750px) {
+
+        .carga-info {
+            grid-template-columns: 1fr;
+        }
+
+        .separador {
+            width: 100%;
+            height: 1px;
+        }
+
+        .tabla-formato {
+            grid-template-columns: 1fr;
+        }
+
+        .formato-celda {
+            border-right: none;
+        }
+
+        .acciones-formulario {
+            flex-direction: column-reverse;
+        }
+
+        .acciones-formulario .btn {
+            width: 100%;
+            text-align: center;
+        }
+    }
+
+</style>
+
+{% endblock %}

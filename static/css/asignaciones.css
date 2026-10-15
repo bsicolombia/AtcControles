@@ -1,0 +1,171 @@
+/* Pegar al final de static/css/asignaciones.css */
+/* Filtros en una sola línea */
+.filtros {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+/* Campo de búsqueda */
+.filtro-busqueda {
+    flex: 1 1 auto;
+    min-width: 180px;
+}
+
+.filtro-busqueda .buscar {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Selector de técnico */
+.filtros .select-tecnico {
+    flex: 0 0 220px;
+    width: 220px;
+    min-width: 0;
+}
+
+/* Selector de estado */
+.filtros .select-estado {
+    flex: 0 0 180px;
+    width: 180px;
+    min-width: 0;
+}
+
+/* Botones */
+.filtros > button,
+.filtros > a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* Adaptación para pantallas pequeñas */
+@media (max-width: 768px) {
+    .filtros {
+        flex-wrap: wrap;
+    }
+
+    .filtro-busqueda {
+        flex: 1 1 100%;
+    }
+
+    .filtros .select-tecnico,
+    .filtros .select-estado {
+        flex: 1 1 180px;
+        width: auto;
+    }
+}
+.tecnico-nombre {
+    vertical-align: middle;
+    padding: 10px;
+    min-width: 230px;
+    max-width: 260px;
+}
+
+.tecnico-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    background: #ffffff;
+    border: 1px solid #e5e9f0;
+    border-left: 4px solid #2563eb;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, .06);
+    text-align: left;
+}
+
+.tecnico-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tecnico-avatar {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #eaf1ff;
+    color: #2563eb;
+    font-weight: 700;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tecnico-datos {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.tecnico-titulo {
+    font-size: 14px;
+    line-height: 1.25;
+    color: #101828;
+    text-transform: uppercase;
+    letter-spacing: .2px;
+    word-break: break-word;
+}
+
+.chip-cedula {
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475467;
+    background: #f2f4f7;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.tecnico-supervisor {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 10px;
+    border-top: 1px dashed #e5e9f0;
+}
+
+.tecnico-supervisor .label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: #98a2b3;
+}
+
+.tecnico-supervisor .valor-sup {
+    font-size: 12px;
+    color: #344054;
+}
+
+.btn-gestionar-nuevo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 12px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: background .15s, transform .15s, box-shadow .15s;
+}
+
+.btn-gestionar-nuevo:hover {
+    background: #1d4ed8;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, .25);
+    transform: translateY(-1px);
+}
+
+.btn-gestionar-nuevo:active {
+    transform: translateY(0);
+}

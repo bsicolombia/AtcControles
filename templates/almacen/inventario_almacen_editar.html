@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block titulo %}Inventario de almacén{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/formularios.css' %}">
+{% endblock %}
+
+{% block contenido %}
+
+<header class="cabecera">
+  <div>
+    <h1>Inventario de almacén</h1>
+    <p>Actualice manualmente el inventario registrado para este producto.</p>
+  </div>
+  <div class="acciones">
+    <a class="btn btn-secundario" href="{% url 'almacen:inventario' %}">Volver</a>
+  </div>
+</header>
+
+<div class="tarjeta form-tarjeta">
+
+  <div class="tarjeta-cab">
+    <div>
+      <h2>{{ inventario.producto.nombre_completo }}</h2>
+      <div class="codigo">Código: {{ inventario.producto.codigo_producto }}</div>
+    </div>
+  </div>
+
+  <div class="tarjeta-cuerpo">
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div class="alerta-form" role="alert">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="campo {% if form.inventario_almacen.errors %}campo-error{% endif %}">
+        {{ form.inventario_almacen.label_tag }}
+        {{ form.inventario_almacen }}
+
+        {% if form.inventario_almacen.help_text %}
+        <small class="ayuda">{{ form.inventario_almacen.help_text }}</small>
+        {% endif %}
+
+        {% if form.inventario_almacen.errors %}
+        <div class="error" role="alert">{{ form.inventario_almacen.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div class="form-acciones">
+        <a class="btn btn-secundario" href="{% url 'almacen:inventario' %}">Cancelar</a>
+        <button type="submit" class="btn btn-primario">Guardar inventario</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+{% endblock %}

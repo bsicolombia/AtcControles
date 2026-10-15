@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block titulo %}Inicio{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block contenido %}
+
+<!-- Cabecera -->
+<header class="cabecera">
+  <div>
+    <h1>Hola, {{ request.user.get_full_name|default:request.user.username }}</h1>
+    <p>Resumen del almacén · <span class="cabecera-fecha">{% now "l j \d\e F \d\e Y" %}</span></p>
+  </div>
+</header>
+
+<!-- Atajos -->
+<div class="atajos">
+  <a class="atajo" href="{% url 'almacen:ingreso_crear' %}">
+    <span class="atajo-icono">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>
+    </span>
+    <span class="atajo-texto">Registrar ingreso<small>Entra material nuevo</small></span>
+    <svg class="atajo-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </a>
+
+  <a class="atajo" href="{% url 'almacen:asignacion_crear' %}">
+    <span class="atajo-icono">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+    </span>
+    <span class="atajo-texto">Asignar a un técnico<small>Entrega material o una unidad</small></span>
+    <svg class="atajo-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </a>
+
+  <a class="atajo" href="{% url 'almacen:asignaciones' %}?estado=ASIGNADA">
+    <span class="atajo-icono">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+    </span>
+    <span class="atajo-texto">Registrar instalación<small>{{ pendientes }} pendiente{{ pendientes|pluralize }} por instalar</small></span>
+    <svg class="atajo-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </a>
+</div>
+
+<!-- Existencias por producto -->
+<div class="kpis">
+  {% for item in productos_stock %}
+  <div class="tarjeta kpi">
+    <div class="kpi-nombre">{{ item.producto.nombre_completo }}</div>
+    <div class="kpi-valor">{{ item.cantidad_disponible }}</div>
+    <div class="kpi-etiqueta">disponibles</div>
+  </div>
+  {% empty %}
+  <div class="tarjeta kpis-vacio">
+    <div class="vacio">
+      <strong>No hay productos registrados</strong>
+      Registre productos para comenzar.
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Estado de unidades + stock bajo -->
+<div class="dash-grid">
+
+  <section class="tarjeta">
+    <div class="tarjeta-cab">
+      <h2>Medidores, reguladores y válvulas por estado</h2>
+      <a href="{% url 'almacen:unidades' %}">Ver unidades</a>
+    </div>
+    <div class="tarjeta-cuerpo">
+      {% if total_unidades %}
+      <div class="barra-estados" role="img" aria-label="Distribución de unidades por estado">
+        {% for u in unidades %}{% if u.n %}<span class="bg-{{ u.estado|lower }}" style="width: {{ u.pct }}%"></span>{% endif %}{% endfor %}
+      </div>
+
+      <div class="leyenda">
+        {% for u in unidades %}
+        <a class="leyenda-item" href="{% url 'almacen:unidades' %}?estado={{ u.estado }}">
+          <span class="punto bg-{{ u.estado|lower }}"></span>
+          <span class="leyenda-datos">
+            <span class="leyenda-n">{{ u.n }}</span>
+            <span class="leyenda-t">{{ u.nombre }}</span>
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="vacio">
+        <strong>Aún no hay unidades</strong>
+        Registre un ingreso de medidores, reguladores o válvulas para empezar.
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="tarjeta">
+    <div class="tarjeta-cab">
+      <h2>Stock bajo</h2>
+      <a href="{% url 'dashboard' %}?bajo=1">Ver todos</a>
+    </div>
+    {% if bajo_stock %}
+    <ul class="lista-simple">
+      {% for i in bajo_stock %}
+      <li>
+        <span class="lista-nombre">{{ i.producto.nombre_completo }}</span>
+        <span class="lista-cifras"><strong class="num">{{ i.cantidad_actual }}</strong> <span class="suave">de mín. {{ i.cantidad_minima }}</span></span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="vacio">
+      <strong>Todo en orden</strong>
+      Ningún producto está por debajo de su mínimo.
+    </div>
+    {% endif %}
+  </section>
+
+</div>
+
+<!-- Últimos movimientos -->
+<section class="tarjeta">
+  <div class="tarjeta-cab">
+    <h2>Últimos movimientos</h2>
+    <a href="{% url 'almacen:movimientos' %}">Ver todos</a>
+  </div>
+  <div class="tarjeta-tabla">
+    {% include "almacen/_tabla_movimientos.html" with movimientos=ultimos %}
+  </div>
+</section>
+
+{% endblock %}
