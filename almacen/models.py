@@ -387,9 +387,10 @@ class Asignacion(models.Model):
     )
 
     tecnico = models.ForeignKey(
-        "usuarios.Tecnicos",
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="asignaciones"
+        related_name="asignaciones",
+        verbose_name="Técnico",
     )
 
     producto = models.ForeignKey(

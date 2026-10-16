@@ -20,7 +20,10 @@ from django.views.generic import (
 )
 from django.db.models import Prefetch
 from usuarios.mixins import RolRequeridoMixin
-from usuarios.models import Tecnicos
+from django.contrib.auth import get_user_model
+from usuarios.models import PerfilTecnico
+
+User = get_user_model()
 from usuarios.roles import ADMINISTRADOR
 from urllib.parse import urlencode
 from . import services
@@ -55,6 +58,19 @@ from django.http import HttpResponse
 from io import BytesIO
 from operaciones.models import CargaSAP, RegistroSAP
 from django.db.models import Sum
+
+
+def tecnicos_queryset():
+    return User.objects.filter(
+        groups__name="Tecnico",
+        perfil_tecnico__isnull=False,
+    ).select_related(
+        "perfil_tecnico"
+    ).distinct().order_by(
+        "first_name",
+        "last_name",
+        "username",
+    )
 # ============================================================
 # UTILIDADES
 # ============================================================
@@ -323,9 +339,7 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
 
         tecnico_sel = self.request.GET.get("tecnico", "").strip()
 
-        ctx["tecnicos_lista"] = Tecnicos.objects.all().order_by(
-            "tecnico_apellido_nombres"
-        )
+        ctx["tecnicos_lista"] = tecnicos_queryset()
         ctx["tecnico_sel"] = tecnico_sel
 
         if tecnico_sel and tecnico_sel.isdigit():
@@ -470,11 +484,15 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
     def get_queryset(self):
         tecnico_id = self.request.GET.get("tecnico", "").strip()
 
-        asignaciones_qs = Asignacion.objects.select_related(
-            "tecnico",
-            "operacion",
-            "producto",
-        ).order_by("-fecha_modificacion", "-id")
+        asignaciones_qs = (
+            Asignacion.objects
+            .select_related(
+                "tecnico",
+                "operacion",
+                "producto",
+            )
+            .order_by("-fecha_modificacion", "-id")
+        )
 
         qs = (
             super()
@@ -482,25 +500,25 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
             .select_related("producto", "remision")
         )
 
-        # Filtrar por técnico y su asignación actual.
-        if tecnico_id:
+        # Filtrar unidades por el técnico seleccionado.
+        if tecnico_id and tecnico_id.isdigit():
             qs = qs.filter(
                 (
                     Q(
                         estado=UnidadSerializada.Estado.ASIGNADO,
-                        asignaciones__tecnico_id=tecnico_id,
+                        asignaciones__tecnico_id=int(tecnico_id),
                         asignaciones__estado=Asignacion.Estado.ASIGNADA,
                     )
                     | Q(
                         estado=UnidadSerializada.Estado.INSTALADO,
-                        asignaciones__tecnico_id=tecnico_id,
+                        asignaciones__tecnico_id=int(tecnico_id),
                         asignaciones__estado=Asignacion.Estado.INSTALADA,
                     )
                 )
             ).distinct()
 
             asignaciones_qs = asignaciones_qs.filter(
-                tecnico_id=tecnico_id
+                tecnico_id=int(tecnico_id)
             )
 
         qs = qs.prefetch_related(
@@ -516,15 +534,15 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
             qs = qs.filter(estado=estado)
 
         producto = self.request.GET.get("producto", "").strip()
-        if producto:
-            qs = qs.filter(producto_id=producto)
+        if producto and producto.isdigit():
+            qs = qs.filter(producto_id=int(producto))
 
         return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        # Contar todos los resultados filtrados, antes de paginar.
+        # Total de resultados filtrados.
         ctx["total_unidades_filtradas"] = self.object_list.count()
 
         ctx["estados"] = UnidadSerializada.Estado.choices
@@ -532,14 +550,26 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
         ctx["producto_sel"] = self.request.GET.get("producto", "")
         ctx["tecnico_sel"] = self.request.GET.get("tecnico", "")
 
-        ctx["tecnicos_lista"] = Tecnicos.objects.order_by(
-            "tecnico_apellido_nombres"
+        # Usuarios que pertenecen al grupo Técnico.
+        ctx["tecnicos_lista"] = (
+            User.objects
+            .filter(
+                groups__name="Tecnico",
+                perfil_tecnico__isnull=False,
+            )
+            .select_related("perfil_tecnico")
+            .distinct()
+            .order_by("first_name", "last_name", "username")
         )
 
-        ctx["productos"] = Producto.objects.filter(
-            tipo_inventario=Producto.TipoInventario.SERIALIZADO,
-            estado=True,
-        ).order_by("nombre")
+        ctx["productos"] = (
+            Producto.objects
+            .filter(
+                tipo_inventario=Producto.TipoInventario.SERIALIZADO,
+                estado=True,
+            )
+            .order_by("nombre")
+        )
 
         ctx["estados_editables"] = list(services.TRANSICIONES)
 
@@ -562,7 +592,11 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
             unidad.asignacion_relevante = next(
                 (
                     asignacion
-                    for asignacion in unidad.asignaciones_lista
+                    for asignacion in getattr(
+                        unidad,
+                        "asignaciones_lista",
+                        [],
+                    )
                     if asignacion.estado == estado_asignacion
                 ),
                 None,
@@ -739,8 +773,11 @@ def _obtener_contexto_asignaciones(request):
     # Búsqueda por cédula, nombre, producto, código o serial
     if q:
         filtros = (
-            Q(tecnico__tecnico_cedula__icontains=q)
-            | Q(tecnico__tecnico_apellido_nombres__icontains=q)
+            Q(tecnico__username__icontains=q)
+            | Q(tecnico__first_name__icontains=q)
+            | Q(tecnico__last_name__icontains=q)
+            | Q(tecnico__perfil_tecnico__cedula__icontains=q)
+            | Q(tecnico__perfil_tecnico__supervisor__icontains=q)
             | Q(producto__nombre__icontains=q)
             | Q(producto__codigo_producto__icontains=q)
             | Q(producto__marca__icontains=q)
@@ -913,8 +950,15 @@ class AsignacionListView(RolRequeridoMixin, TemplateView):
 
         ctx.update(_obtener_contexto_asignaciones(self.request))
 
-        ctx["tecnicos_lista"] = Tecnicos.objects.order_by(
-            "tecnico_apellido_nombres"
+        ctx["tecnicos_lista"] = (
+            User.objects
+            .filter(
+                groups__name="Tecnico",
+                perfil_tecnico__isnull=False,
+            )
+            .select_related("perfil_tecnico")
+            .distinct()
+            .order_by("first_name", "last_name", "username")
         )
 
         return ctx
@@ -961,38 +1005,67 @@ class AsignacionCreateView(FormPageMixin, RolRequeridoMixin, FormView):
 # INSTALAR / DEVOLVER · PANTALLA DEL TÉCNICO (varios materiales)
 # ============================================================
 
+
 class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
     """
     Un técnico, un formulario: se escribe la operación una sola vez
-    y las cantidades (o unidades) instaladas de cada material.
-    Cada fila tiene además su botón de devolver.
+    y las cantidades o unidades instaladas de cada material.
     """
 
     template_name = "almacen/asignacion_instalar.html"
 
     def _cargar(self):
-        self.tecnico = get_object_or_404(Tecnicos, pk=self.kwargs["pk"])
+        self.tecnico = get_object_or_404(
+            User.objects.filter(
+                groups__name="Tecnico",
+                perfil_tecnico__isnull=False,
+            ).select_related("perfil_tecnico").distinct(),
+            pk=self.kwargs["pk"],
+        )
+
         pendientes = (
             Asignacion.objects
-            .filter(tecnico=self.tecnico, estado=Asignacion.Estado.ASIGNADA)
-            .select_related("producto", "unidad_serializada", "operacion")
-            .order_by("producto__nombre", "producto__medida", "id")
+            .filter(
+                tecnico=self.tecnico,
+                estado=Asignacion.Estado.ASIGNADA,
+            )
+            .select_related(
+                "producto",
+                "unidad_serializada",
+                "operacion",
+            )
+            .order_by(
+                "producto__nombre",
+                "producto__medida",
+                "id",
+            )
         )
-        self.pendientes = [a for a in pendientes if a.cantidad_pendiente > 0]
+
+        self.pendientes = [
+            a for a in pendientes
+            if a.cantidad_pendiente > 0
+        ]
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         self._cargar()
 
-        # Si hubo error, conserva lo que el usuario había escrito.
+        # Conservar los valores del formulario si hubo errores.
         if self.request.method == "POST":
             for a in self.pendientes:
-                a.valor = self.request.POST.get(f"cant_{a.pk}", "")
-                a.marcado = bool(self.request.POST.get(f"inst_{a.pk}"))
+                a.valor = self.request.POST.get(
+                    f"cant_{a.pk}", ""
+                )
+                a.marcado = bool(
+                    self.request.POST.get(f"inst_{a.pk}")
+                )
 
         ctx["tecnico"] = self.tecnico
         ctx["pendientes"] = self.pendientes
-        ctx["form"] = kwargs.get("form") or InstalacionMasivaForm()
+        ctx["form"] = (
+            kwargs.get("form") or InstalacionMasivaForm()
+        )
+
         return ctx
 
     def post(self, request, *args, **kwargs):
@@ -1005,20 +1078,25 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
         for a in self.pendientes:
             nombre = a.producto.nombre_completo
 
-            # Unidad con código: casilla "Instalada".
+            # Unidad serializada: se marca como instalada.
             if a.unidad_serializada_id:
                 if request.POST.get(f"inst_{a.pk}"):
                     items.append((a, None))
                 continue
 
-            raw = request.POST.get(f"cant_{a.pk}", "").strip()
+            raw = request.POST.get(
+                f"cant_{a.pk}", ""
+            ).strip()
+
             if not raw:
                 continue
 
             try:
                 cant = int(raw)
             except ValueError:
-                errores.append(f"{nombre}: la cantidad no es válida.")
+                errores.append(
+                    f"{nombre}: la cantidad no es válida."
+                )
                 continue
 
             if cant <= 0:
@@ -1026,23 +1104,28 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 
             if cant > a.cantidad_pendiente:
                 errores.append(
-                    f"{nombre}: solo tiene {a.cantidad_pendiente} pendiente(s)."
+                    f"{nombre}: solo tiene "
+                    f"{a.cantidad_pendiente} pendiente(s)."
                 )
                 continue
 
             items.append((a, cant))
 
         if not items and not errores:
-            errores.append("Indique al menos un material para instalar.")
+            errores.append(
+                "Indique al menos un material para instalar."
+            )
 
         if errores or not form.is_valid():
-            for e in errores:
-                messages.error(request, e)
-            return self.render_to_response(self.get_context_data(form=form))
+            for error in errores:
+                messages.error(request, error)
+
+            return self.render_to_response(
+                self.get_context_data(form=form)
+            )
 
         d = form.cleaned_data
 
-        # Todo o nada: la orden y todas las instalaciones van juntas.
         try:
             with transaction.atomic():
                 op = services.obtener_o_crear_operacion(
@@ -1053,25 +1136,34 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     usuario=request.user,
                     fecha=d["fecha_instalacion"],
                 )
-                for a, cant in items:
+
+                for asignacion, cantidad in items:
                     services.instalar(
-                        asignacion=a,
+                        asignacion=asignacion,
                         usuario=request.user,
-                        cantidad=cant,
+                        cantidad=cantidad,
                         fecha_instalacion=d["fecha_instalacion"],
                         operacion=op,
                         observaciones=d["observaciones"],
                     )
+
         except services.ErrorInventario as e:
             messages.error(request, str(e))
-            return self.render_to_response(self.get_context_data(form=form))
+            return self.render_to_response(
+                self.get_context_data(form=form)
+            )
 
         messages.success(
             request,
-            f"Instalación registrada en la orden {op.numero_orden} "
-            f"({len(items)} material(es)).",
+            f"Instalación registrada en la orden "
+            f"{op.numero_orden} ({len(items)} material(es)).",
         )
-        return redirect("almacen:tecnico_asignaciones", pk=self.tecnico.pk)
+
+        return redirect(
+            "almacen:tecnico_asignaciones",
+            pk=self.tecnico.pk,
+        )
+
 
 
 # ============================================================

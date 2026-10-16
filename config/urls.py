@@ -24,6 +24,8 @@ urlpatterns = [
     path("", InventarioListView.as_view(), name="dashboard"),
     path("almacen/", include("almacen.urls")),
     path("tecnicos/", include("usuarios.urls")),
+    #APIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII NO TOCAR
+    path("api/v1/", include("api.urls"))
 ]
 
 # Añadir esto para que Django sirva las imágenes en desarrollo

@@ -1,10 +1,7 @@
 from django.contrib import admin
 
-from .models import Tecnicos
 
-
-@admin.register(Tecnicos)
-class TecnicosAdmin(admin.ModelAdmin):
-    list_display = ("tecnico_apellido_nombres", "tecnico_cedula", "supervisor", "activo")
-    list_filter = ("activo", "supervisor")
-    search_fields = ("tecnico_apellido_nombres", "tecnico_cedula")
+class PerfilTecnicoAdmin(admin.ModelAdmin): 
+    list_display = ("usuario", "cedula", "supervisor") 
+    search_fields = ( "usuario__username", "usuario__first_name", "usuario__last_name", "cedula", ) 
+    list_filter = ("supervisor",)

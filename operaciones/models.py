@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from almacen.models import UnidadSerializada, Producto
 
+
 class Operacion(models.Model):
     class Origen(models.TextChoices):
         MANUAL = "MANUAL", "Registro manual"
@@ -32,12 +33,11 @@ class Operacion(models.Model):
         choices=TipoOperacion.choices
     )
 
+
     tecnico = models.ForeignKey(
-        "usuarios.Tecnicos",
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="operaciones",
-        null=True,
-        blank=True
+        related_name="operaciones_tecnico",
     )
 
     estado = models.CharField(
@@ -137,11 +137,11 @@ class RegistroSAP(models.Model):
     )
 
     tecnico = models.ForeignKey(
-        "usuarios.Tecnicos",
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        on_delete=models.PROTECT,
-        related_name="registros_sap",
+        related_name="registros_sap_tecnico",
     )
 
     producto = models.ForeignKey(

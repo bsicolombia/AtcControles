@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block titulo %}Técnicos{% endblock %}
@@ -15,7 +16,6 @@
     </div>
 
     {% if es_admin %}
-
         <div class="acciones">
 
             <a
@@ -33,11 +33,9 @@
             </a>
 
         </div>
-
     {% endif %}
 
 </div>
-
 
 <form class="filtros" method="get">
 
@@ -46,64 +44,68 @@
         type="search"
         name="q"
         value="{{ request.GET.q }}"
-        placeholder="Buscar por nombre, cédula o supervisor"
+        placeholder="Buscar por nombre, usuario, cédula o supervisor"
     >
 
-    <button
-        class="btn"
-        type="submit"
-    >
+    <button class="btn" type="submit">
         Buscar
     </button>
 
 </form>
 
-
 <div class="tarjeta">
 
-    {% if object_list %}
+    {% if tecnicos %}
 
         <div class="tabla-wrap">
 
             <table>
 
                 <thead>
-
                     <tr>
                         <th>Técnico</th>
+                        <th>Usuario</th>
+                        <th>Correo</th>
                         <th>Cédula</th>
                         <th>Supervisor</th>
                         <th>Estado</th>
                         <th></th>
                     </tr>
-
                 </thead>
 
                 <tbody>
 
-                    {% for t in object_list %}
+                    {% for t in tecnicos %}
 
                         <tr>
 
                             <td>
                                 <strong>
-                                    {{ t.tecnico_apellido_nombres }}
+                                    {{ t.get_full_name|default:t.username }}
                                 </strong>
                             </td>
 
                             <td class="codigo">
-                                {{ t.tecnico_cedula }}
+                                {{ t.username }}
                             </td>
 
                             <td>
-                                {{ t.supervisor }}
+                                {{ t.email|default:"—" }}
+                            </td>
+
+                            <td class="codigo">
+                                {{ t.perfil_tecnico.cedula|default:"—" }}
+                            </td>
+
+                            <td>
+                                {{ t.perfil_tecnico.supervisor|default:"—" }}
                             </td>
 
                             <td>
 
-                                <span class="chip chip-{% if t.activo %}activo{% else %}inactivo{% endif %}">
+                                <span class="chip chip-{% if t.is_active %}activo{% else %}inactivo{% endif %}">
 
-                                    {% if t.activo %}
+                                    {% if t.is_active %}
                                         Activo
                                     {% else %}
                                         Inactivo
@@ -146,7 +148,7 @@
 
         <div class="vacio">
 
-            <strong>No hay técnicos</strong>
+            <strong>No hay técnicos registrados</strong>
 
             {% if es_admin %}
 
@@ -162,7 +164,6 @@
         </div>
 
     {% endif %}
-
 
     {% include "_paginacion.html" %}
 

@@ -1,8 +1,8 @@
 from django import forms
 from django.utils import timezone
-
+from django.contrib.auth import get_user_model
+User = get_user_model()
 from operaciones.models import Operacion
-from usuarios.models import Tecnicos
 from . import services
 from .models import Categoria, Inventario, Producto, UnidadSerializada
 
@@ -425,9 +425,10 @@ class CambioEstadoForm(EstiloMixin, forms.Form):
 # ---------------------------------------------------------
 # ASIGNACIONES
 # ---------------------------------------------------------
+
 class AsignacionForm(EstiloMixin, forms.Form):
     tecnico = forms.ModelChoiceField(
-        queryset=Tecnicos.objects.none(),
+        queryset=User.objects.none(),
         label="Técnico",
     )
 
@@ -467,16 +468,36 @@ class AsignacionForm(EstiloMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["tecnico"].queryset = Tecnicos.objects.filter(activo=True)
-        self.fields["producto"].queryset = Producto.objects.filter(estado=True)
+        # Ajusta "rol" y "TECNICO" a los nombres reales de tu modelo.
+        qs = User.objects.filter(is_active=True)
+
+        if any(f.name == "rol" for f in User._meta.get_fields()):
+            qs = qs.filter(rol="TECNICO")
+
+        self.fields["tecnico"].queryset = qs.order_by(
+            "last_name", "first_name", "username"
+        )
+
+        self.fields["tecnico"].label_from_instance = (
+            lambda u: (
+                f"{u.get_full_name() or u.username} · {u.username}"
+            )
+        )
+
+        self.fields["producto"].queryset = Producto.objects.filter(
+            estado=True
+        ).select_related("categoria")
 
         self.fields["producto"].label_from_instance = (
             lambda p: f"{p.nombre_completo} · {p.codigo_producto}"
         )
 
-        self.fields["unidad"].queryset = UnidadSerializada.objects.filter(
-            estado=UnidadSerializada.Estado.DISPONIBLE
+        self.fields["unidad"].queryset = (
+            UnidadSerializada.objects
+            .filter(estado=UnidadSerializada.Estado.DISPONIBLE)
+            .select_related("producto")
         )
+
         self.fields["unidad"].label_from_instance = lambda u: u.etiqueta
 
     def clean(self):
@@ -488,20 +509,31 @@ class AsignacionForm(EstiloMixin, forms.Form):
 
         if producto and producto.es_serializado:
             if not unidad:
-                self.add_error("unidad", "Seleccione la unidad que se entrega.")
-            elif unidad.producto_id != producto.id:
-                self.add_error("unidad", "Esa unidad no pertenece al producto elegido.")
+                self.add_error(
+                    "unidad",
+                    "Seleccione la unidad que se entrega.",
+                )
+            elif unidad.producto_id != producto.pk:
+                self.add_error(
+                    "unidad",
+                    "Esa unidad no pertenece al producto elegido.",
+                )
+
             data["cantidad"] = 1
 
         elif producto and cantidad:
-            inv = Inventario.objects.filter(producto=producto).first()
+            inv = Inventario.objects.filter(
+                producto=producto
+            ).first()
+
             disponible = inv.cantidad_actual if inv else 0
 
             if cantidad > disponible:
                 self.add_error(
                     "cantidad",
                     f"Solo hay {disponible} disponible(s) de "
-                    f"{producto.nombre_completo} y está intentando asignar {cantidad}.",
+                    f"{producto.nombre_completo} y está intentando "
+                    f"asignar {cantidad}.",
                 )
 
         return data
