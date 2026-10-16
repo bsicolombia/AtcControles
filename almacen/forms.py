@@ -468,39 +468,44 @@ class AsignacionForm(EstiloMixin, forms.Form):
         super().__init__(*args, **kwargs)
 
         self.fields["tecnico"].queryset = Tecnicos.objects.filter(activo=True)
-
         self.fields["producto"].queryset = Producto.objects.filter(estado=True)
 
         self.fields["producto"].label_from_instance = (
-            lambda producto: (
-                f"{producto.nombre_completo} · {producto.codigo_producto}"
-            )
+            lambda p: f"{p.nombre_completo} · {p.codigo_producto}"
         )
 
         self.fields["unidad"].queryset = UnidadSerializada.objects.filter(
             estado=UnidadSerializada.Estado.DISPONIBLE
         )
+        self.fields["unidad"].label_from_instance = lambda u: u.etiqueta
 
     def clean(self):
         data = super().clean()
 
         producto = data.get("producto")
         unidad = data.get("unidad")
+        cantidad = data.get("cantidad")
 
         if producto and producto.es_serializado:
-
             if not unidad:
                 self.add_error("unidad", "Seleccione la unidad que se entrega.")
-
             elif unidad.producto_id != producto.id:
-                self.add_error(
-                    "unidad",
-                    "Esa unidad no pertenece al producto elegido.",
-                )
-
+                self.add_error("unidad", "Esa unidad no pertenece al producto elegido.")
             data["cantidad"] = 1
 
+        elif producto and cantidad:
+            inv = Inventario.objects.filter(producto=producto).first()
+            disponible = inv.cantidad_actual if inv else 0
+
+            if cantidad > disponible:
+                self.add_error(
+                    "cantidad",
+                    f"Solo hay {disponible} disponible(s) de "
+                    f"{producto.nombre_completo} y está intentando asignar {cantidad}.",
+                )
+
         return data
+
 
 
 # ---------------------------------------------------------

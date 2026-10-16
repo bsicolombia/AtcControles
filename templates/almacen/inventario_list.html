@@ -7,6 +7,20 @@
 <link rel="stylesheet" href="{% static 'css/inventario.css' %}">
 
 <style>
+
+  /* ---------- TABLA CON SCROLL Y ENCABEZADO FIJO ---------- */
+.tabla-wrap {
+    max-height: 65vh;   /* cambia este valor para más o menos alto */
+    overflow: auto;
+}
+
+.tabla-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f1f5f3;          /* ajústalo al color de tu encabezado */
+    box-shadow: 0 1px 0 #d9e2dd;  /* reemplaza el borde inferior */
+}
   .filtros-inventario {
     display: flex;
     align-items: center;
@@ -319,8 +333,8 @@
               <th class="num">Disponible<br>almacén</th>
               <th class="num">Asignado<br>técnico</th>
               <th class="num">En poder<br>técnicos</th>
-              <th class="num">Instalado<br>SAP</th>
               <th class="num">Instalado<br>Five</th>
+              <th class="num">Instalado<br>SAP</th>
               <th class="num">Inventario<br>almacén</th>
               <th class="num">Mínimo</th>
               <th>Alerta</th>
@@ -340,14 +354,14 @@
                 </td>
 
                 <td class="col-producto">
-  <strong>{{ i.producto.nombre }}</strong>
-  {% if i.producto.marca %}
-    {{ i.producto.marca }}
-  {% endif %}
-  {% if i.producto.medida %}
-    {{ i.producto.medida }}
-  {% endif %}
-</td>
+                  <strong>{{ i.producto.nombre }}</strong>
+                  {% if i.producto.marca %}
+                    {{ i.producto.marca }}
+                  {% endif %}
+                  {% if i.producto.medida %}
+                    {{ i.producto.medida }}
+                  {% endif %}
+                </td>
 
                 <td class="num">{{ i.total }}</td>
 
@@ -374,12 +388,16 @@
                 </td>
 
                 <td class="num">
-                  <span class="suave">—</span>
+                  {% if i.instalado_five > 0 %}
+                    <strong>{{ i.instalado_five }}</strong>
+                  {% else %}
+                    <span class="cero">0</span>
+                  {% endif %}
                 </td>
 
                 <td class="num">
-                  {% if i.instalado_five > 0 %}
-                    <strong>{{ i.instalado_five }}</strong>
+                  {% if i.instalado_sap > 0 %}
+                    <strong>{{ i.instalado_sap }}</strong>
                   {% else %}
                     <span class="cero">0</span>
                   {% endif %}

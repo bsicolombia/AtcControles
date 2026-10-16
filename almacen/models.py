@@ -270,6 +270,16 @@ class UnidadSerializada(models.Model):
 
     def __str__(self):
         return self.codigo
+    
+    @property
+    def etiqueta(self):
+        """Texto para mostrar en selectores: serial primero, código como apoyo."""
+        base = self.numero_serie or self.codigo
+        if self.numero_serie:
+            base = f"{self.numero_serie} · {self.codigo}"
+        if self.medida:
+            base += f" · {self.medida}"
+        return base
 
 
 # ============================================================

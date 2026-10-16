@@ -6,8 +6,86 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/asignaciones.css' %}">
-{% endblock %}
 
+<style>
+    /* ---------- CONTENEDOR CON SCROLL ---------- */
+    .tabla-consolidada {
+        max-height: 70vh;      /* scroll vertical si hay muchos técnicos */
+        overflow: auto;        /* scroll horizontal si hay muchos productos */
+        max-width: 100%;
+    }
+
+    .tabla-consolidada table {
+        border-collapse: separate;   /* necesario para que sticky mantenga bordes */
+        border-spacing: 0;
+        width: max-content;          /* la tabla crece según sus columnas */
+        min-width: 100%;
+    }
+
+    /* ---------- COLUMNAS DE PRODUCTO: ancho fijo ---------- */
+    .tabla-consolidada th.col-producto,
+    .tabla-consolidada td.valor {
+        width: 130px;
+        min-width: 130px;
+        max-width: 130px;
+    }
+
+    /* ---------- NOMBRES LARGOS EN 2 o 3 RENGLONES ---------- */
+    .tabla-consolidada .producto-header {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        white-space: normal;          /* permite saltos de línea */
+        overflow-wrap: anywhere;      /* parte palabras muy largas */
+        line-height: 1.25;
+    }
+
+    .tabla-consolidada .producto-header strong {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;        /* máximo 3 renglones */
+        -webkit-box-orient: vertical;
+        overflow: hidden;             /* el resto se corta con "..." */
+        text-overflow: ellipsis;
+    }
+
+    /* ---------- ENCABEZADO FIJO ARRIBA ---------- */
+    .tabla-consolidada thead th {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: #f1f5f3;          /* ajusta a tu color */
+        box-shadow: 0 1px 0 #d9e2dd;
+    }
+
+    /* ---------- COLUMNAS TÉCNICO Y CONCEPTO FIJAS A LA IZQUIERDA ---------- */
+    .tabla-consolidada .col-tecnico,
+    .tabla-consolidada td.tecnico-nombre {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: #fff;
+        min-width: 230px;
+        width: 230px;
+    }
+
+    .tabla-consolidada .col-concepto,
+    .tabla-consolidada td.concepto {
+        position: sticky;
+        left: 230px;                  /* = ancho de la columna técnico */
+        z-index: 2;
+        background: #fff;
+        min-width: 110px;
+        width: 110px;
+    }
+
+    /* La esquina (encabezado + columna fija) debe quedar por encima de todo */
+    .tabla-consolidada thead th.col-tecnico,
+    .tabla-consolidada thead th.col-concepto {
+        z-index: 4;
+        background: #f1f5f3;
+    }
+</style>
+{% endblock %}
 {% block contenido %}
 
 <div class="cabecera">
@@ -296,10 +374,8 @@
                                 </td>
                             {% endfor %}
                         </tr>
-
-
                         <!-- ==================================================
-                             SAP
+                            SAP
                         =================================================== -->
 
                         <tr class="fila-sap">
@@ -309,28 +385,33 @@
                                 POR SAP
                             </td>
 
-
-                            {% for cantidad in tecnico_data.filas.SAP %}
+                            {% for celda in tecnico_data.filas.SAP %}
 
                                 <td class="valor">
 
-                                    {% if cantidad > 0 %}
+                                    <div class="sap-resultado
+                                        {% if celda.coincide %}
+                                            sap-ok
+                                        {% else %}
+                                            sap-error
+                                        {% endif %}">
 
-                                        <strong>
-                                            {{ cantidad }}
-                                        </strong>
+                                        <strong>{{ celda.cantidad }}</strong>
 
-                                    {% else %}
+                                        {% if celda.coincide %}
+                                            <span title="SAP coincide con FIVE">✓</span>
+                                        {% else %}
+                                            <span title="SAP no coincide con FIVE">✕</span>
+                                        {% endif %}
 
-                                        <span class="cero">0</span>
-
-                                    {% endif %}
+                                    </div>
 
                                 </td>
 
                             {% endfor %}
 
                         </tr>
+
 
 
                         <!-- ==================================================

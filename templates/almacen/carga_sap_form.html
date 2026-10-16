@@ -60,6 +60,48 @@
            class="btn btn-secondary">
             Cancelar
         </a>
+        
+        <div class="acciones-carga-sap">
+            <a
+                href="{% url 'almacen:descargar_plantilla_sap' %}"
+                class="btn-plantilla-sap"
+            >
+                <span aria-hidden="true">↓</span>
+                Descargar plantilla Excel
+            </a>
+        </div>
+
+        <a class="btn btn-outline-primary"
+   href="{% url 'almacen:carga_sap_historial' %}">
+    Historial de cargas SAP
+</a>
+
+        <style>
+        .acciones-carga-sap {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .btn-plantilla-sap {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 11px 16px;
+            border-radius: 9px;
+            background: #17365d;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background .2s ease;
+        }
+
+        .btn-plantilla-sap:hover {
+            background: #244b79;
+            color: #fff;
+        }
+        </style>
+
     </form>
 </div>
 {% endblock %}

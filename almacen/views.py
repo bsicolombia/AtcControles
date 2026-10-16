@@ -47,7 +47,14 @@ from .models import (
 )
 from operaciones.models import CargaSAP
 from .forms import CargaSAPForm
-
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from io import BytesIO
+from operaciones.models import CargaSAP, RegistroSAP
+from django.db.models import Sum
 # ============================================================
 # UTILIDADES
 # ============================================================
@@ -321,9 +328,15 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
         )
         ctx["tecnico_sel"] = tecnico_sel
 
-        # Solo construye el consolidado cuando se elige un técnico.
         if tecnico_sel and tecnico_sel.isdigit():
             ctx.update(_obtener_contexto_asignaciones(self.request))
+        else:
+            # Inventario general: agregamos el dato SAP a cada fila
+            sap = _sap_total_por_producto()
+            filas = list(ctx["object_list"])
+            for i in filas:
+                i.instalado_sap = sap.get(i.producto_id, 0)
+            ctx["object_list"] = filas
 
         return ctx
 
@@ -439,6 +452,7 @@ class IngresoView(FormPageMixin, RolRequeridoMixin, FormView):
 # ============================================================
 # UNIDADES SERIALIZADAS
 # ============================================================
+
 class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
     model = UnidadSerializada
     template_name = "almacen/unidad_list.html"
@@ -468,8 +482,7 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
             .select_related("producto", "remision")
         )
 
-        # Si se selecciona un técnico, mostrar únicamente las unidades
-        # asignadas actualmente o instaladas por ese técnico.
+        # Filtrar por técnico y su asignación actual.
         if tecnico_id:
             qs = qs.filter(
                 (
@@ -511,6 +524,9 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
+        # Contar todos los resultados filtrados, antes de paginar.
+        ctx["total_unidades_filtradas"] = self.object_list.count()
+
         ctx["estados"] = UnidadSerializada.Estado.choices
         ctx["estado_sel"] = self.request.GET.get("estado", "")
         ctx["producto_sel"] = self.request.GET.get("producto", "")
@@ -527,7 +543,7 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
 
         ctx["estados_editables"] = list(services.TRANSICIONES)
 
-        ctx["hay_instaladas"] = self.get_queryset().filter(
+        ctx["hay_instaladas"] = self.object_list.filter(
             estado=UnidadSerializada.Estado.INSTALADO
         ).exists()
 
@@ -553,6 +569,7 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
             )
 
         return ctx
+
 
 
 class UnidadDetailView(RolRequeridoMixin, DetailView):
@@ -642,10 +659,55 @@ class UnidadUpdateView(FormPageMixin, RolRequeridoMixin, UpdateView):
 # ============================================================
 # ASIGNACIONES · CONSOLIDADO
 # ============================================================
+def _sap_total_por_producto():
+    """Total reportado por SAP en la última carga, agrupado por producto."""
+    ultima_carga = CargaSAP.objects.order_by("-fecha", "-pk").first()
+
+    if not ultima_carga:
+        return {}
+
+    registros = (
+        RegistroSAP.objects
+        .filter(carga=ultima_carga, producto__isnull=False)
+        .values("producto_id")
+        .annotate(total=Sum("cantidad"))
+    )
+
+    return {r["producto_id"]: r["total"] or 0 for r in registros}
+def _obtener_datos_sap():
+    """
+    Obtiene las cantidades reportadas en la última carga SAP.
+    Incluye filas OK y ERROR si tienen técnico y producto identificados.
+    No modifica el inventario.
+    """
+    ultima_carga = CargaSAP.objects.order_by("-fecha", "-pk").first()
+
+    if not ultima_carga:
+        return {}
+
+    registros = (
+        RegistroSAP.objects
+        .filter(
+            carga=ultima_carga,
+            tecnico__isnull=False,
+            producto__isnull=False,
+        )
+        .values("tecnico_id", "producto_id")
+        .annotate(total=Sum("cantidad"))
+    )
+
+    return {
+        (r["tecnico_id"], r["producto_id"]): r["total"] or 0
+        for r in registros
+    }
 
 def _datos_vacios():
-    return {"asignados": 0, "five": 0, "sap": 0, "debe_tener": 0}
-
+    return {
+        "asignados": 0,
+        "five": 0,
+        "sap": 0,
+        "debe_tener": 0,
+    }
 def _obtener_contexto_asignaciones(request):
     """Arma el consolidado técnico × producto."""
 
@@ -713,6 +775,7 @@ def _obtener_contexto_asignaciones(request):
             
     productos_dict = OrderedDict()
     tecnicos_dict = OrderedDict()
+    datos_sap = _obtener_datos_sap()
 
     for a in qs:
         productos_dict.setdefault(a.producto_id, a.producto)
@@ -760,8 +823,15 @@ def _obtener_contexto_asignaciones(request):
 
             asignados = d["asignados"]
             five = d["five"]
-            sap = d["sap"]
+
+            sap = datos_sap.get(
+                (bloque["tecnico"].pk, p.pk),
+                0,
+            )
+
             debe_tener = max(asignados - sap, 0)
+
+            coincide = sap == five
 
             # Datos para cada celda de la tabla.
             # Las URL conservan el técnico y el producto.
@@ -802,9 +872,12 @@ def _obtener_contexto_asignaciones(request):
             filas["FIVE"].append(
                 crear_celda(five, "FIVE")
             )
-            filas["SAP"].append(
-                crear_celda(sap, "SAP")
+            celda_sap = crear_celda(sap, "SAP")
+            celda_sap["coincide"] = coincide
+            celda_sap["estado_conciliacion"] = (
+                "ok" if coincide else "error"
             )
+            filas["SAP"].append(celda_sap)
             filas["DEBE_TENER"].append(
                 crear_celda(debe_tener, "DEBE_TENER")
             )
@@ -1125,32 +1198,29 @@ class AsignacionDevolverView(RolRequeridoMixin, View):
 # ============================================================
 # UNIDADES DISPONIBLES · JSON
 # ============================================================
-
 class UnidadesDisponiblesJson(RolRequeridoMixin, View):
-    """Alimenta el selector de unidades del formulario de asignación."""
 
     def get(self, request):
         producto = request.GET.get("producto")
-
         data = {"serializado": False, "stock": 0, "unidades": []}
 
         if producto:
             p = get_object_or_404(Producto, pk=producto)
-            inv = Inventario.objects.filter(producto=p).first()
-
             data["serializado"] = p.es_serializado
-            data["stock"] = inv.cantidad_actual if inv else 0
 
             if p.es_serializado:
-                data["unidades"] = [
-                    {
-                        "id": u.id,
-                        "texto": u.codigo + (f" · {u.medida}" if u.medida else ""),
-                    }
-                    for u in UnidadSerializada.objects
+                unidades = (
+                    UnidadSerializada.objects
                     .filter(producto=p, estado=UnidadSerializada.Estado.DISPONIBLE)
-                    .order_by("codigo")
+                    .order_by("numero_serie", "codigo")
+                )
+                data["unidades"] = [
+                    {"id": u.id, "texto": u.etiqueta} for u in unidades
                 ]
+                data["stock"] = len(data["unidades"])
+            else:
+                inv = Inventario.objects.filter(producto=p).first()
+                data["stock"] = inv.cantidad_actual if inv else 0
 
         return JsonResponse(data)
 
@@ -1185,6 +1255,51 @@ class MovimientoListView(RolRequeridoMixin, BuscarMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["tipos"] = MovimientoInventario.TipoMovimiento.choices
         ctx["tipo_sel"] = self.request.GET.get("tipo", "")
+        return ctx
+    
+class HistorialCargaSAPView(RolRequeridoMixin, ListView):
+    model = CargaSAP
+    template_name = "almacen/carga_sap_historial.html"
+    context_object_name = "cargas"
+    paginate_by = 25
+
+    def get_queryset(self):
+        qs = CargaSAP.objects.select_related("usuario").order_by(
+            "-fecha", "-pk"
+        )
+
+        desde = self.request.GET.get("desde", "").strip()
+        hasta = self.request.GET.get("hasta", "").strip()
+        estado = self.request.GET.get("estado", "").strip()
+        q = self.request.GET.get("q", "").strip()
+
+        if desde:
+            qs = qs.filter(fecha__date__gte=desde)
+
+        if hasta:
+            qs = qs.filter(fecha__date__lte=hasta)
+
+        if estado == "OK":
+            qs = qs.filter(filas_error=0, filas_ok__gt=0)
+        elif estado == "ERROR":
+            qs = qs.filter(filas_error__gt=0)
+
+        if q:
+            qs = qs.filter(
+                Q(archivo__icontains=q)
+                | Q(usuario__username__icontains=q)
+            )
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        ctx["desde"] = self.request.GET.get("desde", "")
+        ctx["hasta"] = self.request.GET.get("hasta", "")
+        ctx["estado_sel"] = self.request.GET.get("estado", "")
+        ctx["q"] = self.request.GET.get("q", "")
+
         return ctx
 
 class CargaSAPView(FormPageMixin, RolRequeridoMixin, FormView):
@@ -1232,21 +1347,143 @@ class CargaSAPView(FormPageMixin, RolRequeridoMixin, FormView):
         )
 
 
-class CargaSAPDetalleView(
-    RolRequeridoMixin,
-    DetailView,
-):
+class CargaSAPDetalleView(RolRequeridoMixin, DetailView):
     model = CargaSAP
     template_name = "almacen/carga_sap_detalle.html"
     context_object_name = "carga"
 
     def get_queryset(self):
-        return (
-            CargaSAP.objects
-            .prefetch_related(
-                "registros__operacion",
-                "registros__tecnico",
-                "registros__producto",
-                "registros__unidad_serializada",
+        return CargaSAP.objects.select_related("usuario")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        registros = (
+            self.object.registros
+            .select_related(
+                "operacion",
+                "tecnico",
+                "producto",
+                "unidad_serializada",
             )
+            .order_by("fila")
         )
+
+        estado = self.request.GET.get("estado", "").strip()
+        tipo_error = self.request.GET.get("tipo_error", "").strip()
+        q = self.request.GET.get("q", "").strip()
+
+        if estado in RegistroSAP.Estado.values:
+            registros = registros.filter(estado=estado)
+
+        if tipo_error:
+            registros = registros.filter(tipo_error=tipo_error)
+
+        if q:
+            registros = registros.filter(
+                Q(numero_orden__icontains=q)
+                | Q(codigo_producto__icontains=q)
+                | Q(numero_serie__icontains=q)
+                | Q(tecnico__tecnico_apellido_nombres__icontains=q)
+                | Q(error__icontains=q)
+                | Q(diagnostico__icontains=q)
+            )
+
+        ctx["registros"] = registros
+        ctx["estado_sel"] = estado
+        ctx["tipo_error_sel"] = tipo_error
+        ctx["q"] = q
+        ctx["tipos_error"] = (
+            self.object.registros
+            .exclude(tipo_error="")
+            .values_list("tipo_error", flat=True)
+            .distinct()
+            .order_by("tipo_error")
+        )
+
+        return ctx
+
+@login_required
+def descargar_plantilla_sap(request):
+    """
+    Genera y descarga una plantilla Excel para la carga SAP.
+    """
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Carga SAP"
+
+    # Columnas que utiliza services_sap.py
+    columnas = [
+        "numero_orden",
+        "codigo_producto",
+        "numero_serie",
+        "cantidad",
+    ]
+
+    ws.append(columnas)
+
+    # Encabezados
+    for celda in ws[1]:
+        celda.font = Font(
+            bold=True,
+            color="FFFFFF",
+        )
+        celda.fill = PatternFill(
+            fill_type="solid",
+            fgColor="17365D",
+        )
+        celda.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    # Ejemplos para orientar al usuario
+    ws.append([
+        "100001",
+        "MED001",
+        "SERIAL001",
+        1,
+    ])
+
+    ws.append([
+        "100002",
+        "MAT001",
+        "",
+        5,
+    ])
+
+    # Anchos de columnas
+    anchos = [22, 24, 30, 15]
+
+    for indice, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[
+            get_column_letter(indice)
+        ].width = ancho
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = "A1:D3"
+
+    # Mantener los códigos y seriales como texto
+    for fila in ws.iter_rows(min_row=2, max_col=3):
+        for celda in fila:
+            celda.number_format = "@"
+
+    # Crear archivo en memoria
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+    )
+
+    response["Content-Disposition"] = (
+        'attachment; filename="plantilla_carga_sap.xlsx"'
+    )
+
+    return response

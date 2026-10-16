@@ -1,5 +1,30 @@
 /* Pegar al final de static/css/asignaciones.css */
 /* Filtros en una sola línea */
+.sap-resultado {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 48px;
+    padding: 5px 9px;
+    border-radius: 6px;
+    font-weight: 700;
+}
+
+.sap-ok {
+    color: #166534;
+    background: #dcfce7;
+}
+
+.sap-error {
+    color: #991b1b;
+    background: #fee2e2;
+}
+
+.sap-resultado span {
+    font-size: 15px;
+}
+
 .enlace-cantidad {
     display: inline-flex;
     align-items: center;

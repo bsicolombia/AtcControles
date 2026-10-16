@@ -18,7 +18,13 @@
        href="{% url 'almacen:ingreso_crear' %}">
       Registrar ingreso
     </a>
+    <!-- CONTADOR DE MATERIALES -->
+<div class="contador-materiales">
+    <strong>{{ total_unidades_filtradas }}</strong>
+    <span>materiales</span>
+</div>
   </div>
+  
 </div>
 
 <!-- FILTROS -->
@@ -116,6 +122,7 @@
 
 <!-- TABLA DE UNIDADES -->
 <div class="tarjeta">
+
 
   {% if object_list %}
 
@@ -309,4 +316,75 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_css %}
+<style>
+
+  
+.contador-materiales {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 6px 11px;
+    margin-bottom: 12px;
+    border: 1px solid #dce5df;
+    border-radius: 7px;
+    background: #f5f8f6;
+    color: #526157;
+    font-size: 13px;
+}
+
+.contador-materiales strong {
+    color: #245c3c;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+    /* ---------- FILTROS ORGANIZADOS ---------- */
+    .filtros {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr auto;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .filtros .input {
+        width: 100%;
+        min-width: 0;
+    }
+
+    @media (max-width: 1000px) {
+        .filtros {
+            grid-template-columns: 1fr 1fr;
+        }
+        .filtros .buscar {
+            grid-column: 1 / -1;   /* el buscador ocupa toda la fila */
+        }
+    }
+
+    @media (max-width: 600px) {
+        .filtros {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ---------- TABLA CON SCROLL ---------- */
+    .tabla-wrap {
+        max-height: 62vh;      /* 70% del alto de la pantalla */
+        overflow: auto;        /* scroll vertical y horizontal si hace falta */
+    }
+
+    /* ---------- ENCABEZADO FIJO ---------- */
+    .tabla-wrap thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #f1f5f3;   /* OBLIGATORIO: sin fondo se ve lo de abajo */
+        box-shadow: 0 1px 0 #d9e2dd;  /* línea inferior (el borde no se pega con sticky) */
+    }
+
+    
+</style>
 {% endblock %}

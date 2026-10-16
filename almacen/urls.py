@@ -33,4 +33,24 @@ urlpatterns = [
     path("api/unidades-disponibles/", views.UnidadesDisponiblesJson.as_view(), name="api_unidades"),
 
     path("movimientos/", views.MovimientoListView.as_view(), name="movimientos"),
+    
+    path("inventario/", views.InventarioListView.as_view(), name="inventario"), 
+    
+    path("carga_sap/", views.CargaSAPView.as_view(), name="carga_sap"),
+    path(
+    'carga_sap_detalle/<int:pk>/',
+    views.CargaSAPDetalleView.as_view(),
+    name='carga_sap_detalle'
+),
+    path("carga-sap/plantilla/",views.descargar_plantilla_sap,name="descargar_plantilla_sap",),
+    path(
+    "cargas-sap/",
+    views.HistorialCargaSAPView.as_view(),
+        name="carga_sap_historial",
+    ),
+    path(
+        "carga_sap_detalle/<int:pk>/",
+        views.CargaSAPDetalleView.as_view(),
+        name="carga_sap_detalle",
+    ),
 ]

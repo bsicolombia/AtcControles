@@ -77,11 +77,20 @@ class Operacion(models.Model):
         auto_now=True
     )
     
+
+from django.conf import settings
+from django.db import models
+
+
 class CargaSAP(models.Model):
     archivo = models.FileField(upload_to="cargas_sap/")
+
     usuario = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="cargas_sap"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="cargas_sap",
     )
+
     fecha = models.DateTimeField(auto_now_add=True)
     total_filas = models.PositiveIntegerField(default=0)
     filas_ok = models.PositiveIntegerField(default=0)
@@ -90,33 +99,90 @@ class CargaSAP(models.Model):
     class Meta:
         ordering = ["-fecha"]
 
+    def __str__(self):
+        return f"Carga SAP #{self.pk} - {self.fecha}"
+
 
 class RegistroSAP(models.Model):
+
     class Estado(models.TextChoices):
         OK = "OK", "Conciliado"
         ERROR = "ERROR", "Con error"
 
-    carga = models.ForeignKey(CargaSAP, on_delete=models.CASCADE, related_name="registros")
-    fila = models.PositiveIntegerField()
+    carga = models.ForeignKey(
+        CargaSAP,
+        on_delete=models.CASCADE,
+        related_name="registros",
+    )
 
-    # Lo que vino en el Excel (se guarda tal cual, aunque sea inválido)
+    fila = models.PositiveIntegerField()
     numero_orden = models.CharField(max_length=30, blank=True)
     codigo_producto = models.CharField(max_length=30, blank=True)
     numero_serie = models.CharField(max_length=100, blank=True)
     cantidad = models.PositiveIntegerField(default=1)
 
-    estado = models.CharField(max_length=10, choices=Estado.choices)
+    estado = models.CharField(
+        max_length=10,
+        choices=Estado.choices,
+    )
+
     error = models.TextField(blank=True)
 
-    # Referencias resueltas (solo si hubo coincidencia)
-    operacion = models.ForeignKey("operaciones.Operacion", null=True, blank=True,
-                                  on_delete=models.PROTECT, related_name="registros_sap")
-    tecnico = models.ForeignKey("usuarios.Tecnicos", null=True, blank=True,
-                                on_delete=models.PROTECT, related_name="registros_sap")
-    producto = models.ForeignKey(Producto, null=True, blank=True,
-                                 on_delete=models.PROTECT, related_name="registros_sap")
-    unidad_serializada = models.ForeignKey(UnidadSerializada, null=True, blank=True,
-                                           on_delete=models.PROTECT, related_name="registros_sap")
+    operacion = models.ForeignKey(
+        "operaciones.Operacion",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="registros_sap",
+    )
+
+    tecnico = models.ForeignKey(
+        "usuarios.Tecnicos",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="registros_sap",
+    )
+
+    producto = models.ForeignKey(
+        "almacen.Producto",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="registros_sap",
+    )
+
+    unidad_serializada = models.ForeignKey(
+        "almacen.UnidadSerializada",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="registros_sap",
+    )
+    
+    cantidad_sap_original = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+    )
+
+    tipo_error = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+    )
+
+    diagnostico = models.TextField(
+        blank=True,
+        default="",
+    )
 
     class Meta:
         ordering = ["fila"]
+
+    def __str__(self):
+        return (
+            f"Fila {self.fila} - "
+            f"{self.numero_orden} - {self.estado}"
+        )
+

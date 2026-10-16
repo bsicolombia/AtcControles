@@ -61,6 +61,9 @@
       <div class="nav-grupo">Tecnicos</div>
       <a href="{% url 'tecnicos:lista' %}" class="{% if request.resolver_match.app_name == 'tecnicos' %}activo{% endif %}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/></svg>Técnicos</a>
+      <div class="nav-grupo">Carga SAP</div>
+      <a href="{% url 'almacen:carga_sap' %}" class="{% if request.resolver_match.app_name == 'carga_sap' %}activo{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/></svg>Carga Sap</a>
 
       {% if es_admin %}
       <div class="nav-grupo">Administración</div>

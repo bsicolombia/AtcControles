@@ -4,6 +4,7 @@
 {% block titulo %}{{ titulo }}{% endblock %}
 
 {% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'css/formularios.css' %}">
 
 <style>
@@ -371,7 +372,7 @@
                  ========================================== -->
 
             <div id="seriales-seccion" class="seriales-box">
-                <p class="seriales-titulo">Números de serie físicos</p>
+                
 
                 <div class="campo">
                     <label for="{{ form.numeros_serie.id_for_label }}">
@@ -434,7 +435,7 @@
 
 </div>
 
-
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -453,6 +454,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const infoMedida = document.getElementById("info-medida");
     const infoUnidad = document.getElementById("info-unidad");
 
+    // 1) FOTOCOPIA: guardamos los data-* de cada opción ANTES de activar Tom Select
+    const datosProductos = {};
+    Array.from(producto.options).forEach(function (op) {
+        if (op.value) {
+            datosProductos[op.value] = Object.assign({}, op.dataset);
+        }
+    });
+
     function texto(valor) {
         return valor && valor.trim() ? valor.trim() : "No registrado";
     }
@@ -460,13 +469,13 @@ document.addEventListener("DOMContentLoaded", function () {
     function actualizarContador() {
         if (!seriales || !contadorSeriales) return;
 
-        const lineas = seriales.value
+        const total = seriales.value
             .split("\n")
-            .map(linea => linea.trim())
-            .filter(linea => linea !== "");
+            .map(l => l.trim())
+            .filter(l => l !== "").length;
 
-        const total = lineas.length;
-        contadorSeriales.textContent = total === 1 ? "1 serial ingresado" : total + " seriales ingresados";
+        contadorSeriales.textContent =
+            total === 1 ? "1 serial ingresado" : total + " seriales ingresados";
 
         if (cantidad && cantidad.value && total > 0) {
             const esperado = parseInt(cantidad.value, 10);
@@ -477,56 +486,58 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function limpiarInformacion() {
-        if (productoInfo) productoInfo.classList.remove("visible");
-        if (codigoAutomatico) codigoAutomatico.classList.remove("visible");
-        if (serialesSeccion) serialesSeccion.classList.remove("visible");
-        if (seriales) seriales.required = false;
+        productoInfo.classList.remove("visible");
+        codigoAutomatico.classList.remove("visible");
+        serialesSeccion.classList.remove("visible");
+        seriales.required = false;
 
-        [infoNombre, infoCodigo, infoMarca, infoReferencia, infoMedida, infoUnidad].forEach(el => {
-            if (el) el.textContent = "—";
-        });
+        [infoNombre, infoCodigo, infoMarca, infoReferencia, infoMedida, infoUnidad]
+            .forEach(el => el.textContent = "—");
         actualizarContador();
     }
 
-    function actualizarProducto() {
-        if (!producto) return;
-        const opcion = producto.options[producto.selectedIndex];
+    // 2) Ahora recibe el VALOR (id) y busca en el diccionario
+    function actualizarProducto(valor) {
+        const d = datosProductos[valor];
 
-        if (!opcion || !opcion.value) {
+        if (!valor || !d) {
             limpiarInformacion();
             return;
         }
 
-        if (infoNombre) infoNombre.textContent = texto(opcion.dataset.nombre);
-        if (infoCodigo) infoCodigo.textContent = texto(opcion.dataset.codigo);
-        if (infoMarca) infoMarca.textContent = texto(opcion.dataset.marca);
-        if (infoReferencia) infoReferencia.textContent = texto(opcion.dataset.referencia);
-        if (infoMedida) infoMedida.textContent = texto(opcion.dataset.medida);
-        if (infoUnidad) infoUnidad.textContent = texto(opcion.dataset.unidadMedida);
+        infoNombre.textContent = texto(d.nombre);
+        infoCodigo.textContent = texto(d.codigo);
+        infoMarca.textContent = texto(d.marca);
+        infoReferencia.textContent = texto(d.referencia);
+        infoMedida.textContent = texto(d.medida);
+        infoUnidad.textContent = texto(d.unidadMedida);
 
-        if (productoInfo) productoInfo.classList.add("visible");
+        productoInfo.classList.add("visible");
 
-        const serializado = opcion.dataset.serializado === "true";
-        const requiereSerial = opcion.dataset.requiereSerial === "true";
+        const serializado = d.serializado === "true";
+        const requiereSerial = d.requiereSerial === "true";
 
-        if (codigoAutomatico) {
-            codigoAutomatico.classList.toggle("visible", serializado);
-        }
+        codigoAutomatico.classList.toggle("visible", serializado);
+        serialesSeccion.classList.toggle("visible", requiereSerial);
+        seriales.required = requiereSerial;
+        if (!requiereSerial) seriales.value = "";
 
-        if (serialesSeccion && seriales) {
-            serialesSeccion.classList.toggle("visible", requiereSerial);
-            seriales.required = requiereSerial;
-            if (!requiereSerial) seriales.value = "";
-        }
         actualizarContador();
     }
 
-    if (producto) producto.addEventListener("change", actualizarProducto);
+    // 3) Activamos el select con búsqueda
+    const selectorProducto = new TomSelect(producto, {
+        placeholder: "Escriba para buscar un producto...",
+        maxOptions: 200,          // máximo de resultados mostrados a la vez
+        allowEmptyOption: true,
+        onChange: actualizarProducto
+    });
+
     if (seriales) seriales.addEventListener("input", actualizarContador);
     if (cantidad) cantidad.addEventListener("input", actualizarContador);
 
-    actualizarProducto();
+    // Si el formulario volvió con errores, recupera la info del producto elegido
+    actualizarProducto(selectorProducto.getValue());
 });
 </script>
-
 {% endblock %}

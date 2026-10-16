@@ -1,0 +1,154 @@
+
+{% extends "base.html" %}
+
+{% block titulo %}Historial de cargas SAP{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-4">
+        <div>
+            <h1>Historial de cargas SAP</h1>
+            <p class="text-muted">
+                Consulta todas las importaciones y sus resultados.
+            </p>
+        </div>
+        <a href="{% url 'almacen:carga_sap' %}" class="btn btn-primary">
+            Nueva carga SAP
+        </a>
+    </div>
+
+    <form method="get" class="card card-body mb-4">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Desde</label>
+                <input type="date" name="desde" value="{{ desde }}"
+                       class="form-control">
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Hasta</label>
+                <input type="date" name="hasta" value="{{ hasta }}"
+                       class="form-control">
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Estado</label>
+                <select name="estado" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="OK"
+                        {% if estado_sel == "OK" %}selected{% endif %}>
+                        Sin errores
+                    </option>
+                    <option value="ERROR"
+                        {% if estado_sel == "ERROR" %}selected{% endif %}>
+                        Con errores
+                    </option>
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Archivo o usuario</label>
+                <input type="search" name="q" value="{{ q }}"
+                       class="form-control"
+                       placeholder="Buscar archivo o usuario">
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">
+                    Filtrar
+                </button>
+                <a href="{% url 'almacen:carga_sap_historial' %}"
+                   class="btn btn-outline-secondary">
+                    Limpiar
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Fecha y hora</th>
+                    <th>Archivo</th>
+                    <th>Usuario</th>
+                    <th>Total</th>
+                    <th>Conciliados</th>
+                    <th>Errores</th>
+                    <th>Resultado</th>
+                    <th>Detalle</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for carga in cargas %}
+                <tr>
+                    <td>{{ carga.pk }}</td>
+                    <td>{{ carga.fecha|date:"d/m/Y H:i:s" }}</td>
+                    <td>
+                        {% if carga.archivo %}
+                            {{ carga.archivo.name }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>{{ carga.usuario|default:"—" }}</td>
+                    <td>{{ carga.total_filas }}</td>
+                    <td class="text-success fw-bold">{{ carga.filas_ok }}</td>
+                    <td class="text-danger fw-bold">{{ carga.filas_error }}</td>
+                    <td>
+                        {% if carga.filas_error %}
+                            <span class="badge bg-danger">Con errores</span>
+                        {% else %}
+                            <span class="badge bg-success">Sin errores</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="{% url 'almacen:carga_sap_detalle' carga.pk %}">
+                            Ver registros
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center py-4">
+                        No hay cargas SAP para los filtros seleccionados.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_paginated %}
+    <nav class="mt-3">
+        <ul class="pagination">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link"
+                   href="?page={{ page_obj.previous_page_number }}&desde={{ desde|urlencode }}&hasta={{ hasta|urlencode }}&estado={{ estado_sel|urlencode }}&q={{ q|urlencode }}">
+                    Anterior
+                </a>
+            </li>
+            {% endif %}
+
+            <li class="page-item active">
+                <span class="page-link">
+                    {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                </span>
+            </li>
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link"
+                   href="?page={{ page_obj.next_page_number }}&desde={{ desde|urlencode }}&hasta={{ hasta|urlencode }}&estado={{ estado_sel|urlencode }}&q={{ q|urlencode }}">
+                    Siguiente
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
