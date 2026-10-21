@@ -1,30 +1,49 @@
 from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from .models import User
 
 
+class UserForm(UserCreationForm):
 
-class CargaMasivaTecnicosForm(forms.Form):
+    class Meta:
+        model = User
+        fields = [
+            'username',
+            'first_name',
+            'last_name',
+            'email',
+            'cedula',
+            'rol',
+            'supervisor',
+        ]
 
-    archivo = forms.FileField(
-        label="Archivo Excel",
-        help_text=(
-            "Seleccione la plantilla Excel diligenciada. "
-            "Debe ser un archivo .xlsx."
-        ),
-        widget=forms.ClearableFileInput(
-            attrs={
-                "accept": ".xlsx",
-                "class": "input",
-            }
-        ),
-    )
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def clean_archivo(self):
-        archivo = self.cleaned_data["archivo"]
+        self.fields['supervisor'].queryset = User.objects.filter(
+            rol='SUPERVISOR'
+        )
 
-        if not archivo.name.lower().endswith(".xlsx"):
-            raise forms.ValidationError(
-                "El archivo debe estar en formato Excel .xlsx."
+        self.fields['supervisor'].required = (
+            self.data.get('rol', getattr(self.instance, 'rol', '')) == 'TECNICO'
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        rol = cleaned_data.get('rol')
+        supervisor = cleaned_data.get('supervisor')
+
+        if rol == 'TECNICO' and not supervisor:
+            self.add_error(
+                'supervisor',
+                'Debes seleccionar un supervisor para el técnico.'
             )
 
-        return archivo
-    
+        if rol != 'TECNICO' and supervisor:
+            self.add_error(
+                'supervisor',
+                'Solo los técnicos pueden tener supervisor.'
+            )
+
+        return cleaned_data

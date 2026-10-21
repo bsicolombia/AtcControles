@@ -1,0 +1,14 @@
+{% if r.comparacion %}
+{% with c=r.comparacion %}
+<td class="{% if c.medidor.ok %}table-success{% else %}table-danger{% endif %}">{{ c.medidor.five|default:"—" }}</td>
+<td class="{% if c.orden.ok %}table-success{% else %}table-danger{% endif %}">{{ c.orden.five|default:"—" }}</td>
+<td class="{% if c.cuenta_contrato.ok %}table-success{% else %}table-danger{% endif %}">{{ c.cuenta_contrato.five|default:"—" }}</td>
+<td class="{% if c.medidor.ok %}table-success{% else %}table-danger{% endif %}">{{ c.medidor.sap|default:"—" }}</td>
+<td class="{% if c.orden.ok %}table-success{% else %}table-danger{% endif %}">{{ c.orden.sap|default:"—" }}</td>
+<td class="{% if c.cuenta_contrato.ok %}table-success{% else %}table-danger{% endif %}">{{ c.cuenta_contrato.sap|default:"—" }}</td>
+{% endwith %}
+{% else %}
+<td colspan="6" class="text-muted small">
+    {% if r.estado == "IGNORADO" %}Ya conciliado antes{% else %}Sin comparación{% endif %}
+</td>
+{% endif %}

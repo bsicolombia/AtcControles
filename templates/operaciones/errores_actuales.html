@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% load sap_extras %}
+{% block titulo %}Errores de conciliación{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3">Errores de conciliación</h1>
+            <p class="text-muted mb-0">Qué está mal hoy, qué se corrigió y qué instalamos que SAP aún no reporta.</p>
+        </div>
+        <div class="d-flex gap-2 align-self-start">
+            <a href="{% url 'operaciones:carga_sap' %}" class="btn btn-primary">Nueva carga SAP</a>
+            <a href="{% url 'operaciones:carga_sap_historial' %}" class="btn btn-outline-secondary">Historial</a>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><a class="nav-link {% if vista == 'actuales' %}active{% endif %}" href="?vista=actuales">Errores actuales</a></li>
+        <li class="nav-item"><a class="nav-link {% if vista == 'resueltos' %}active{% endif %}" href="?vista=resueltos">Resueltos</a></li>
+        <li class="nav-item"><a class="nav-link {% if vista == 'falta_sap' %}active{% endif %}" href="?vista=falta_sap">Instalado en Five, falta en SAP</a></li>
+    </ul>
+
+    {% if vista != "falta_sap" %}
+        {% if vista == "actuales" %}
+        <div class="row g-3 mb-3">
+            <div class="col-4"><a class="text-decoration-none" href="?vista=actuales&severidad=ALTA"><div class="card card-body text-center border-danger">
+                <div class="small text-muted">Alta</div><div class="fs-3 fw-bold text-danger">{{ n_alta }}</div></div></a></div>
+            <div class="col-4"><a class="text-decoration-none" href="?vista=actuales&severidad=MEDIA"><div class="card card-body text-center border-warning">
+                <div class="small text-muted">Media</div><div class="fs-3 fw-bold text-warning">{{ n_media }}</div></div></a></div>
+            <div class="col-4"><a class="text-decoration-none" href="?vista=actuales&severidad=BAJA"><div class="card card-body text-center">
+                <div class="small text-muted">Baja</div><div class="fs-3 fw-bold text-secondary">{{ n_baja }}</div></div></a></div>
+        </div>
+        {% endif %}
+
+        <div class="card card-body mb-3">
+            {% for r in resumen %}
+            <a class="badge text-decoration-none me-1 mb-1 fs-6 fw-normal
+               {% if r.severidad == 'ALTA' %}text-bg-danger{% elif r.severidad == 'MEDIA' %}text-bg-warning{% else %}text-bg-secondary{% endif %}"
+               href="?vista={{ vista }}&tipo_error={{ r.codigo|urlencode }}">{{ r.etiqueta }} · {{ r.n }}</a>
+            {% empty %}<span class="text-muted">Sin registros.</span>{% endfor %}
+        </div>
+    {% endif %}
+
+    <form method="get" class="card card-body mb-3">
+        <input type="hidden" name="vista" value="{{ vista }}">
+        <div class="input-group">
+            <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Serie, orden o cuenta">
+            <button class="btn btn-primary">Buscar</button>
+            <a class="btn btn-outline-secondary" href="?vista={{ vista }}">Limpiar</a>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+    {% if vista == "falta_sap" %}
+        <p class="small text-muted">Gris = instalado hace menos de {{ dias }} días (SAP aún puede reportarlo). Rojo = ya debería estar en SAP.</p>
+        <table class="table table-bordered align-middle">
+            <thead class="table-dark"><tr><th>Estado</th><th>Serie</th><th>Producto</th><th>Orden</th><th>Cuenta</th><th>Técnico</th><th>Instalado</th></tr></thead>
+            <tbody>
+            {% for a in page_obj %}
+                <tr>
+                    <td>{% if a.fecha_instalacion and a.fecha_instalacion <= limite %}<span class="badge bg-danger">Falta en SAP</span>
+                        {% else %}<span class="badge bg-secondary">Pendiente SAP</span>{% endif %}</td>
+                    <td>{{ a.unidad_serializada.numero_serie }}</td>
+                    <td>{{ a.producto.nombre_completo }}</td>
+                    <td>{% if a.operacion %}<a href="{% url 'operaciones:consulta_orden' %}?q={{ a.operacion.numero_orden }}">{{ a.operacion.numero_orden }}</a>{% else %}—{% endif %}</td>
+                    <td>{{ a.operacion.numero_cuenta_contrato|default:"—" }}</td>
+                    <td>{{ a.tecnico.get_full_name|default:a.tecnico.username }}</td>
+                    <td>{{ a.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
+                </tr>
+            {% empty %}<tr><td colspan="7" class="text-center py-4">Todo lo instalado ya fue reportado por SAP.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <table class="table table-bordered align-middle">
+            <thead class="table-dark"><tr>
+                <th>Gravedad</th><th>Error</th><th>Orden</th><th>Serie</th><th>Cuenta</th><th>Técnico</th>
+                <th style="min-width:300px">Qué pasó</th><th style="min-width:240px">Qué hacer</th>
+                <th>{% if vista == "resueltos" %}Resuelto{% else %}Carga{% endif %}</th></tr></thead>
+            <tbody>
+            {% for r in page_obj %}
+                {% with sev=r.tipo_error|sap_meta:"severidad" %}
+                <tr>
+                    <td><span class="badge {% if sev == 'ALTA' %}bg-danger{% elif sev == 'MEDIA' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ sev }}</span></td>
+                    <td>{{ r.tipo_error|sap_meta:"etiqueta" }}</td>
+                    <td><a href="{% url 'operaciones:consulta_orden' %}?q={{ r.numero_orden }}">{{ r.numero_orden|default:"—" }}</a></td>
+                    <td>{{ r.numero_serie|default:"—" }}</td>
+                    <td>{{ r.cuenta_contrato|default:"—" }}</td>
+                    <td>{% if r.tecnico %}{{ r.tecnico.get_full_name|default:r.tecnico.username }}{% else %}—{% endif %}</td>
+                    <td class="small">{{ r.diagnostico }}</td>
+                    <td class="small">{{ r.tipo_error|sap_meta:"accion" }}</td>
+                    <td class="small">
+                        {% if vista == "resueltos" %}
+                            Carga <a href="{% url 'operaciones:carga_sap_detalle' r.resuelto_en_id %}">#{{ r.resuelto_en_id }}</a><br>
+                            {{ r.get_resuelto_por_display }}
+                        {% else %}
+                            <a href="{% url 'operaciones:carga_sap_detalle' r.carga_id %}">#{{ r.carga_id }}</a> · fila {{ r.fila }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endwith %}
+            {% empty %}<tr><td colspan="9" class="text-center py-4">Sin registros.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="mt-3"><ul class="pagination">
+        {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>{% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>{% endif %}
+    </ul></nav>
+    {% endif %}
+</div>
+{% endblock %}

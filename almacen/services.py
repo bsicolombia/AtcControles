@@ -438,10 +438,7 @@ def asignar(
         tipo_movimiento=Mov.ASIGNACION,
         cantidad=cantidad,
         usuario=usuario,
-        observacion=(
-            f"Entregado a {tecnico}. "
-            f"{observaciones}"
-        ).strip(),
+        observacion=(observaciones or "").strip(),
     )
 
     return asignacion
@@ -560,15 +557,10 @@ def instalar(
         producto=a.producto,
         unidad_serializada=a.unidad_serializada,
         asignacion=a,
-        tipo_movimiento=Mov.SALIDA,
+        tipo_movimiento=Mov.INSTALACION,      # <-- antes Mov.SALIDA
         cantidad=cantidad,
         usuario=usuario,
-        observacion=(
-            f"{operacion.get_tipo_operacion_display()} · "
-            f"orden {operacion.numero_orden} · "
-            f"cuenta {operacion.numero_cuenta_contrato} · "
-            f"técnico {a.tecnico}"
-        ),
+        observacion=(observaciones or "").strip(),
     )
 
     return a
@@ -615,7 +607,7 @@ def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
     if op.tecnico_id and op.tecnico_id != tecnico.id:
         raise ErrorInventario(f"La orden {numero_orden} está asignada a {op.tecnico}.")
 
-        op.tecnico = op.tecnico or tecnico
+    op.tecnico = op.tecnico or tecnico   # <-- fuera del if
 
     # Solo avanza estados "previos"; no pisa EFECTIVA / NO_EJECUTADA.
     if op.estado in (
@@ -799,9 +791,7 @@ def devolver(
 
     asignacion.estado = EstadoA.DEVUELTA
 
-    asignacion.save(
-        update_fields=["estado"]
-    )
+    asignacion.save(update_fields=["estado", "fecha_modificacion"])
 
     inv.cantidad_asignada = max(
         inv.cantidad_asignada - asignacion.cantidad,

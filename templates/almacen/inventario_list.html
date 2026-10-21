@@ -7,453 +7,1097 @@
 <link rel="stylesheet" href="{% static 'css/inventario.css' %}">
 
 <style>
+/* =========================================================
+   INVENTARIO GENERAL
+========================================================= */
 
-  /* ---------- TABLA CON SCROLL Y ENCABEZADO FIJO ---------- */
 .tabla-wrap {
-    max-height: 65vh;   /* cambia este valor para más o menos alto */
+    position: relative;
+    width: 100%;
+    max-height: 68vh;
     overflow: auto;
+    background: #fff;
+    border-radius: 8px;
+    scrollbar-gutter: stable;
+}
+
+.tabla-wrap table {
+    width: 100%;
+    min-width: 1250px;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #fff;
+}
+
+.tabla-wrap th,
+.tabla-wrap td {
+    box-sizing: border-box;
+    padding: 11px 13px;
+    border-right: 1px solid #e2e8e5;
+    border-bottom: 1px solid #e2e8e5;
+    vertical-align: middle;
 }
 
 .tabla-wrap thead th {
     position: sticky;
     top: 0;
-    z-index: 2;
-    background: #f1f5f3;          /* ajústalo al color de tu encabezado */
-    box-shadow: 0 1px 0 #d9e2dd;  /* reemplaza el borde inferior */
+    z-index: 5;
+    background: #f1f5f3 !important;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    white-space: nowrap;
+    box-shadow: 0 1px 0 #cbd5d1;
 }
-  .filtros-inventario {
+
+.tabla-wrap tbody tr:hover td {
+    background-color: #f8fafc;
+}
+
+.tabla-wrap tbody tr.fila-bajo td {
+    background-color: #fffaf0;
+}
+
+.tabla-wrap tbody tr.fila-bajo:hover td {
+    background-color: #fff3d6;
+}
+
+.tabla-general {
+    font-size: 13px;
+}
+
+.tabla-general td.codigo {
+    min-width: 120px;
+    color: #475569;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.tabla-general td.col-producto {
+    min-width: 230px;
+    max-width: 320px;
+    overflow-wrap: anywhere;
+}
+
+.tabla-general td.col-producto strong {
+    color: #1e293b;
+    line-height: 1.4;
+}
+
+.tabla-general .suave {
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 11px;
+}
+
+.tabla-general .num {
+    text-align: center;
+    white-space: nowrap;
+    min-width: 85px;
+}
+
+.tabla-general .dato-principal {
+    color: #166534;
+    font-size: 14px;
+}
+
+.tabla-general .cero,
+.tabla-consolidada .cero {
+    color: #94a3b8;
+}
+
+.tabla-general .col-acciones {
+    min-width: 100px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* =========================================================
+   FILTROS
+========================================================= */
+
+.filtros-inventario {
     display: flex;
     align-items: center;
-    gap: 10px;
     flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 16px;
-  }
+}
 
-  .filtros-inventario .buscar-wrap {
-    flex: 1 1 250px;
-    min-width: 180px;
-  }
+.filtros-inventario .buscar-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 280px;
+    min-width: 190px;
+}
 
-  .filtros-inventario select {
-    flex: 1 1 230px;
+.filtros-inventario .buscar-wrap svg {
+    position: absolute;
+    left: 12px;
+    width: 17px;
+    height: 17px;
+    color: #64748b;
+    pointer-events: none;
+}
+
+.filtros-inventario .buscar-wrap input {
+    width: 100%;
+    padding-left: 38px;
+}
+
+.filtros-inventario select {
+    flex: 0 1 260px;
     min-width: 190px;
     max-width: 330px;
-  }
+}
 
-  .resumen-tecnico {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--color-borde, #e2e8f0);
-    background: var(--color-fondo-secundario, #f8fafc);
-  }
-
-  .resumen-tecnico h2 {
-    margin: 0 0 5px;
-    font-size: 15px;
-  }
-
-  .resumen-tecnico p {
-    margin: 0;
-    color: #64748b;
-    font-size: 12px;
-  }
-
-  .tabla-tecnico th,
-  .tabla-tecnico td {
-    padding: 11px 14px;
-    vertical-align: middle;
-  }
-
-  .tabla-tecnico th {
-    white-space: nowrap;
-  }
-
-  .tabla-tecnico .producto-nombre {
-    min-width: 200px;
-  }
-
-  .tabla-tecnico .cantidad {
-    text-align: center;
-    min-width: 95px;
-  }
-
-  .tabla-tecnico .cantidad strong {
+.filtro-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    color: #475569;
     font-size: 13px;
-  }
+    white-space: nowrap;
+}
 
-  .tabla-tecnico .pendiente {
-    color: #b45309;
-    font-weight: 700;
-  }
+.filtro-check input {
+    accent-color: #166534;
+}
 
-  .tabla-tecnico .sin-cantidad {
-    color: #94a3b8;
-  }
+/* =========================================================
+   COMPARACIÓN FIVE / SAP
+========================================================= */
 
-  .tecnico-vacio {
-    padding: 28px 16px;
+.tabla-general .cantidad {
     text-align: center;
-  }
+    white-space: nowrap;
+}
 
-  .tecnico-vacio strong {
+.tabla-general .cantidad.coincide {
+    background-color: #f0fdf4;
+    color: #15803d;
+}
+
+.tabla-general .cantidad.no-coincide {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+.tabla-general .estado-comparacion {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-weight: 700;
+}
+
+.tabla-general .estado-comparacion span {
+    font-size: 14px;
+}
+
+.tabla-general .estado-comparacion.sap-ok {
+    color: #15803d;
+}
+
+.tabla-general .estado-comparacion.sap-error {
+    color: #dc2626;
+}
+
+/* =========================================================
+   INVENTARIO FÍSICO
+========================================================= */
+
+.tabla-general td.inventario-ok {
+    background-color: #f0fdf4;
+    color: #166534;
+    text-align: center;
+}
+
+.tabla-general td.inventario-error {
+    background-color: #fef2f2;
+    color: #b91c1c;
+    text-align: center;
+}
+
+.tabla-general .dato-inventario {
     display: block;
-    margin-bottom: 6px;
-  }
+    margin-bottom: 7px;
+    font-size: 14px;
+}
 
-  .tecnico-vacio p {
-    margin: 0;
-    color: #64748b;
+.btn-chico {
+    padding: 5px 9px;
+    font-size: 11px;
+}
+
+/* =========================================================
+   TABLA CONSOLIDADA POR TÉCNICO
+========================================================= */
+
+.tabla-consolidada {
+    position: relative;
+    width: 100%;
+    max-height: 70vh;
+    overflow: auto;
+    isolation: isolate;
+    background: #fff;
+    scrollbar-gutter: stable;
+}
+
+.tabla-consolidada table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #fff;
+}
+
+.tabla-consolidada th,
+.tabla-consolidada td {
+    box-sizing: border-box;
+    padding: 10px;
+    border-right: 1px solid #e2e8e5;
+    border-bottom: 1px solid #e2e8e5;
+    vertical-align: middle;
+}
+
+/* Encabezados fijos */
+
+.tabla-consolidada thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #f1f5f3 !important;
+    background-image: none !important;
+    color: #1e293b;
+    text-align: center;
+    vertical-align: top;
+    box-shadow:
+        inset 0 -1px 0 #cbd5d1,
+        0 2px 4px rgba(15, 23, 42, .06);
+}
+
+.tabla-consolidada th.col-producto,
+.tabla-consolidada td.valor {
+    width: 130px;
+    min-width: 130px;
+    max-width: 130px;
+}
+
+.tabla-consolidada th.col-producto {
+    background: #f1f5f3 !important;
+}
+
+.tabla-consolidada .producto-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.tabla-consolidada .producto-header strong {
+    display: -webkit-box;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
     font-size: 12px;
-  }
+    font-weight: 700;
+}
 
-  @media (max-width: 600px) {
+.tabla-consolidada .producto-header span {
+    max-width: 100%;
+    color: #475569;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.tabla-consolidada .producto-header small {
+    max-width: 100%;
+    color: #64748b;
+    font-size: 10px;
+    overflow-wrap: anywhere;
+}
+
+/* Columna fija de técnico */
+
+.tabla-consolidada .col-tecnico,
+.tabla-consolidada td.tecnico-nombre {
+    position: sticky;
+    left: 0;
+    width: 230px;
+    min-width: 230px;
+    max-width: 230px;
+    background: #fff !important;
+    background-image: none !important;
+    z-index: 5;
+}
+
+/* Columna fija de concepto */
+
+.tabla-consolidada .col-concepto,
+.tabla-consolidada td.concepto {
+    position: sticky;
+    left: 230px;
+    width: 110px;
+    min-width: 110px;
+    max-width: 110px;
+    background: #fff !important;
+    background-image: none !important;
+    z-index: 5;
+}
+
+/* Esquinas superiores */
+
+.tabla-consolidada thead th.col-tecnico,
+.tabla-consolidada thead th.col-concepto {
+    top: 0;
+    z-index: 20;
+    background: #e8efeb !important;
+    box-shadow:
+        inset 0 -1px 0 #cbd5d1,
+        1px 1px 3px rgba(15, 23, 42, .08);
+}
+
+.tabla-consolidada tbody td {
+    background-clip: padding-box;
+}
+
+.tabla-consolidada tbody td.tecnico-nombre,
+.tabla-consolidada tbody td.concepto {
+    background: #fff !important;
+    background-image: none !important;
+}
+
+.tabla-consolidada td.valor {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.tabla-consolidada .concepto {
+    color: #334155;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.tabla-consolidada .enlace-cantidad {
+    display: inline-block;
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.tabla-consolidada .enlace-cantidad:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+.tabla-consolidada .sap-resultado {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.tabla-consolidada .sap-ok {
+    color: #15803d;
+}
+
+.tabla-consolidada .sap-error {
+    color: #dc2626;
+}
+
+/* Tarjeta del técnico */
+
+.tecnico-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 10px;
+}
+
+.tecnico-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.tecnico-datos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.tecnico-titulo {
+    color: #1e293b;
+    font-size: 14px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.chip-cedula {
+    color: #475569;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.tecnico-avatar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #e2eee7;
+    color: #166534;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.tecnico-supervisor {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.tecnico-supervisor .label {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.tecnico-supervisor .valor-sup {
+    color: #334155;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.btn-gestionar-nuevo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #fff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color .2s, border-color .2s;
+}
+
+.btn-gestionar-nuevo:hover {
+    border-color: #94a3b8;
+    background: #f1f5f9;
+}
+
+/* Separador y estados vacíos */
+
+.tabla-consolidada tr.separador-tecnico td {
+    height: 10px;
+    padding: 0;
+    border-bottom: 1px solid #d8e2dc;
+    background: #edf2ef !important;
+}
+
+.tecnico-vacio,
+.vacio {
+    padding: 36px 20px;
+    text-align: center;
+    color: #64748b;
+}
+
+.tecnico-vacio strong,
+.vacio strong {
+    display: block;
+    margin-bottom: 7px;
+    color: #334155;
+    font-size: 15px;
+}
+
+.tecnico-vacio p {
+    margin: 0;
+    font-size: 12px;
+}
+
+.vacio-icono {
+    margin-bottom: 10px;
+    font-size: 36px;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 768px) {
+    .tabla-wrap {
+        max-height: 65vh;
+    }
+
+    .filtros-inventario .buscar-wrap,
     .filtros-inventario select {
-      max-width: none;
-      flex-basis: 100%;
+        flex: 1 1 100%;
+        max-width: none;
     }
 
-    .tabla-tecnico .producto-nombre {
-      min-width: 170px;
+    .tabla-consolidada {
+        max-height: 65vh;
     }
-  }
+
+    .tabla-consolidada .col-tecnico,
+    .tabla-consolidada td.tecnico-nombre {
+        width: 190px;
+        min-width: 190px;
+        max-width: 190px;
+    }
+
+    .tabla-consolidada .col-concepto,
+    .tabla-consolidada td.concepto {
+        left: 190px;
+        width: 100px;
+        min-width: 100px;
+        max-width: 100px;
+    }
+
+    .tabla-consolidada th.col-producto,
+    .tabla-consolidada td.valor {
+        width: 120px;
+        min-width: 120px;
+        max-width: 120px;
+    }
+
+    .tecnico-card {
+        gap: 10px;
+        padding: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .tabla-wrap table {
+        min-width: 1100px;
+    }
+
+    .tabla-general td.col-producto {
+        min-width: 170px;
+    }
+}
 </style>
 {% endblock %}
+
 
 {% block contenido %}
 
 <header class="cabecera">
-  <div>
-    <h1>Resumen de Materiales</h1>
-    <p>
-      Consulta las existencias de bodega y controla los materiales
-      asignados a cada técnico.
-    </p>
-  </div>
+    <div>
+        <h1>Resumen de Materiales</h1>
+        <p>
+            Consulta las existencias de bodega y controla los materiales
+            asignados a cada técnico.
+        </p>
+    </div>
 
-  <div class="acciones">
-    <a class="btn btn-primario"
-       href="{% url 'almacen:ingreso_crear' %}">
-      Registrar ingreso
-    </a>
-  </div>
+    <div class="acciones">
+        <a class="btn btn-primario"
+           href="{% url 'almacen:ingreso_crear' %}">
+            Registrar ingreso
+        </a>
+    </div>
 </header>
+
 
 <!-- FILTROS -->
 <form class="filtros filtros-inventario" method="get">
 
-  <div class="buscar-wrap">
-    <svg viewBox="0 0 24 24"
-         fill="none"
-         stroke="currentColor"
-         stroke-width="2"
-         stroke-linecap="round"
-         stroke-linejoin="round"
-         aria-hidden="true">
-      <circle cx="11" cy="11" r="7"/>
-      <path d="M21 21l-4.3-4.3"/>
-    </svg>
+    <div class="buscar-wrap">
+        <svg viewBox="0 0 24 24"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2"
+             stroke-linecap="round"
+             stroke-linejoin="round"
+             aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="M21 21l-4.3-4.3"/>
+        </svg>
 
-    <input
-      class="input buscar"
-      type="search"
-      name="q"
-      value="{{ request.GET.q }}"
-      placeholder="Buscar producto, código o técnico"
+        <input
+            class="input buscar"
+            type="search"
+            name="q"
+            value="{{ request.GET.q }}"
+            placeholder="Buscar producto, código o técnico"
+        >
+    </div>
+
+    <select
+        class="input"
+        name="tecnico"
+        onchange="this.form.submit()"
     >
-  </div>
+        <option value="">Ningún técnico seleccionado</option>
 
-  <select
+        {% for tecnico in tecnicos_lista %}
+            <option
+                value="{{ tecnico.pk }}"
+                {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
+                    selected
+                {% endif %}
+            >
+                {{ tecnico.get_full_name|default:tecnico.username|upper }}
+            </option>
+        {% endfor %}
+    </select>
+    
+<select
     class="input"
-    name="tecnico"
+    name="comparacion"
     onchange="this.form.submit()"
-  >
-    <option value="">Ningun Tecnico Seleccionado</option>
+>
+    <option value="">Todos: SAP y FIVE</option>
 
-    {% for t in tecnicos_lista %}
-      <option
-        value="{{ t.pk }}"
-        {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}
-      >
-        {{ t.tecnico_apellido_nombres }}
-        {% if t.tecnico_cedula %}
-          — CC {{ t.tecnico_cedula }}
-        {% endif %}
-      </option>
-    {% endfor %}
-  </select>
-
-  <label class="filtro-check">
-    <input
-      class="check"
-      type="checkbox"
-      name="bajo"
-      value="1"
-      {% if request.GET.bajo %}checked{% endif %}
+    <option
+        value="coinciden"
+        {% if comparacion_sel == "coinciden" %}selected{% endif %}
     >
-    Solo stock bajo
-  </label>
+        ✓ SAP y FIVE coinciden
+    </option>
 
-  <button class="btn btn-secundario" type="submit">
-    Buscar
-  </button>
-
-  {% if request.GET.q or tecnico_sel or request.GET.bajo %}
-    <a
-      class="btn btn-secundario"
-      href="{% url 'dashboard' %}"
+    <option
+        value="diferentes"
+        {% if comparacion_sel == "diferentes" %}selected{% endif %}
     >
-      Limpiar
-    </a>
-  {% endif %}
+        ✕ SAP y FIVE diferentes
+    </option>
+</select>
+
+
+    {% if not tecnico_sel %}
+        <label class="filtro-check">
+            <input
+                class="check"
+                type="checkbox"
+                name="bajo"
+                value="1"
+                {% if request.GET.bajo %}checked{% endif %}
+            >
+            Solo stock bajo
+        </label>
+    {% endif %}
+
+    <button class="btn btn-secundario" type="submit">
+        Buscar
+    </button>
+
+    {% if request.GET.q or tecnico_sel or request.GET.bajo %}
+        <a
+            class="btn btn-secundario"
+            href="{% url 'dashboard' %}"
+        >
+            Limpiar
+        </a>
+    {% endif %}
 
 </form>
 
+
 <!-- ======================================================
-     VISTA POR TÉCNICO
+     VISTA CONSOLIDADA POR TÉCNICO
+====================================================== -->
+
+
+<!-- ======================================================
+     VISTA CONSOLIDADA POR TÉCNICO — SOLO CONSULTA
 ====================================================== -->
 
 {% if tecnico_sel %}
 
-  <div class="tarjeta">
+    <div class="tarjeta tarjeta-asignaciones">
 
-    <div class="resumen-tecnico">
-      <h2>Materiales del técnico</h2>
-      <p>
-        Cantidades asignadas, instaladas y pendientes de instalación.
-      </p>
-    </div>
+        {% if tecnicos and productos %}
 
-    {% if tecnicos and productos %}
+            <div class="tabla-consolidada">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-tecnico">TÉCNICO</th>
+                            <th class="col-concepto">ASIGNACIÓN</th>
 
-      <div class="tabla-wrap">
-        <table class="tabla-tecnico">
+                            {% for producto in productos %}
+                                <th
+                                    class="col-producto"
+                                    title="{{ producto.nombre_completo }}"
+                                >
+                                    <div class="producto-header">
+                                        <strong>{{ producto.nombre|upper }}</strong>
 
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th class="cantidad">Asignado</th>
-              <th class="cantidad">Instalado Five</th>
-              <th class="cantidad">Instalado SAP</th>
-              <th class="cantidad">Debe tener</th>
-            </tr>
-          </thead>
+                                        {% if producto.medida %}
+                                            <span>{{ producto.medida|upper }}</span>
+                                        {% endif %}
 
-          <tbody>
-            {% for tecnico_data in tecnicos %}
+                                        {% if producto.color %}
+                                            <span>{{ producto.color|upper }}</span>
+                                        {% endif %}
 
-              {% for item in tecnico_data.productos_detalle %}
+                                        {% if producto.presentacion %}
+                                            <span>{{ producto.presentacion|upper }}</span>
+                                        {% endif %}
 
-                {% if item.asignados > 0 or item.five > 0 or item.sap > 0 %}
+                                        <small>{{ producto.codigo_producto|upper }}</small>
+                                    </div>
+                                </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
 
-                  <tr>
-                    <td class="producto-nombre">
-                      <strong>
-                        {{ item.producto.nombre_completo }}
-                      </strong>
+                    <tbody>
+                        {% for tecnico_data in tecnicos %}
 
-                      <div class="codigo">
-                        {{ item.producto.codigo_producto }}
-                      </div>
-                    </td>
+                            <!-- ASIGNADOS -->
+                            <tr class="fila-asignados">
+                                <td class="tecnico-nombre" rowspan="4">
+                                    <div class="tecnico-card">
 
-                    <td class="cantidad">
-                      {% if item.asignados > 0 %}
-                        <strong>{{ item.asignados }}</strong>
-                      {% else %}
-                        <span class="sin-cantidad">0</span>
-                      {% endif %}
-                    </td>
+                                        <div class="tecnico-top">
+                                            <div class="tecnico-avatar">
+                                                {{ tecnico_data.tecnico.first_name|default:tecnico_data.tecnico.username|slice:":1"|upper }}
+                                            </div>
 
-                    <td class="cantidad">
-                      {% if item.five > 0 %}
-                        <strong>{{ item.five }}</strong>
-                      {% else %}
-                        <span class="sin-cantidad">0</span>
-                      {% endif %}
-                    </td>
+                                            <div class="tecnico-datos">
+                                                <strong class="tecnico-titulo">
+                                                    {{ tecnico_data.tecnico.get_full_name|default:tecnico_data.tecnico.username|upper }}
+                                                </strong>
 
-                    <td class="cantidad">
-                      {% if item.sap > 0 %}
-                        <strong>{{ item.sap }}</strong>
-                      {% else %}
-                        <span class="sin-cantidad">0</span>
-                      {% endif %}
-                    </td>
+                                                <span class="chip-cedula">
+                                                    CC {{ tecnico_data.tecnico.cedula|default:"Sin cédula" }}
+                                                </span>
+                                            </div>
+                                        </div>
 
-                    <td class="cantidad">
-                      {% if item.debe_tener > 0 %}
-                        <strong class="pendiente">
-                          {{ item.debe_tener }}
-                        </strong>
-                      {% else %}
-                        <strong>0</strong>
-                      {% endif %}
-                    </td>
-                  </tr>
+                                        <div class="tecnico-supervisor">
+                                            <span class="label">
+                                                Supervisor asignado
+                                            </span>
 
+                                            <span class="valor-sup">
+                                                {% if tecnico_data.tecnico.supervisor %}
+                                                    {{ tecnico_data.tecnico.supervisor.get_full_name|default:tecnico_data.tecnico.supervisor.username }}
+                                                {% else %}
+                                                    Sin supervisor asignado
+                                                {% endif %}
+                                            </span>
+                                        </div>
+
+                                        <!-- Sin botón de instalar/devolver -->
+
+                                    </div>
+                                </td>
+
+                                <td class="concepto asignados">
+                                    ASIGNADOS
+                                </td>
+
+                                {% for celda in tecnico_data.filas.ASIGNADOS %}
+    <td class="valor asignado">
+        {% if celda.url %}
+            <a href="{{ celda.url }}" class="enlace-cantidad">
+                {% if celda.cantidad > 0 %}
+                    <strong>{{ celda.cantidad }}</strong>
+                {% else %}
+                    <span class="cero">0</span>
                 {% endif %}
+            </a>
+        {% else %}
+            {% if celda.cantidad > 0 %}
+                <strong>{{ celda.cantidad }}</strong>
+            {% else %}
+                <span class="cero">0</span>
+            {% endif %}
+        {% endif %}
+    </td>
+{% endfor %}
+                            </tr>
 
-              {% endfor %}
+                            <!-- INSTALADO SEGÚN FIVE -->
+                            <tr class="fila-five">
+                                <td class="concepto five">
+                                    INSTALADO<br>SEGÚN FIVE
+                                </td>
 
-            {% endfor %}
-          </tbody>
+                                {% for celda in tecnico_data.filas.FIVE %}
+    <td class="valor">
+        {% if celda.url %}
+            <a href="{{ celda.url }}" class="enlace-cantidad">
+                {% if celda.cantidad > 0 %}
+                    <strong>{{ celda.cantidad }}</strong>
+                {% else %}
+                    <span class="cero">0</span>
+                {% endif %}
+            </a>
+        {% else %}
+            {% if celda.cantidad > 0 %}
+                <strong>{{ celda.cantidad }}</strong>
+            {% else %}
+                <span class="cero">0</span>
+            {% endif %}
+        {% endif %}
+    </td>
+{% endfor %}
+                            </tr>
 
-        </table>
-      </div>
+                            <!-- INSTALADOS POR SAP -->
+                            <tr class="fila-sap">
+                                <td class="concepto sap">
+                                    INSTALADOS<br>POR SAP
+                                </td>
 
-    {% else %}
+                                {% for celda in tecnico_data.filas.SAP %}
+                                    <td class="valor">
+                                        <div class="sap-resultado {% if celda.coincide %}sap-ok{% else %}sap-error{% endif %}">
+                                            <strong>{{ celda.cantidad }}</strong>
 
-      <div class="tecnico-vacio">
-        <strong>Sin materiales asignados</strong>
-        <p>
-          Este técnico no tiene asignaciones para los filtros actuales.
-        </p>
-      </div>
+                                            {% if celda.coincide %}
+                                                <span title="SAP coincide con FIVE">✓</span>
+                                            {% else %}
+                                                <span title="SAP no coincide con FIVE">✕</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                {% endfor %}
+                            </tr>
 
-    {% endif %}
+                            <!-- DEBE TENER -->
+                            <tr class="fila-debe">
+                                <td class="concepto debe">
+                                    DEBE TENER
+                                </td>
 
-  </div>
+                                {% for celda in tecnico_data.filas.DEBE_TENER %}
+    <td class="valor debe-valor">
+        {% if celda.url %}
+            <a href="{{ celda.url }}" class="enlace-cantidad">
+                {% if celda.cantidad > 0 %}
+                    <strong>{{ celda.cantidad }}</strong>
+                {% else %}
+                    <span class="cero">0</span>
+                {% endif %}
+            </a>
+        {% else %}
+            {% if celda.cantidad > 0 %}
+                <strong>{{ celda.cantidad }}</strong>
+            {% else %}
+                <span class="cero">0</span>
+            {% endif %}
+        {% endif %}
+    </td>
+{% endfor %}
+                            </tr>
 
-<!-- ======================================================
-     INVENTARIO GENERAL
-====================================================== -->
+                            <!-- SEPARADOR -->
+                            <tr class="separador-tecnico">
+                                <td colspan="100"></td>
+                            </tr>
+
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        {% else %}
+
+            <div class="tecnico-vacio">
+                <strong>Sin materiales asignados</strong>
+                <p>
+                    Este técnico no tiene asignaciones para los filtros actuales.
+                </p>
+            </div>
+
+        {% endif %}
+
+    </div>
 
 {% else %}
 
-  <div class="tarjeta">
 
-    {% if object_list %}
+    <!-- ======================================================
+         INVENTARIO GENERAL
+    ====================================================== -->
 
-      <div class="tabla-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Material</th>
-              <th>Tipo Material</th>
-              <th class="num">Total<br>recibido</th>
-              <th class="num">Disponible<br>almacén</th>
-              <th class="num">Asignado<br>técnico</th>
-              <th class="num">En poder<br>técnicos</th>
-              <th class="num">Instalado<br>Five</th>
-              <th class="num">Instalado<br>SAP</th>
-              <th class="num">Inventario<br>almacén</th>
-              <th class="num">Mínimo</th>
-              <th>Alerta</th>
-              <th><span class="sr-only">Acciones</span></th>
-            </tr>
-          </thead>
+    <div class="tarjeta">
 
-          <tbody>
-            {% for i in object_list %}
+        {% if object_list %}
 
-              <tr class="{% if i.bajo_stock %}fila-bajo{% endif %}">
+            <div class="tabla-wrap">
+                <table class="tabla-general">
 
-                <td>
-                  <span class="material">
-                    {{ i.producto.categoria.nombre }}
-                  </span>
-                </td>
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Material</th>
+                            <th>Tipo material</th>
+                            <th class="num">Total<br>recibido</th>
+                            <th class="num">Disponible<br>almacén</th>
+                            <th class="num">Asignado<br>técnico</th>
+                            <th class="num">En poder<br>técnicos</th>
+                            <th class="num">Instalado<br>FIVE</th>
+                            <th class="num">Instalado<br>SAP</th>
+                            <th class="num">Inventario<br>almacén</th>
+                            <th class="num">Mínimo</th>
+                            <th>Alerta</th>
+                            <th><span class="sr-only">Acciones</span></th>
+                        </tr>
+                    </thead>
 
-                <td class="col-producto">
-                  <strong>{{ i.producto.nombre }}</strong>
-                  {% if i.producto.marca %}
-                    {{ i.producto.marca }}
-                  {% endif %}
-                  {% if i.producto.medida %}
-                    {{ i.producto.medida }}
-                  {% endif %}
-                </td>
+                    <tbody>
+                        {% for i in object_list %}
 
-                <td class="num">{{ i.total }}</td>
+                            <tr class="{% if i.bajo_stock %}fila-bajo{% endif %}">
 
-                <td class="num">
-                  <strong class="dato-principal">
-                    {{ i.cantidad_actual }}
-                  </strong>
-                </td>
+                                <td class="codigo">
+                                    {{ i.producto.codigo_producto }}
+                                </td>
 
-                <td class="num">
-                  {% if i.total_asignado > 0 %}
-                    <strong>{{ i.total_asignado }}</strong>
-                  {% else %}
-                    <span class="cero">0</span>
-                  {% endif %}
-                </td>
+                                <td class="col-producto">
+                                    <strong>{{ i.producto.nombre_completo }}</strong>
 
-                <td class="num">
-                  {% if i.en_poder_tecnicos > 0 %}
-                    <strong>{{ i.en_poder_tecnicos }}</strong>
-                  {% else %}
-                    <span class="cero">0</span>
-                  {% endif %}
-                </td>
+                                    {% if i.producto.marca %}
+                                        <div class="suave">
+                                            {{ i.producto.marca }}
+                                            {% if i.producto.referencia %}
+                                                · {{ i.producto.referencia }}
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                </td>
 
-                <td class="num">
-                  {% if i.instalado_five > 0 %}
-                    <strong>{{ i.instalado_five }}</strong>
-                  {% else %}
-                    <span class="cero">0</span>
-                  {% endif %}
-                </td>
+                                <td>
+                                    {% if i.producto.categoria %}
+                                        {{ i.producto.categoria.nombre }}
+                                    {% else %}
+                                        <span class="suave">Sin categoría</span>
+                                    {% endif %}
+                                </td>
 
-                <td class="num">
-                  {% if i.instalado_sap > 0 %}
-                    <strong>{{ i.instalado_sap }}</strong>
-                  {% else %}
-                    <span class="cero">0</span>
-                  {% endif %}
-                </td>
+                                <td class="num">{{ i.total|default:0 }}</td>
 
-                <td class="num {% if i.inventario_almacen == i.cantidad_actual %}inventario-ok{% else %}inventario-error{% endif %}">
-                  <strong class="dato-inventario">
-                    {{ i.inventario_almacen }}
-                  </strong>
+                                <td class="num">
+                                    <strong class="dato-principal">
+                                        {{ i.cantidad_actual|default:0 }}
+                                    </strong>
+                                </td>
 
-                  <a
-                    class="btn btn-secundario btn-chico"
-                    href="{% url 'almacen:inventario_almacen_editar' i.pk %}"
-                  >
-                    Editar
-                  </a>
-                </td>
+                                <td class="num">
+                                    {% if i.asignado_estado > 0 %}
+                                        <strong>{{ i.asignado_estado }}</strong>
+                                    {% else %}
+                                        <span class="cero">0</span>
+                                    {% endif %}
+                                </td>
 
-                <td class="num">{{ i.cantidad_minima }}</td>
+                                <td class="num">
+                                    {% if i.en_poder_tecnicos > 0 %}
+                                        <strong>{{ i.en_poder_tecnicos }}</strong>
+                                    {% else %}
+                                        <span class="cero">0</span>
+                                    {% endif %}
+                                </td>
 
-                <td>
-                  {% if i.bajo_stock %}
-                    <span class="chip chip-bajo">Stock bajo</span>
-                  {% else %}
-                    <span class="suave">—</span>
-                  {% endif %}
-                </td>
+                                <!-- FIVE -->
+                                <td class="cantidad {% if i.five == i.sap %}coincide{% else %}no-coincide{% endif %}">
+                                    {% if i.five > 0 %}
+                                        <strong>{{ i.five }}</strong>
+                                    {% else %}
+                                        <span class="cero">0</span>
+                                    {% endif %}
+                                </td>
 
-                <td class="col-acciones">
-                  <a
-                    class="btn btn-secundario btn-chico"
-                    href="{% url 'almacen:minimo_editar' i.pk %}"
-                  >
-                    Mínimo
-                  </a>
-                </td>
+                                <!-- SAP -->
+                                <td class="cantidad {% if i.five == i.sap %}coincide{% else %}no-coincide{% endif %}">
+                                    <div class="estado-comparacion {% if i.five == i.sap %}sap-ok{% else %}sap-error{% endif %}">
+                                        <strong>{{ i.sap|default:0 }}</strong>
 
-              </tr>
+                                        {% if i.five == i.sap %}
+                                            <span title="SAP coincide con FIVE">✓</span>
+                                        {% else %}
+                                            <span title="SAP no coincide con FIVE">✕</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
 
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+                                <!-- INVENTARIO FÍSICO -->
+                                <td class="{% if i.inventario_almacen == i.cantidad_actual %}inventario-ok{% else %}inventario-error{% endif %}">
+                                    <strong class="dato-inventario">
+                                        {{ i.inventario_almacen|default:0 }}
+                                    </strong>
 
-    {% else %}
+                                    <a
+                                        class="btn btn-secundario btn-chico"
+                                        href="{% url 'almacen:inventario_almacen_editar' i.pk %}"
+                                    >
+                                        Editar
+                                    </a>
+                                </td>
 
-      <div class="vacio">
-        <strong>Sin existencias para mostrar</strong>
-        Registre un ingreso o cambie los filtros.
-      </div>
+                                <td class="num">
+                                    {{ i.cantidad_minima|default:0 }}
+                                </td>
 
-    {% endif %}
+                                <td>
+                                    {% if i.bajo_stock %}
+                                        <span class="chip chip-bajo">Stock bajo</span>
+                                    {% else %}
+                                        <span class="suave">—</span>
+                                    {% endif %}
+                                </td>
 
-    {% include "_paginacion.html" %}
+                                <td class="col-acciones">
+                                    <a
+                                        class="btn btn-secundario btn-chico"
+                                        href="{% url 'almacen:minimo_editar' i.pk %}"
+                                    >
+                                        Mínimo
+                                    </a>
+                                </td>
 
-  </div>
+                            </tr>
+
+                        {% endfor %}
+                    </tbody>
+
+                </table>
+            </div>
+
+        {% else %}
+
+            <div class="vacio">
+                <div class="vacio-icono">📦</div>
+                <strong>Sin existencias para mostrar</strong>
+                Registre un ingreso o cambie los filtros.
+            </div>
+
+        {% endif %}
+
+        {% include "_paginacion.html" %}
+
+    </div>
 
 {% endif %}
 

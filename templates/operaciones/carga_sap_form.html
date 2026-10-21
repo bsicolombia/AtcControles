@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block titulo %}Carga masiva SAP{% endblock %}
+
+{% block contenido %}
+<div class="container mt-4" style="max-width: 860px;">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-1">Carga masiva SAP</h1>
+            <p class="text-muted mb-0">
+                Compara órdenes, cuentas contrato, medidores y cantidades de SAP contra Five.
+            </p>
+        </div>
+        <a class="btn btn-outline-primary" href="{% url 'operaciones:carga_sap_historial' %}">
+            Historial de cargas
+        </a>
+    </div>
+
+    <div class="alert alert-info">
+        <strong>Columnas obligatorias:</strong>
+<code>numero_orden</code>, <code>cuenta_contrato</code>, <code>tipo_operacion</code><br>
+Medidores: agregue <code>numero_serie</code>. Material por cantidad: agregue <code>cantidad</code>.
+        <span class="small">Si sube de nuevo filas que ya quedaron conciliadas, se ignoran y no se duplican.</span>
+    </div>
+
+    {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %}">
+            {{ message }}
+        </div>
+    {% endfor %}
+
+    <form method="post" enctype="multipart/form-data" class="card card-body">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <div class="mb-3">
+            <label class="form-label fw-bold" for="{{ form.archivo.id_for_label }}">Archivo Excel</label>
+            {{ form.archivo }}
+            {% for error in form.archivo.errors %}
+                <div class="text-danger mt-1">{{ error }}</div>
+            {% endfor %}
+            <div class="form-text">Formato permitido: .xlsx</div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">Cargar y validar</button>
+            <a href="{% url 'almacen:asignaciones' %}" class="btn btn-secondary">Cancelar</a>
+            <a href="{% url 'operaciones:descargar_plantilla_sap' %}" class="btn btn-dark ms-auto">
+                ↓ Descargar plantilla Excel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

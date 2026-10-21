@@ -48,17 +48,18 @@
   >
     <option value="">Todos los técnicos</option>
 
-    {% for t in tecnicos_lista %}
-      <option
-        value="{{ t.pk }}"
-        {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}
-      >
-        {{ t.tecnico_apellido_nombres }}
-        {% if t.tecnico_cedula %}
-          — CC {{ t.tecnico_cedula }}
-        {% endif %}
-      </option>
+    
+    {% for tecnico in tecnicos_lista %}
+        <option
+            value="{{ tecnico.pk }}"
+            {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
+                selected
+            {% endif %}
+        >
+            {{ tecnico.get_full_name|default:tecnico.username|upper }}
+        </option>
     {% endfor %}
+
   </select>
 
   <!-- Producto -->
@@ -97,8 +98,31 @@
     {% endfor %}
   </select>
 
+  <!-- Comparación FIVE / SAP -->
+<select
+  class="input"
+  name="comparacion"
+  onchange="this.form.submit()"
+>
+  <option value="">Todos (FIVE / SAP)</option>
+
+  <option
+    value="coinciden"
+    {% if comparacion_sel == "coinciden" %}selected{% endif %}
+  >
+    FIVE y SAP coinciden
+  </option>
+
+  <option
+    value="diferentes"
+    {% if comparacion_sel == "diferentes" %}selected{% endif %}
+  >
+    FIVE y SAP no coinciden
+  </option>
+</select>
+
   <!-- Único botón para borrar filtros -->
-  {% if request.GET.q or tecnico_sel or producto_sel or estado_sel %}
+  {% if request.GET.q or tecnico_sel or producto_sel or estado_sel or comparacion_sel %}
     <a
       class="btn btn-secundario"
       href="{% url 'almacen:unidades' %}"
@@ -131,13 +155,16 @@
         <thead>
           <tr>
             <th>Remisión / Ingreso</th>
+            <th>Código Material</th>
             <th>Material</th>
-            <th>Código</th>
+            <th>Código unidad</th>
             <th>Serial</th>
             <th>Marca</th>
             <th>Medida</th>
             <th>Ubicación / Responsable</th>
             <th>Estado</th>
+            <th>FIVE</th>
+            <th>SAP</th>
             <th>Último cambio</th>
 
             {% if hay_instaladas %}
@@ -177,24 +204,31 @@
                 </div>
               </td>
 
-              <!-- MATERIAL -->
-              <td>
-                {{ u.producto.nombre }}
+              <!-- CÓDIGO DEL PRODUCTO -->
+              <td class="codigo">
+                  <strong>
+                      {{ u.producto.codigo_producto|default:"—" }}
+                  </strong>
               </td>
 
-              <!-- CÓDIGO -->
+              <!-- MATERIAL -->
               <td>
-                <a
-                  class="codigo"
-                  href="{% url 'almacen:unidad_detalle' u.pk %}"
-                >
-                  <strong>{{ u.codigo }}</strong>
-                </a>
+                  {{ u.producto.nombre|upper }}
+              </td>
+
+              <!-- CÓDIGO DE LA UNIDAD -->
+              <td>
+                  <a
+                      class="codigo"
+                      href="{% url 'almacen:unidad_detalle' u.pk %}"
+                  >
+                      <strong>{{ u.codigo }}</strong>
+                  </a>
               </td>
 
               <!-- SERIAL -->
               <td class="codigo">
-                {{ u.numero_serie|default:"—" }}
+                  {{ u.numero_serie|default:"—" }}
               </td>
 
               <!-- MARCA -->
@@ -209,35 +243,35 @@
 
               <!-- UBICACIÓN / RESPONSABLE -->
               <td>
-                {% if u.estado == "DISPONIBLE" %}
-                  Almacén
+                  {% if u.estado == "DISPONIBLE" %}
+                      Almacén
 
-                {% elif u.estado == "ASIGNADO" %}
-                  {% if u.asignacion_relevante %}
-                    {{ u.asignacion_relevante.tecnico.tecnico_apellido_nombres }}
+                  {% elif u.estado == "ASIGNADO" %}
+                      {% if u.asignacion_relevante and u.asignacion_relevante.tecnico %}
+                          {{ u.asignacion_relevante.tecnico.get_full_name|default:u.asignacion_relevante.tecnico.username|upper }}
+                      {% else %}
+                          <span class="suave">Sin técnico registrado</span>
+                      {% endif %}
+
+                  {% elif u.estado == "INSTALADO" %}
+                      {% if u.asignacion_relevante and u.asignacion_relevante.tecnico %}
+                          {{ u.asignacion_relevante.tecnico.get_full_name|default:u.asignacion_relevante.tecnico.username|upper }}
+                          <div class="suave">
+                              Técnico de la instalación
+                          </div>
+                      {% else %}
+                          <span class="suave">Instalado — técnico no registrado</span>
+                      {% endif %}
+
+                  {% elif u.estado == "DANADO" %}
+                      Almacén
+
+                  {% elif u.estado == "BAJA" %}
+                      Devuelto / Fuera de servicio
+
                   {% else %}
-                    <span class="suave">Sin técnico registrado</span>
+                      —
                   {% endif %}
-
-                {% elif u.estado == "INSTALADO" %}
-                  {% if u.asignacion_relevante %}
-                    {{ u.asignacion_relevante.tecnico.tecnico_apellido_nombres }}
-                    <div class="suave">
-                      Técnico de la instalación
-                    </div>
-                  {% else %}
-                    Instalado — técnico no registrado
-                  {% endif %}
-
-                {% elif u.estado == "DANADO" %}
-                  Almacén
-
-                {% elif u.estado == "BAJA" %}
-                  Devuelto / Fuera de servicio
-
-                {% else %}
-                  —
-                {% endif %}
               </td>
 
               <!-- ESTADO -->
@@ -245,6 +279,28 @@
                 <span class="chip chip-{{ u.estado|lower }}">
                   {{ u.get_estado_display }}
                 </span>
+              </td>
+
+              <!-- FIVE -->
+              <td class="num">
+                <a
+                  class="cantidad-enlace"
+                  href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.producto.codigo_producto|default:u.producto.nombre|urlencode }}"
+                  title="Consultar asignaciones e instalaciones"
+                >
+                  {{ u.five }}
+                </a>
+              </td>
+
+              <!-- SAP -->
+              <td class="num">
+                <a
+                  class="cantidad-enlace {% if u.coincide_sap_five %}cantidad-ok{% else %}cantidad-error{% endif %}"
+                  href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.producto.codigo_producto|default:u.producto.nombre|urlencode }}"
+                  title="{% if u.coincide_sap_five %}FIVE y SAP coinciden{% else %}FIVE y SAP no coinciden{% endif %}"
+                >
+                  {{ u.sap }}
+                </a>
               </td>
 
               <!-- ÚLTIMO CAMBIO -->
@@ -320,71 +376,276 @@
 
 {% block extra_css %}
 <style>
-
-  
+/* ---------- CONTADOR DE MATERIALES ---------- */
 .contador-materiales {
     display: inline-flex;
     align-items: baseline;
     gap: 5px;
-    padding: 6px 11px;
-    margin-bottom: 12px;
+    padding: 5px 10px;
+    margin-bottom: 8px;
     border: 1px solid #dce5df;
     border-radius: 7px;
     background: #f5f8f6;
     color: #526157;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .contador-materiales strong {
     color: #245c3c;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 800;
 }
 
-    /* ---------- FILTROS ORGANIZADOS ---------- */
+/* ---------- FILTROS ---------- */
+.filtros {
+    display: grid;
+    grid-template-columns: minmax(240px, 2fr)
+                           repeat(3, minmax(130px, 1fr))
+                           auto;
+    gap: 9px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.filtros .input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    font-size: 13px;
+    padding: 9px 10px;
+}
+
+@media (max-width: 1000px) {
     .filtros {
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr 1fr auto;
-        gap: 12px;
-        align-items: center;
-        margin-bottom: 16px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .filtros .input {
-        width: 100%;
-        min-width: 0;
+    .filtros .buscar {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 600px) {
+    .filtros {
+        grid-template-columns: 1fr;
     }
 
-    @media (max-width: 1000px) {
-        .filtros {
-            grid-template-columns: 1fr 1fr;
-        }
-        .filtros .buscar {
-            grid-column: 1 / -1;   /* el buscador ocupa toda la fila */
-        }
+    .filtros .buscar {
+        grid-column: auto;
     }
+}
 
-    @media (max-width: 600px) {
-        .filtros {
-            grid-template-columns: 1fr;
-        }
-    }
+/* ---------- CONTENEDOR DE LA TABLA ---------- */
+.tabla-wrap {
+    width: 100%;
+    max-height: 62vh;
+    overflow: auto;
+    border: 1px solid #e1e7e3;
+    border-radius: 8px;
+}
 
-    /* ---------- TABLA CON SCROLL ---------- */
+/* ---------- TABLA COMPACTA ---------- */
+.tabla-wrap table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.tabla-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 10px 8px;
+    background: #f1f5f3;
+    color: #34483c;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+    white-space: nowrap;
+    text-align: left;
+    box-shadow: 0 1px 0 #d9e2dd;
+}
+
+.tabla-wrap tbody td {
+    padding: 8px;
+    border-bottom: 1px solid #edf0ee;
+    vertical-align: middle;
+}
+
+.tabla-wrap tbody tr:nth-child(even) {
+    background: #fafcfb;
+}
+
+.tabla-wrap tbody tr:hover {
+    background: #f0f6f2;
+}
+
+/* ---------- ANCHOS DE COLUMNAS ---------- */
+/* Remisión e ingreso */
+.tabla-wrap th:nth-child(1),
+.tabla-wrap td:nth-child(1) {
+    min-width: 90px;
+}
+
+/* Código de material */
+.tabla-wrap th:nth-child(2),
+.tabla-wrap td:nth-child(2) {
+    min-width: 85px;
+    max-width: 115px;
+}
+
+/* Nombre del material */
+.tabla-wrap th:nth-child(3),
+.tabla-wrap td:nth-child(3) {
+    min-width: 120px;
+    max-width: 175px;
+}
+
+/* Código de unidad y serial */
+.tabla-wrap th:nth-child(4),
+.tabla-wrap td:nth-child(4),
+.tabla-wrap th:nth-child(5),
+.tabla-wrap td:nth-child(5) {
+    min-width: 85px;
+}
+
+/* Marca y medida */
+.tabla-wrap th:nth-child(6),
+.tabla-wrap td:nth-child(6),
+.tabla-wrap th:nth-child(7),
+.tabla-wrap td:nth-child(7) {
+    min-width: 65px;
+    max-width: 95px;
+}
+
+/* Ubicación y responsable */
+.tabla-wrap th:nth-child(8),
+.tabla-wrap td:nth-child(8) {
+    min-width: 135px;
+    max-width: 185px;
+}
+
+/* Estado */
+.tabla-wrap th:nth-child(9),
+.tabla-wrap td:nth-child(9) {
+    min-width: 85px;
+}
+
+/* FIVE y SAP */
+.tabla-wrap th:nth-child(10),
+.tabla-wrap td:nth-child(10),
+.tabla-wrap th:nth-child(11),
+.tabla-wrap td:nth-child(11) {
+    min-width: 48px;
+    text-align: center;
+}
+
+/* Último cambio */
+.tabla-wrap th:nth-child(12),
+.tabla-wrap td:nth-child(12) {
+    min-width: 105px;
+    white-space: nowrap;
+}
+
+/* Orden y cuenta contrato */
+.tabla-wrap th:nth-child(13),
+.tabla-wrap td:nth-child(13),
+.tabla-wrap th:nth-child(14),
+.tabla-wrap td:nth-child(14) {
+    min-width: 90px;
+}
+
+/* ---------- CÓDIGOS ---------- */
+.codigo {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.tabla-wrap td:nth-child(3) {
+    overflow-wrap: anywhere;
+}
+
+/* ---------- RESPONSABLE Y FECHAS ---------- */
+.tabla-wrap td:nth-child(8) {
+    overflow-wrap: anywhere;
+}
+
+.suave {
+    font-size: 11px;
+    color: #78857d;
+}
+
+/* ---------- CANTIDADES FIVE / SAP ---------- */
+.cantidad-enlace {
+    display: inline-block;
+    min-width: 25px;
+    padding: 4px 6px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 750;
+    text-align: center;
+    text-decoration: none;
+    color: #245c3c;
+    background: #f1f5f3;
+}
+
+.cantidad-enlace:hover {
+    background: #dcebe1;
+    text-decoration: underline;
+}
+
+.cantidad-ok {
+    color: #166534;
+    background: #dcfce7;
+}
+
+.cantidad-error {
+    color: #991b1b;
+    background: #fee2e2;
+}
+
+/* ---------- BOTONES DE ACCIÓN ---------- */
+.tabla-wrap .btn-pequeno {
+    padding: 5px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* ---------- ESTADOS ---------- */
+.tabla-wrap .chip {
+    display: inline-block;
+    padding: 4px 7px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+/* ---------- TARJETA Y MÓVILES ---------- */
+.tarjeta {
+    min-width: 0;
+}
+
+@media (max-width: 768px) {
     .tabla-wrap {
-        max-height: 62vh;      /* 70% del alto de la pantalla */
-        overflow: auto;        /* scroll vertical y horizontal si hace falta */
+        max-height: 65vh;
     }
 
-    /* ---------- ENCABEZADO FIJO ---------- */
+    .tabla-wrap table {
+        font-size: 11px;
+    }
+
     .tabla-wrap thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: #f1f5f3;   /* OBLIGATORIO: sin fondo se ve lo de abajo */
-        box-shadow: 0 1px 0 #d9e2dd;  /* línea inferior (el borde no se pega con sticky) */
+        padding: 9px 7px;
     }
 
-    
+    .tabla-wrap tbody td {
+        padding: 7px;
+    }
+}
 </style>
 {% endblock %}

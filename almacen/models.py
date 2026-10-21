@@ -286,6 +286,7 @@ class UnidadSerializada(models.Model):
 # INVENTARIO
 # ============================================================
 
+
 class Inventario(models.Model):
 
     producto = models.OneToOneField(
@@ -294,26 +295,18 @@ class Inventario(models.Model):
         related_name="inventario"
     )
 
-    cantidad_actual = models.PositiveIntegerField(
-        default=0
-    )
+    cantidad_actual = models.PositiveIntegerField(default=0)
 
-    cantidad_asignada = models.PositiveIntegerField(
-        default=0
-    )
+    cantidad_asignada = models.PositiveIntegerField(default=0)
 
     inventario_almacen = models.PositiveIntegerField(
         "Inventario de almacén",
         default=0
     )
 
-    cantidad_minima = models.PositiveIntegerField(
-        default=0
-    )
+    cantidad_minima = models.PositiveIntegerField(default=0)
 
-    fecha_actualizacion = models.DateTimeField(
-        auto_now=True
-    )
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Inventario"
@@ -325,7 +318,15 @@ class Inventario(models.Model):
 
     @property
     def total(self):
-        return self.cantidad_actual + self.cantidad_asignada
+        """Total histórico de unidades recibidas mediante entradas."""
+        from django.db.models import Sum
+
+        resultado = MovimientoInventario.objects.filter(
+            producto_id=self.producto_id,
+            tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
+        ).aggregate(total=Sum("cantidad"))
+
+        return resultado["total"] or 0
 
     @property
     def bajo_stock(self):
@@ -333,40 +334,47 @@ class Inventario(models.Model):
             self.cantidad_minima > 0
             and self.cantidad_actual <= self.cantidad_minima
         )
-        
 
     @property
     def total_asignado(self):
-        """Total de material que se encuentra actualmente en estado ASIGNADA"""
+        """Total de material actualmente asignado."""
         return sum(
-            a.cantidad for a in self.producto.asignaciones.all() 
+            a.cantidad or 0
+            for a in self.producto.asignaciones.all()
             if a.estado == Asignacion.Estado.ASIGNADA
         )
 
     @property
     def instalado_five(self):
-        """Total de material instalado según Five (excluyendo devueltas)"""
+        """Total de material instalado según FIVE, excluyendo devueltas."""
         total = 0
+
         for a in self.producto.asignaciones.all():
             if a.estado == Asignacion.Estado.DEVUELTA:
-                continue  # Ignoramos las devueltas
-            
+                continue
+
             if a.estado == Asignacion.Estado.INSTALADA:
                 total += a.cantidad or 0
             else:
                 total += a.cantidad_instalada or 0
+
         return total
 
     @property
     def en_poder_tecnicos(self):
-        """Material en poder de técnicos: Lo asignado activo menos lo ya instalado de esas asignaciones"""
+        """Material asignado que todavía no se ha instalado."""
         total = 0
+
         for a in self.producto.asignaciones.all():
             if a.estado == Asignacion.Estado.ASIGNADA:
-                # Cantidad asignada menos lo que ya hayan instalado de esta misma orden
-                pendiente = max((a.cantidad or 0) - (a.cantidad_instalada or 0), 0)
+                pendiente = max(
+                    (a.cantidad or 0) - (a.cantidad_instalada or 0),
+                    0
+                )
                 total += pendiente
+
         return total
+
 
 # ============================================================
 # ASIGNACIÓN

@@ -480,7 +480,8 @@ class AsignacionForm(EstiloMixin, forms.Form):
 
         self.fields["tecnico"].label_from_instance = (
             lambda u: (
-                f"{u.get_full_name() or u.username} · {u.username}"
+                f"{(u.get_full_name() or u.username).upper()} · "
+                f"{u.username.upper()}"
             )
         )
 

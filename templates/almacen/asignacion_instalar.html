@@ -137,9 +137,11 @@
                         <th>Entregado</th>
                         <th class="num">Pendiente</th>
                         <th class="num">Instalar</th>
+                        {% if puede_ver_almacen %}
                         <th>
                             <span class="sr-only">Devolver</span>
                         </th>
+                        {%endif%}
                     </tr>
                 </thead>
 
@@ -193,16 +195,20 @@
                             {% endif %}
                         </td>
 
-                        <td class="col-acciones">
-                            <button
-                                type="submit"
-                                form="devolver-{{ a.pk }}"
-                                class="btn btn-secundario btn-chico"
-                                onclick="return confirm('¿Devolver {{ a.producto.nombre_completo|escapejs }} al almacén?')"
-                            >
-                                Devolver
-                            </button>
+                        
+                            <td class="col-acciones">
+                                {% if puede_ver_almacen %}
+                                    <button
+                                        type="submit"
+                                        form="devolver-{{ a.pk }}"
+                                        class="btn btn-secundario btn-chico"
+                                        onclick="return confirm('¿Devolver {{ a.producto.nombre_completo|escapejs }} al almacén?')"
+                                    >
+                                        Devolver
+                                    </button>
+                                {% endif %}
                         </td>
+
                     </tr>
                     {% endfor %}
                 </tbody>

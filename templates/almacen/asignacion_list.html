@@ -8,82 +8,167 @@
 <link rel="stylesheet" href="{% static 'css/asignaciones.css' %}">
 
 <style>
-    /* ---------- CONTENEDOR CON SCROLL ---------- */
-    .tabla-consolidada {
-        max-height: 70vh;      /* scroll vertical si hay muchos técnicos */
-        overflow: auto;        /* scroll horizontal si hay muchos productos */
-        max-width: 100%;
-    }
+.tabla-consolidada {
+  --w-tec: 230px;
+  --w-con: 110px;
+  --w-prod: 130px;
 
-    .tabla-consolidada table {
-        border-collapse: separate;   /* necesario para que sticky mantenga bordes */
-        border-spacing: 0;
-        width: max-content;          /* la tabla crece según sus columnas */
-        min-width: 100%;
-    }
+  position: relative;
+  max-height: 70vh;
+  max-width: 100%;
+  overflow: auto;
+  isolation: isolate;
+  background: #fff;
+  scrollbar-gutter: stable;
+}
 
-    /* ---------- COLUMNAS DE PRODUCTO: ancho fijo ---------- */
-    .tabla-consolidada th.col-producto,
-    .tabla-consolidada td.valor {
-        width: 130px;
-        min-width: 130px;
-        max-width: 130px;
-    }
+/* Ancho exacto = técnico + asignación + (N productos × ancho) */
+.tabla-consolidada table {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  width: calc(var(--w-tec) + var(--w-con) + var(--n, 1) * var(--w-prod));
+  background: #fff;
+}
 
-    /* ---------- NOMBRES LARGOS EN 2 o 3 RENGLONES ---------- */
-    .tabla-consolidada .producto-header {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        white-space: normal;          /* permite saltos de línea */
-        overflow-wrap: anywhere;      /* parte palabras muy largas */
-        line-height: 1.25;
-    }
+.tabla-consolidada th,
+.tabla-consolidada td {
+  box-sizing: border-box;
+  border-right: 1px solid #e2e8e5;
+  border-bottom: 1px solid #e2e8e5;
+  padding: 10px;
+  vertical-align: middle;
+}
 
-    .tabla-consolidada .producto-header strong {
-        display: -webkit-box;
-        -webkit-line-clamp: 3;        /* máximo 3 renglones */
-        -webkit-box-orient: vertical;
-        overflow: hidden;             /* el resto se corta con "..." */
-        text-overflow: ellipsis;
-    }
+/* ---------- ENCABEZADOS ---------- */
+.tabla-consolidada thead th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: #f1f5f3;
+  box-shadow: inset 0 -1px 0 #cbd5d1, 0 2px 4px rgba(15,23,42,.06);
+  color: #1e293b;
+  text-align: center;
+  vertical-align: top;
+}
 
-    /* ---------- ENCABEZADO FIJO ARRIBA ---------- */
-    .tabla-consolidada thead th {
-        position: sticky;
-        top: 0;
-        z-index: 3;
-        background: #f1f5f3;          /* ajusta a tu color */
-        box-shadow: 0 1px 0 #d9e2dd;
-    }
+.tabla-consolidada th.col-producto,
+.tabla-consolidada td.valor {
+  width: var(--w-prod);
+  min-width: var(--w-prod);
+  max-width: var(--w-prod);
+}
 
-    /* ---------- COLUMNAS TÉCNICO Y CONCEPTO FIJAS A LA IZQUIERDA ---------- */
-    .tabla-consolidada .col-tecnico,
-    .tabla-consolidada td.tecnico-nombre {
-        position: sticky;
-        left: 0;
-        z-index: 2;
-        background: #fff;
-        min-width: 230px;
-        width: 230px;
-    }
+/* ---------- COLUMNA TÉCNICO (fija) ---------- */
+.tabla-consolidada th.col-tecnico,
+.tabla-consolidada td.tecnico-nombre {
+  position: sticky;
+  left: 0;
+  width: var(--w-tec);
+  min-width: var(--w-tec);
+  max-width: var(--w-tec);
+  overflow: hidden;
+  background: #fff;
+  background-clip: padding-box;
+  z-index: 6;
+}
 
-    .tabla-consolidada .col-concepto,
-    .tabla-consolidada td.concepto {
-        position: sticky;
-        left: 230px;                  /* = ancho de la columna técnico */
-        z-index: 2;
-        background: #fff;
-        min-width: 110px;
-        width: 110px;
-    }
+/* ---------- COLUMNA ASIGNACIÓN (fija) ---------- */
+.tabla-consolidada th.col-concepto,
+.tabla-consolidada td.concepto {
+  position: sticky;
+  left: var(--w-tec);
+  width: var(--w-con);
+  min-width: var(--w-con);
+  max-width: var(--w-con);
+  overflow: hidden;
+  background: #fff;
+  background-clip: padding-box;
+  z-index: 6;
+  box-shadow: 2px 0 4px rgba(15,23,42,.08);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.4;
+  color: #334155;
+}
 
-    /* La esquina (encabezado + columna fija) debe quedar por encima de todo */
-    .tabla-consolidada thead th.col-tecnico,
-    .tabla-consolidada thead th.col-concepto {
-        z-index: 4;
-        background: #f1f5f3;
-    }
+/* Esquinas: encima de todo */
+.tabla-consolidada thead th.col-tecnico,
+.tabla-consolidada thead th.col-concepto {
+  z-index: 30;
+  background: #e8efeb;
+}
+
+/* ---------- CELDAS DE VALORES (debajo de las fijas) ---------- */
+.tabla-consolidada td.valor {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ---------- CONTENIDO DEL ENCABEZADO ---------- */
+.tabla-consolidada .producto-header {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 100%; min-width: 0;
+  white-space: normal; overflow-wrap: anywhere; line-height: 1.25;
+}
+.tabla-consolidada .producto-header strong {
+  display: -webkit-box; width: 100%;
+  -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; font-size: 12px; font-weight: 700;
+}
+.tabla-consolidada .producto-header span  { display:block; font-size: 11px; color:#475569; overflow-wrap:anywhere; }
+.tabla-consolidada .producto-header small { display:block; font-size: 10px; color:#64748b; overflow-wrap:anywhere; }
+
+/* ---------- TARJETA DEL TÉCNICO ---------- */
+.tecnico-card { display:flex; flex-direction:column; gap:12px; padding:10px; }
+.tecnico-top { display:flex; align-items:flex-start; gap:10px; }
+.tecnico-datos { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.tecnico-titulo { font-size:14px; line-height:1.4; overflow-wrap:anywhere; color:#1e293b; }
+.chip-cedula { font-size:12px; color:#475569; }
+.tecnico-supervisor { display:flex; flex-direction:column; gap:4px; padding-top:8px; border-top:1px solid #e2e8f0; }
+.tecnico-supervisor .label { font-size:11px; color:#64748b; text-transform:uppercase; font-weight:600; }
+.tecnico-supervisor .valor-sup { font-size:13px; color:#334155; overflow-wrap:anywhere; }
+.tecnico-avatar {
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  width:36px; height:36px; border-radius:50%;
+  background:#e2eee7; color:#166534; font-size:14px; font-weight:700;
+}
+
+/* ---------- ENLACES, SAP, SEPARADOR ---------- */
+.tabla-consolidada .enlace-cantidad { display:inline-block; color:#2563eb; text-decoration:none; }
+.tabla-consolidada .enlace-cantidad:hover { color:#1d4ed8; text-decoration:underline; }
+.tabla-consolidada .cero { color:#94a3b8; }
+.tabla-consolidada .sap-resultado { display:flex; align-items:center; justify-content:center; gap:6px; }
+.tabla-consolidada .sap-ok { color:#15803d; }
+.tabla-consolidada .sap-error { color:#dc2626; }
+.tabla-consolidada tr.separador-tecnico td {
+  height:10px; padding:0; background:#edf2ef; border-bottom:1px solid #d8e2dc;
+}
+
+/* ---------- BOTÓN ---------- */
+.btn-gestionar-nuevo {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  padding:8px 10px; border:1px solid #cbd5e1; border-radius:7px;
+  background:#fff; color:#334155; font-size:12px; font-weight:600; text-decoration:none;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+.btn-gestionar-nuevo:hover { background:#f1f5f9; border-color:#94a3b8; }
+
+/* ---------- ESTADO VACÍO ---------- */
+.vacio { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:40px 20px; text-align:center; color:#64748b; }
+.vacio-icono { font-size:36px; }
+.vacio strong { font-size:16px; color:#334155; }
+.vacio span { max-width:420px; font-size:13px; line-height:1.5; }
+
+/* ---------- RESPONSIVE: solo cambian las variables ---------- */
+@media (max-width: 768px) {
+  .tabla-consolidada { --w-tec: 190px; --w-con: 100px; --w-prod: 120px; max-height: 65vh; }
+  .tecnico-card { padding: 8px; gap: 10px; }
+}
 </style>
 {% endblock %}
 {% block contenido %}
@@ -135,6 +220,7 @@
 >
     <option value="">Ningun Tecnico Seleccionado</option>
 
+    
     {% for tecnico in tecnicos_lista %}
         <option
             value="{{ tecnico.pk }}"
@@ -142,9 +228,10 @@
                 selected
             {% endif %}
         >
-            {{ tecnico.tecnico_apellido_nombres }}
+            {{ tecnico.get_full_name|default:tecnico.username|upper }}
         </option>
     {% endfor %}
+
 </select>
 
     <!-- Filtrar por estado -->
@@ -271,44 +358,60 @@
 
                                 <div class="tecnico-card">
 
+                                    <!-- Nombre y cédula del técnico -->
                                     <div class="tecnico-top">
+
                                         <div class="tecnico-avatar">
-                                            {{ tecnico_data.tecnico.tecnico_apellido_nombres|slice:":1"|upper }}
+                                            {{ tecnico_data.tecnico.first_name|default:tecnico_data.tecnico.username|slice:":1"|upper }}
                                         </div>
 
                                         <div class="tecnico-datos">
+
                                             <strong class="tecnico-titulo">
-                                                {{ tecnico_data.tecnico.tecnico_apellido_nombres }}
+                                                {{ tecnico_data.tecnico.get_full_name|default:tecnico_data.tecnico.username }}
                                             </strong>
 
-                                            {% if tecnico_data.tecnico.tecnico_cedula %}
-                                                <span class="chip-cedula">
-                                                    CC {{ tecnico_data.tecnico.tecnico_cedula }}
-                                                </span>
-                                            {% endif %}
+                                            <span class="chip-cedula">
+                                                CC {{ tecnico_data.tecnico.cedula|default:"Sin cédula" }}
+                                            </span>
+
                                         </div>
+
                                     </div>
 
-                                    {% if tecnico_data.tecnico.supervisor %}
-                                        <div class="tecnico-supervisor">
-                                            <span class="label">Supervisor</span>
-                                            <span class="valor-sup">{{ tecnico_data.tecnico.supervisor }}</span>
-                                        </div>
-                                    {% endif %}
+                                    <div class="tecnico-supervisor">
 
+                                        <span class="label">Supervisor asignado</span>
+
+                                        <span class="valor-sup">
+                                            {% if tecnico_data.tecnico.supervisor %}
+                                                {{ tecnico_data.tecnico.supervisor.get_full_name|default:tecnico_data.tecnico.supervisor.username }}
+                                            {% else %}
+                                                Sin supervisor asignado
+                                            {% endif %}
+                                        </span>
+
+                                    </div>
+
+                                    <!-- Botón para gestionar materiales -->
                                     <a class="btn-gestionar-nuevo"
                                     href="{% url 'almacen:tecnico_asignaciones' tecnico_data.tecnico.pk %}">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round" aria-hidden="true">
+
+                                        <svg width="16" height="16" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round"
+                                            aria-hidden="true">
                                             <path d="M7 7h13l-3-3M17 17H4l3 3"/>
                                         </svg>
+
                                         Instalar / Devolver
+
                                     </a>
 
                                 </div>
 
                             </td>
+
 
 
                             <td class="concepto asignados">

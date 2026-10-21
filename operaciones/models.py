@@ -95,6 +95,8 @@ class CargaSAP(models.Model):
     total_filas = models.PositiveIntegerField(default=0)
     filas_ok = models.PositiveIntegerField(default=0)
     filas_error = models.PositiveIntegerField(default=0)
+    filas_ignoradas = models.PositiveIntegerField(default=0)
+    hash_archivo = models.CharField(max_length=64, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-fecha"]
@@ -108,77 +110,48 @@ class RegistroSAP(models.Model):
     class Estado(models.TextChoices):
         OK = "OK", "Conciliado"
         ERROR = "ERROR", "Con error"
+        IGNORADO = "IGNORADO", "Ya conciliado antes"
 
-    carga = models.ForeignKey(
-        CargaSAP,
-        on_delete=models.CASCADE,
-        related_name="registros",
-    )
-
+    carga = models.ForeignKey(CargaSAP, on_delete=models.CASCADE, related_name="registros")
     fila = models.PositiveIntegerField()
-    numero_orden = models.CharField(max_length=30, blank=True)
+    numero_orden = models.CharField(max_length=30, blank=True, db_index=True)
     codigo_producto = models.CharField(max_length=30, blank=True)
-    numero_serie = models.CharField(max_length=100, blank=True)
+    numero_serie = models.CharField(max_length=100, blank=True, db_index=True)
+    codigo_unidad = models.CharField(max_length=50, blank=True, default="", db_index=True)
     cantidad = models.PositiveIntegerField(default=1)
-
-    estado = models.CharField(
-        max_length=10,
-        choices=Estado.choices,
-    )
-
+    estado = models.CharField(max_length=10, choices=Estado.choices)
     error = models.TextField(blank=True)
-
-    operacion = models.ForeignKey(
-        "operaciones.Operacion",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="registros_sap",
-    )
-
-    tecnico = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="registros_sap_tecnico",
-    )
-
-    producto = models.ForeignKey(
-        "almacen.Producto",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="registros_sap",
-    )
-
-    unidad_serializada = models.ForeignKey(
-        "almacen.UnidadSerializada",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="registros_sap",
+    operacion = models.ForeignKey("operaciones.Operacion",null=True,blank=True,on_delete=models.PROTECT,related_name="registros_sap",)
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True, related_name="registros_sap_tecnico",)
+    producto = models.ForeignKey("almacen.Producto",null=True,blank=True,on_delete=models.PROTECT,related_name="registros_sap",)
+    unidad_serializada = models.ForeignKey("almacen.UnidadSerializada",null=True,blank=True,on_delete=models.PROTECT,related_name="registros_sap",) 
+    cantidad_sap_original = models.CharField(max_length=50,blank=True,default="",)
+    tipo_error = models.CharField(max_length=30,blank=True,default="",)
+    diagnostico = models.TextField(blank=True,default="",)
+    cuenta_contrato = models.CharField(max_length=30, blank=True, default="")
+    clave_unica = models.CharField(max_length=40, blank=True, default="", db_index=True)
+    comparacion = models.JSONField(default=dict, blank=True)
+    registro_original = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="repeticiones",
     )
     
-    cantidad_sap_original = models.CharField(
-        max_length=50,
-        blank=True,
-        default="",
+    vigente = models.BooleanField(default=False, db_index=True)   # último estado de ese caso, aún sin resolver
+    resuelto = models.BooleanField(default=False, db_index=True)
+    resuelto_en = models.ForeignKey(
+        "CargaSAP", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="errores_resueltos",
     )
-
-    tipo_error = models.CharField(
-        max_length=30,
-        blank=True,
-        default="",
-    )
-
-    diagnostico = models.TextField(
-        blank=True,
-        default="",
+    resuelto_por = models.CharField(
+        max_length=10, blank=True, default="",
+        choices=[("FIVE", "Se corrigió en Five"),
+                 ("SAP", "Se corrigió en SAP"),
+                 ("AMBOS", "Se corrigió en ambos")],
     )
 
     class Meta:
         ordering = ["fila"]
+        indexes = [models.Index(fields=["clave_unica", "estado"])]
 
     def __str__(self):
         return (

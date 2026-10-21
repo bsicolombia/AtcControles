@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block titulo %}Consulta de orden{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid py-4">
+    <h1>Consulta de orden</h1>
+    <p class="text-muted">Escriba un número de orden, o un serial / código de medidor.</p>
+
+    <form method="get" class="card card-body mb-4">
+        <div class="input-group">
+            <input type="search" name="q" value="{{ q }}" class="form-control"
+                   placeholder="Número de orden o serial" autofocus>
+            <button class="btn btn-primary">Buscar</button>
+        </div>
+    </form>
+
+    {% if operacion %}
+    <div class="card mb-4">
+        <div class="card-body row g-3">
+            <div class="col-md-2"><div class="small text-muted">Orden</div><div class="fw-bold">{{ operacion.numero_orden }}</div></div>
+            <div class="col-md-2"><div class="small text-muted">Cuenta contrato</div><div class="fw-bold">{{ operacion.numero_cuenta_contrato }}</div></div>
+            <div class="col-md-2"><div class="small text-muted">Tipo</div><div>{{ operacion.get_tipo_operacion_display }}</div></div>
+            <div class="col-md-2"><div class="small text-muted">Estado</div><div><span class="badge bg-info text-dark">{{ operacion.get_estado_display }}</span></div></div>
+            <div class="col-md-2"><div class="small text-muted">Técnico</div><div>{{ operacion.tecnico.get_full_name|default:operacion.tecnico.username }}</div></div>
+            <div class="col-md-2"><div class="small text-muted">Fecha</div><div>{{ operacion.fecha_operacion|date:"d/m/Y" }}</div></div>
+        </div>
+    </div>
+
+    <h2 class="h5">Materiales en Five</h2>
+    <div class="table-responsive mb-4">
+    <table class="table table-bordered align-middle">
+        <thead class="table-dark"><tr>
+            <th>Producto</th><th>Serie</th><th>Cant.</th><th>Estado</th><th>Técnico</th>
+            <th>Instalado</th><th>Evidencias</th><th>En SAP</th></tr></thead>
+        <tbody>
+        {% for m in materiales %}
+            <tr>
+                <td>{{ m.producto.nombre_completo }}</td>
+                <td>{{ m.unidad_serializada.numero_serie|default:"—" }}</td>
+                <td>{% if m.unidad_serializada_id %}1{% else %}{{ m.cantidad_instalada }} / {{ m.cantidad }}{% endif %}</td>
+                <td><span class="badge bg-secondary">{{ m.get_estado_display }}</span></td>
+                <td>{{ m.tecnico.get_full_name|default:m.tecnico.username }}</td>
+                <td>{{ m.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
+                <td>
+                    {% for ev in m.evidencias.all %}
+                        <a href="{{ ev.imagen.url }}" target="_blank">
+                            <img src="{{ ev.imagen.url }}" alt="{{ ev.descripcion }}" height="40" class="rounded border">
+                        </a>
+                    {% empty %}<span class="text-muted">—</span>{% endfor %}
+                </td>
+                <td>
+                    {% if not m.unidad_serializada_id %}<span class="text-muted small">Ver tabla de abajo</span>
+                    {% elif m.sap.estado == "OK" %}<span class="badge bg-success">Coincide</span>
+                    {% elif m.sap.estado == "ERROR" %}<span class="badge bg-danger">{{ m.sap.tipo_error }}</span>
+                    {% else %}<span class="badge bg-warning text-dark">No reportado en SAP</span>{% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="8" class="text-center py-3">Esta orden no tiene materiales asignados.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    <h2 class="h5">Lo que dijo SAP sobre esta orden</h2>
+    <div class="table-responsive">
+    <table class="table table-bordered align-middle text-center">
+        <thead class="table-dark">
+            <tr><th rowspan="2">Carga</th><th rowspan="2">Serie / Producto</th>
+                <th colspan="3" class="bg-primary">Five</th><th colspan="3" class="bg-warning text-dark">SAP</th>
+                <th rowspan="2">Resultado</th></tr>
+            <tr><th>Instalado</th><th>Orden</th><th>Cuenta</th><th>Instalado</th><th>Orden</th><th>Cuenta</th></tr>
+        </thead>
+        <tbody>
+        {% for r in registros %}
+            <tr>
+                <td><a href="{% url 'operaciones:carga_sap_detalle' r.carga_id %}">#{{ r.carga_id }}</a>
+                    <div class="small text-muted">{{ r.carga.fecha|date:"d/m/Y H:i" }}</div></td>
+                <td>{{ r.numero_serie|default:r.codigo_producto }}</td>
+                {% include "operaciones/_sap_celdas.html" with r=r %}
+                <td class="text-start">
+                    {% if r.estado == "OK" %}<span class="badge bg-success">Coincide</span>
+                    {% elif r.estado == "IGNORADO" %}<span class="badge bg-secondary">Ignorado</span>
+                    {% else %}<span class="badge bg-danger">{{ r.tipo_error }}</span>
+                        <div class="small mt-1">{{ r.diagnostico }}</div>{% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="9" class="py-3">Ninguna carga de SAP ha incluido esta orden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    {% elif bloques %}
+        {% for b in bloques %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <strong>{{ b.unidad.numero_serie|default:b.unidad.codigo }}</strong> ·
+                {{ b.unidad.producto.nombre }} ·
+                <span class="badge bg-secondary">{{ b.unidad.get_estado_display }}</span>
+            </div>
+            <div class="card-body">
+                <h3 class="h6">Asignaciones / instalaciones en Five</h3>
+                <ul>
+                {% for a in b.asignaciones %}
+                    <li>
+                        Orden
+                        {% if a.operacion %}<a href="?q={{ a.operacion.numero_orden }}">{{ a.operacion.numero_orden }}</a>
+                        (cuenta {{ a.operacion.numero_cuenta_contrato }}){% else %}—{% endif %}
+                        · {{ a.get_estado_display }} · {{ a.tecnico.get_full_name|default:a.tecnico.username }}
+                        · {{ a.fecha_instalacion|date:"d/m/Y"|default:"sin fecha" }}
+                        · {{ a.evidencias.count }} evidencia(s)
+                    </li>
+                {% empty %}<li class="text-muted">Sin asignaciones.</li>{% endfor %}
+                </ul>
+                <h3 class="h6">Reportes de SAP</h3>
+                <ul>
+                {% for r in b.registros %}
+                    <li>Carga #{{ r.carga_id }} ({{ r.carga.fecha|date:"d/m/Y" }}) — orden {{ r.numero_orden }}:
+                        {% if r.estado == "OK" %}<span class="badge bg-success">Coincide</span>
+                        {% elif r.estado == "IGNORADO" %}<span class="badge bg-secondary">Ignorado</span>
+                        {% else %}<span class="badge bg-danger">{{ r.tipo_error }}</span> {{ r.diagnostico }}{% endif %}
+                    </li>
+                {% empty %}<li class="text-muted">SAP nunca lo ha reportado.</li>{% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endfor %}
+
+    {% elif q %}
+        <div class="alert alert-warning">
+            No se encontró la orden ni el serial <strong>{{ q }}</strong> en Five.
+            {% if candidatas %}
+            <div class="mt-2">¿Quiso decir?
+                {% for o in candidatas %}<a class="me-2" href="?q={{ o.numero_orden }}">{{ o.numero_orden }}</a>{% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

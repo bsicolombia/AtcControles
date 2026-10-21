@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% load sap_extras %}
+{% block titulo %}Carga SAP #{{ carga.pk }}{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3">Carga SAP #{{ carga.pk }}</h1>
+            <p class="text-muted mb-0">
+                {{ carga.fecha|date:"d/m/Y H:i" }} · {{ carga.usuario|default:"—" }} ·
+                {% if carga.archivo %}{{ carga.archivo.name }}{% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2 align-self-start">
+            <a class="btn btn-outline-primary" href="{% url 'operaciones:conciliacion_sap' %}?carga={{ carga.pk }}">Ver Five vs SAP</a>
+            <a class="btn btn-outline-secondary" href="{% url 'operaciones:carga_sap_historial' %}">Historial</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3"><div class="card card-body text-center">
+            <div class="text-muted small">Total filas</div><div class="fs-3 fw-bold">{{ carga.total_filas }}</div></div></div>
+        <div class="col-6 col-md-3"><a href="?estado=OK" class="text-decoration-none"><div class="card card-body text-center border-success">
+            <div class="text-muted small">Conciliados</div><div class="fs-3 fw-bold text-success">{{ carga.filas_ok }}</div></div></a></div>
+        <div class="col-6 col-md-3"><a href="?estado=ERROR" class="text-decoration-none"><div class="card card-body text-center border-danger">
+            <div class="text-muted small">Con errores</div><div class="fs-3 fw-bold text-danger">{{ carga.filas_error }}</div></div></a></div>
+        <div class="col-6 col-md-3"><a href="?estado=IGNORADO" class="text-decoration-none"><div class="card card-body text-center">
+            <div class="text-muted small">Ignorados</div><div class="fs-3 fw-bold text-secondary">{{ carga.filas_ignoradas }}</div></div></a></div>
+    </div>
+
+    {% if resumen_errores %}
+    <div class="card card-body mb-4">
+        <h2 class="h6">Errores por causa</h2>
+        <div>
+            {% for e in resumen_errores %}
+            <a class="badge text-bg-danger text-decoration-none me-1 mb-1 fs-6 fw-normal"
+               href="?estado=ERROR&tipo_error={{ e.codigo|urlencode }}">{{ e.label }} · {{ e.n }}</a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="get" class="card card-body mb-4">
+        <div class="row g-3">
+            <div class="col-md-3"><label class="form-label">Estado</label>
+                <select name="estado" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="OK" {% if estado_sel == "OK" %}selected{% endif %}>Conciliados</option>
+                    <option value="ERROR" {% if estado_sel == "ERROR" %}selected{% endif %}>Con error</option>
+                    <option value="IGNORADO" {% if estado_sel == "IGNORADO" %}selected{% endif %}>Ignorados</option>
+                </select></div>
+            <div class="col-md-4"><label class="form-label">Tipo de error</label>
+                <select name="tipo_error" class="form-select">
+                    <option value="">Todos</option>
+                    {% for e in resumen_errores %}
+                    <option value="{{ e.codigo }}" {% if tipo_error_sel == e.codigo %}selected{% endif %}>{{ e.label }} ({{ e.n }})</option>
+                    {% endfor %}
+                </select></div>
+            <div class="col-md-5"><label class="form-label">Buscar</label>
+                <input type="search" name="q" value="{{ q }}" class="form-control"
+                       placeholder="Orden, serie, cuenta, técnico, texto del error…"></div>
+            <div class="col-12 d-flex gap-2">
+                <button class="btn btn-primary">Filtrar</button>
+                <a class="btn btn-outline-secondary" href="{% url 'operaciones:carga_sap_detalle' carga.pk %}">Limpiar</a>
+            </div>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+    <table class="table table-bordered align-middle">
+        <thead class="table-dark">
+            <tr><th>Fila</th><th>Orden</th><th>Producto</th><th>Serie</th><th>Cuenta</th>
+                <th>Técnico</th><th style="min-width:340px">Resultado</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for r in page_obj %}
+            <tr>
+                <td>{{ r.fila }}</td>
+                <td>{{ r.numero_orden|default:"—" }}</td>
+                <td>{{ r.codigo_producto|default:"—" }}</td>
+                <td>{{ r.numero_serie|default:"—" }}</td>
+                <td>{{ r.cuenta_contrato|default:"—" }}</td>
+                
+                <td>
+                    {% if r.tecnico %}
+                        {{ r.tecnico.get_full_name|default:r.tecnico.username }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if r.estado == "OK" %}
+                        <span class="badge bg-success">Conciliado</span>
+                    {% elif r.estado == "IGNORADO" %}
+                        <span class="badge bg-secondary">Ignorado</span>
+                        <div class="small text-muted">{{ r.diagnostico }}</div>
+                    {% else %}
+                        {% with sev=r.tipo_error|sap_meta:"severidad" %}
+                        <span class="badge {% if sev == 'ALTA' %}bg-danger{% elif sev == 'MEDIA' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                            {{ r.tipo_error|sap_meta:"etiqueta" }}
+                        </span>
+                        {% endwith %}
+                        <div class="small mt-1">{{ r.diagnostico }}</div>
+                        <div class="small text-muted"><b>Qué hacer:</b> {{ r.tipo_error|sap_meta:"accion" }}</div>
+                        {% if r.resuelto %}
+                            <span class="badge bg-success mt-1">
+                                Resuelto en carga #{{ r.resuelto_en_id }} · {{ r.get_resuelto_por_display }}
+                            </span>
+                        {% elif r.vigente %}
+                            <span class="badge bg-dark mt-1">Vigente</span>
+                        {% endif %}
+                        <div class="small mt-1">{{ r.diagnostico }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if r.comparacion %}
+                    <button class="btn btn-sm btn-outline-secondary" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#cmp{{ r.pk }}">Five vs SAP</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% if r.comparacion %}
+            <tr class="collapse" id="cmp{{ r.pk }}">
+                <td colspan="8" class="bg-light">
+                    <table class="table table-sm table-bordered mb-0 w-auto">
+                        <thead><tr><th>Campo</th><th>Five</th><th>SAP</th><th></th></tr></thead>
+                        <tbody>
+                        {% for campo, c in r.comparacion.items %}
+                            <tr class="{% if c.ok %}table-success{% else %}table-danger{% endif %}">
+                                <td>{{ c.label }}</td><td>{{ c.five|default:"—" }}</td>
+                                <td>{{ c.sap|default:"—" }}</td>
+                                <td>{% if c.ok %}✔{% else %}✘{% endif %}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+            {% endif %}
+        {% empty %}
+            <tr><td colspan="8" class="text-center py-4">No hay registros con esos filtros.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="mt-3"><ul class="pagination">
+        {% if page_obj.has_previous %}<li class="page-item"><a class="page-link"
+            href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>{% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}<li class="page-item"><a class="page-link"
+            href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>{% endif %}
+    </ul></nav>
+    {% endif %}
+</div>
+{% endblock %}

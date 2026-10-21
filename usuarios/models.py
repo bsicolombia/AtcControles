@@ -1,15 +1,55 @@
-from django.conf import settings
+
 from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 
 
-class PerfilTecnico(models.Model):
-    usuario = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="perfil_tecnico",
+class User(AbstractUser):
+
+    ROLES = [
+        ('ADMIN', 'Administrador'),
+        ('SUPERVISOR', 'Supervisor'),
+        ('TECNICO', 'Tecnico'),
+        ('COORDINADOR', 'Coordinador'),
+        ('ALMACENISTA', 'Almacenista'),
+        ('DIGITADOR', 'Digitador'),
+    ]
+
+    cedula = models.CharField(
+        max_length=20,
+        unique=True
     )
-    cedula = models.CharField(max_length=20, unique=True)
-    supervisor = models.CharField(max_length=150, blank=True)
+
+    rol = models.CharField(
+        max_length=20,
+        choices=ROLES
+    )
+
+    supervisor = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tecnicos'
+    )
+
+    def clean(self):
+        super().clean()
+
+        if self.rol == 'TECNICO' and not self.supervisor:
+            raise ValidationError({
+                'supervisor': 'Un técnico debe tener un supervisor.'
+            })
+
+        if self.rol != 'TECNICO' and self.supervisor:
+            raise ValidationError({
+                'supervisor': 'Solo los técnicos pueden tener supervisor.'
+            })
+
+        if self.supervisor and self.supervisor.rol != 'SUPERVISOR':
+            raise ValidationError({
+                'supervisor': 'Debes seleccionar un usuario con rol Supervisor.'
+            })
 
     def __str__(self):
-        return f"{self.usuario.get_full_name()} - CC {self.cedula}"
+        return f"{self.cedula} - {self.username}"

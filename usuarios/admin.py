@@ -1,7 +1,18 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from .models import User
 
 
-class PerfilTecnicoAdmin(admin.ModelAdmin): 
-    list_display = ("usuario", "cedula", "supervisor") 
-    search_fields = ( "usuario__username", "usuario__first_name", "usuario__last_name", "cedula", ) 
-    list_filter = ("supervisor",)
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    fieldsets = UserAdmin.fieldsets + (
+        ('Información adicional', {
+            'fields': ('cedula', 'rol', 'supervisor')
+        }),
+    )
+
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ('Información adicional', {
+            'fields': ('cedula', 'rol', 'supervisor')
+        }),
+    )

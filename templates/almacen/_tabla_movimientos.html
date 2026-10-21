@@ -1,87 +1,271 @@
 {% if movimientos %}
+
 <div class="tabla-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>Fecha y hora</th>
-        <th>Responsable de la acción</th>
-        <th>Tipo de movimiento</th>
-        <th>Producto</th>
-        <th>Código de unidad</th>
-        <th class="num">Cantidad</th>
-        <th>Detalle de la acción</th>
-      </tr>
-    </thead>
+<table class="tabla-movimientos">
+<thead>
+<tr>
+<th>Fecha y hora</th>
+<th>Responsable</th>
+<th>Movimiento</th>
+<th>Producto / Unidad</th>
+<th>Cantidad</th>
+<th>Detalle de la acción</th>
+<th>Observaciones</th>
+</tr>
+</thead>
 
-    <tbody>
-      {% for m in movimientos %}
-      <tr>
-        <!-- Fecha y hora del movimiento -->
-        <td class="suave num">
-          {{ m.fecha|date:"d/m/Y H:i" }}
-        </td>
+<tbody>
+  {% for m in movimientos %}
+  <tr>
+    <!-- FECHA -->
+    <td class="fecha-mov">
+      {% if m.fecha %}
+        {{ m.fecha|date:"d/m/Y" }}
+        <span>{{ m.fecha|date:"H:i" }}</span>
+      {% else %}
+        —
+      {% endif %}
+    </td>
 
-        <!-- Persona responsable -->
-        <td>
-          <strong>
-            {{ m.usuario.get_full_name|default:m.usuario.username }}
-          </strong>
-        </td>
-
-        <!-- Tipo de movimiento -->
-        <td>
-          <span class="chip chip-{{ m.tipo_movimiento|lower }}">
-            {{ m.get_tipo_movimiento_display }}
+    <!-- RESPONSABLE -->
+    <td>
+      {% if m.usuario %}
+        <strong>
+          {{ m.usuario.get_full_name|default:m.usuario.username }}
+        </strong>
+        {% if m.usuario.cedula %}
+          <span class="dato-secundario">
+            C.C. {{ m.usuario.cedula }}
           </span>
-        </td>
+        {% endif %}
+      {% else %}
+        —
+      {% endif %}
+    </td>
 
-        <!-- Información del producto -->
-        <td>
-          <strong>{{ m.producto.nombre_completo }}</strong>
-          <div class="suave">
-            {{ m.producto.codigo_producto }}
+    <!-- TIPO -->
+    <td>
+      <span class="mov-tipo">
+        {{ m.get_tipo_movimiento_display }}
+      </span>
+    </td>
+
+    <!-- PRODUCTO Y UNIDAD -->
+    <td>
+      {% if m.producto %}
+        <strong>{{ m.producto.nombre_completo }}</strong>
+        <span class="dato-secundario">
+          {{ m.producto.codigo_producto }}
+        </span>
+      {% endif %}
+
+      {% if m.unidad_serializada %}
+        <a
+          class="unidad-enlace"
+          href="{% url 'almacen:unidad_detalle' m.unidad_serializada.pk %}"
+        >
+          {{ m.unidad_serializada.codigo }}
+        </a>
+
+        {% if m.unidad_serializada.numero_serie %}
+          <span class="dato-secundario">
+            Serie: {{ m.unidad_serializada.numero_serie }}
+          </span>
+        {% endif %}
+      {% endif %}
+    </td>
+
+    <!-- CANTIDAD -->
+    <td class="cantidad-mov">
+      {{ m.cantidad }}
+    </td>
+
+    <!-- DETALLE DE LA ACCIÓN -->
+    <td>
+      <div class="detalle-accion">
+
+        {% if m.remision %}
+          <span><b>Remisión:</b> {{ m.remision.numero_remision }}</span>
+        {% endif %}
+
+        {% if m.asignacion %}
+          <span>
+            <b>Técnico:</b>
+            {{ m.asignacion.tecnico.get_full_name|default:m.asignacion.tecnico.username }}
+          </span>
+
+          {% if m.tipo_movimiento == "INSTALACION" and m.asignacion.operacion %}
+            <span><b>Orden:</b> {{ m.asignacion.operacion.numero_orden }}</span>
+            <span><b>Cuenta:</b> {{ m.asignacion.operacion.numero_cuenta_contrato }}</span>
+          {% endif %}
+        {% endif %}
+
+      </div>
+    </td>
+
+    <!-- OBSERVACIONES -->
+    <td>
+      <div class="observaciones-mov">
+        {% if m.observacion %}
+          <div class="observacion-item">
+            <span class="observacion-etiqueta">{{ m.get_tipo_movimiento_display }}</span>
+            {{ m.observacion|linebreaksbr }}
           </div>
-        </td>
+        {% else %}
+          <span class="sin-observacion">Sin observaciones</span>
+        {% endif %}
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+</tbody>
 
-        <!-- Código de la unidad serializada -->
-        <td>
-          {% if m.unidad_serializada %}
-            <a
-              class="codigo"
-              href="{% url 'almacen:unidad_detalle' m.unidad_serializada.pk %}"
-            >
-              {{ m.unidad_serializada.codigo }}
-            </a>
-          {% else %}
-            <span class="suave">No aplica</span>
-          {% endif %}
-        </td>
 
-        <!-- Cantidad del movimiento -->
-        <td class="num">
-          {{ m.cantidad }}
-        </td>
-
-        <!-- Observaciones -->
-        <td class="suave">
-          {% if m.observacion %}
-            {{ m.observacion|truncatechars:100 }}
-          {% else %}
-            <span>Sin observaciones</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+</table>
 </div>
 
 {% else %}
+
 <div class="vacio">
-  <strong>Sin movimientos registrados</strong>
-  <p>
-    Cuando se registren ingresos, asignaciones, instalaciones
-    o devoluciones, aparecerán aquí con su fecha y responsable.
-  </p>
+<strong>Sin movimientos registrados</strong>
+<p>
+Los ingresos, asignaciones, instalaciones, ajustes y devoluciones
+aparecerán aquí con sus detalles y observaciones.
+</p>
 </div>
 {% endif %}
+
+<style>
+.tabla-wrap {
+width: 100%;
+overflow-x: auto;
+border: 1px solid var(--color-borde, #e2e8f0);
+border-radius: 9px;
+}
+
+.tabla-movimientos {
+width: 100%;
+min-width: 1150px;
+border-collapse: collapse;
+font-size: 12px;
+}
+
+.tabla-movimientos th {
+padding: 12px;
+background: var(--color-fondo-secundario, #f8fafc);
+color: var(--color-texto, #334155);
+font-size: 10px;
+text-transform: uppercase;
+letter-spacing: .3px;
+text-align: left;
+white-space: nowrap;
+}
+
+.tabla-movimientos td {
+padding: 12px;
+vertical-align: top;
+border-top: 1px solid var(--color-borde, #e2e8f0);
+overflow-wrap: anywhere;
+line-height: 1.5;
+}
+
+.tabla-movimientos tbody tr:hover {
+background: var(--color-fondo-secundario, #f8fafc);
+}
+
+.fecha-mov {
+min-width: 100px;
+white-space: nowrap;
+}
+
+.fecha-mov span,
+.dato-secundario {
+display: block;
+color: var(--color-texto-secundario, #64748b);
+font-size: 11px;
+margin-top: 3px;
+}
+
+.mov-tipo {
+display: inline-block;
+padding: 4px 8px;
+border-radius: 5px;
+background: var(--color-fondo-secundario, #f1f5f9);
+font-weight: 700;
+white-space: nowrap;
+}
+
+.unidad-enlace {
+display: block;
+margin-top: 5px;
+font-family: monospace;
+font-weight: 700;
+}
+
+.cantidad-mov {
+text-align: center;
+font-weight: 700;
+}
+
+.detalle-accion {
+display: flex;
+flex-direction: column;
+gap: 5px;
+min-width: 180px;
+}
+
+.detalle-accion > strong {
+margin-bottom: 3px;
+}
+
+.detalle-tecnico {
+color: var(--color-texto-secundario, #64748b);
+font-size: 11px;
+}
+
+.observaciones-mov {
+min-width: 200px;
+max-width: 340px;
+white-space: normal;
+}
+
+.observacion-item {
+padding: 8px 10px;
+margin-bottom: 6px;
+border-left: 3px solid var(--color-primario, #2563eb);
+background: var(--color-fondo-secundario, #f8fafc);
+border-radius: 0 5px 5px 0;
+line-height: 1.6;
+}
+
+.observacion-item:last-child {
+margin-bottom: 0;
+}
+
+.observacion-etiqueta {
+display: block;
+margin-bottom: 3px;
+font-size: 10px;
+font-weight: 700;
+text-transform: uppercase;
+color: var(--color-texto-secundario, #64748b);
+}
+
+.sin-observacion {
+color: var(--color-texto-secundario, #64748b);
+font-style: italic;
+font-size: 11px;
+}
+
+.vacio {
+padding: 24px;
+text-align: center;
+}
+
+@media (max-width: 600px) {
+.tabla-movimientos th,
+.tabla-movimientos td {
+padding: 9px;
+}
+}
+</style>

@@ -296,7 +296,10 @@
     </div>
 
     <div class="ud-acciones">
-      <a class="btn" href="{% url 'almacen:unidades' %}">
+      <a
+        class="btn"
+        href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/almacen/unidades/' }}"
+      >
         Volver
       </a>
 
@@ -430,7 +433,18 @@
           <tbody>
             {% for a in asignaciones %}
               <tr>
-                <td><strong>{{ a.tecnico }}</strong></td>
+                <td>
+                  <strong>
+                    {{ a.tecnico.get_full_name|default:a.tecnico.username }}
+                  </strong>
+
+                  <br>
+
+                  <span class="ud-suave">
+                    C.C.:
+                    {{ a.tecnico.cedula|default:"No registrada" }}
+                  </span>
+                </td>
 
                 <td>
                   {% if a.fecha_asignacion %}
@@ -496,7 +510,10 @@
 
   <!-- ACCIONES FINALES -->
   <div class="ud-footer">
-    <a class="btn" href="{% url 'almacen:unidades' %}">
+    <a
+      class="btn"
+      href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/almacen/unidades/' }}"
+    >
       Volver al inventario
     </a>
 

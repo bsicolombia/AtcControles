@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block titulo %}Historial de cargas SAP{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-4">
+        <div>
+            <h1>Historial de cargas SAP</h1>
+            <p class="text-muted">Todas las importaciones, con sus errores agrupados por causa.</p>
+        </div>
+        <div class="d-flex gap-2 align-self-start">
+            <a href="{% url 'operaciones:conciliacion_sap' %}" class="btn btn-outline-primary">Five vs SAP</a>
+            <a href="{% url 'operaciones:consulta_orden' %}" class="btn btn-outline-primary">Consultar orden</a>
+            <a href="{% url 'operaciones:carga_sap' %}" class="btn btn-primary">Nueva carga SAP</a>
+        </div>
+    </div>
+
+    <form method="get" class="card card-body mb-4">
+        <div class="row g-3">
+            <div class="col-md-3"><label class="form-label">Desde</label>
+                <input type="date" name="desde" value="{{ desde }}" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Hasta</label>
+                <input type="date" name="hasta" value="{{ hasta }}" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Estado</label>
+                <select name="estado" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="OK" {% if estado_sel == "OK" %}selected{% endif %}>Sin errores</option>
+                    <option value="ERROR" {% if estado_sel == "ERROR" %}selected{% endif %}>Con errores</option>
+                </select></div>
+            <div class="col-md-3"><label class="form-label">Archivo o usuario</label>
+                <input type="search" name="q" value="{{ q }}" class="form-control"
+                       placeholder="Buscar archivo o usuario"></div>
+            <div class="col-12 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Filtrar</button>
+                <a href="{% url 'operaciones:carga_sap_historial' %}" class="btn btn-outline-secondary">Limpiar</a>
+            </div>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th><th>Fecha y hora</th><th>Archivo</th><th>Usuario</th>
+                    <th>Total</th><th>Conciliados</th><th>Errores</th><th>Ignorados</th>
+                    <th>Resultado</th><th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for carga in cargas %}
+                <tr>
+                    <td>{{ carga.pk }}</td>
+                    <td>{{ carga.fecha|date:"d/m/Y H:i:s" }}</td>
+                    <td>{% if carga.archivo %}{{ carga.archivo.name }}{% else %}—{% endif %}</td>
+                    <td>{{ carga.usuario|default:"—" }}</td>
+                    <td>{{ carga.total_filas }}</td>
+                    <td class="text-success fw-bold">{{ carga.filas_ok }}</td>
+                    <td class="text-danger fw-bold">{{ carga.filas_error }}</td>
+                    <td class="text-muted">{{ carga.filas_ignoradas }}</td>
+                    <td>
+                        {% if carga.filas_error %}<span class="badge bg-danger">Con errores</span>
+                        {% elif carga.filas_ok %}<span class="badge bg-success">Sin errores</span>
+                        {% else %}<span class="badge bg-secondary">Todo ignorado</span>{% endif %}
+                    </td>
+                    <td class="text-nowrap">
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="{% url 'operaciones:carga_sap_detalle' carga.pk %}">Ver registros</a>
+                        {% if carga.errores_resumen %}
+                        <button class="btn btn-sm btn-outline-danger" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#err{{ carga.pk }}">
+                            Ver errores
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if carga.errores_resumen %}
+                <tr class="collapse" id="err{{ carga.pk }}">
+                    <td colspan="10" class="bg-light">
+                        <span class="small text-muted me-2">Errores por causa:</span>
+                        {% for e in carga.errores_resumen %}
+                        <a class="badge text-bg-danger text-decoration-none me-1"
+                           href="{% url 'operaciones:carga_sap_detalle' carga.pk %}?estado=ERROR&tipo_error={{ e.codigo|urlencode }}">
+                            {{ e.label }} · {{ e.n }}
+                        </a>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endif %}
+            {% empty %}
+                <tr><td colspan="10" class="text-center py-4">No hay cargas SAP para los filtros seleccionados.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_paginated %}
+    <nav class="mt-3">
+        <ul class="pagination">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link"
+                href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link"
+                href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
