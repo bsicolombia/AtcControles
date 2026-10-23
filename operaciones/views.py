@@ -1,4 +1,7 @@
 import logging
+
+from django.contrib.auth import get_user_model
+User = get_user_model() 
 from collections import defaultdict
 from almacen.views import FormPageMixin
 from django.contrib import messages
@@ -87,13 +90,11 @@ def descargar_plantilla_sap(request):
     wb = Workbook()
     ws = wb.active
     ws.title = "SAP"
-    ws.append(["numero_orden","cuenta_contrato","tipo_operacion",
-        "numero_serie","codigo_unidad","cantidad",
-    ])
-
-    ws.append(["1234567890", "9876543210", "Instalación", "SER123", "", ""])
-    ws.append(["1234567891", "9876543211", "Instalación", "", "REG-0001", ""])
-    ws.append(["1234567892", "9876543212", "Instalación", "", "", "5"])
+    ws.append(["numero_orden", "cuenta_contrato", "tipo_operacion",
+               "numero_serie", "codigo_unidad", "codigo_producto", "cantidad"])
+    ws.append(["1234567890", "9876543210", "Instalación", "SER123", "", "", ""])
+    ws.append(["1234567890", "9876543210", "Instalación", "", "REG-001", "", ""])
+    ws.append(["1234567890", "9876543210", "Instalación", "", "", "COD-001", "5"])
     resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
@@ -203,117 +204,328 @@ class CargaSAPDetalleView(QuerystringMixin, RolRequeridoMixin, DetailView):
         return ctx
 
 
-# ------------------------------------------------------------------ Five vs SAP
-class ConciliacionSAPView(QuerystringMixin, RolRequeridoMixin, TemplateView):
+
+# ------------------------------------------------------------------
+# Five vs SAP
+# ------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------
+# Five vs SAP
+# ------------------------------------------------------------------
+
+
+class ConciliacionSAPView(
+    QuerystringMixin,
+    RolRequeridoMixin,
+    TemplateView,
+):
     roles_permitidos = ROLES_ALMACEN
     template_name = "operaciones/conciliacion_sap.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
+        E = RegistroSAP.Estado
 
+        # --------------------------------------------------
+        # Valores de los filtros
+        # --------------------------------------------------
         carga_sel = g.get("carga")
-        if carga_sel is None:                       # por defecto, la última carga
-            ultima = CargaSAP.objects.order_by("-fecha", "-pk").first()
+        if carga_sel is None:
+            ultima = (
+                CargaSAP.objects
+                .order_by("-fecha", "-pk")
+                .first()
+            )
             carga_sel = str(ultima.pk) if ultima else "todas"
 
+        tipo = g.get("tipo", "").strip()
+        estado = g.get("estado", "").strip().upper()
+        error = g.get("tipo_error", "").strip()
+        q = g.get("q", "").strip()
+
+        # --------------------------------------------------
+        # Base de registros SAP
+        # No incluir PENDIENTE aquí: viene de FIVE.
+        # --------------------------------------------------
         qs = (
             RegistroSAP.objects
-            .exclude(numero_serie="")               # solo serializados
             .exclude(estado=E.IGNORADO)
-            .select_related("carga", "producto__categoria")
+            .filter(
+                Q(estado=E.OK)
+                | Q(estado=E.ERROR, vigente=True)
+            )
+            .select_related(
+                "carga",
+                "producto__categoria",
+                "operacion",
+                "unidad_serializada",
+            )
             .order_by("-carga__fecha", "fila")
         )
+
+        # Filtros compartidos por los contadores SAP
+        # y por los resultados de SAP.
         if carga_sel != "todas":
-            qs = qs.filter(carga_id=carga_sel)
+            if carga_sel.isdigit():
+                qs = qs.filter(carga_id=int(carga_sel))
+            else:
+                qs = qs.none()
 
-        tipo = g.get("tipo", "")
         if tipo.isdigit():
-            qs = qs.filter(producto__categoria_id=tipo)
+            qs = qs.filter(producto__categoria_id=int(tipo))
 
-        resumen = {x["estado"]: x["n"] for x in qs.values("estado").annotate(n=Count("id"))}
-
-        estado, error, q = g.get("estado", ""), g.get("tipo_error", ""), g.get("q", "").strip()
-        if estado in (E.OK, E.ERROR):
-            qs = qs.filter(estado=estado)
         if error:
             qs = qs.filter(tipo_error=error)
+
         if q:
             qs = qs.filter(
-                Q(numero_serie__icontains=q) | Q(numero_orden__icontains=q)
+                Q(numero_serie__icontains=q)
+                | Q(numero_orden__icontains=q)
                 | Q(cuenta_contrato__icontains=q)
+                | Q(codigo_producto__icontains=q)
+                | Q(codigo_unidad__icontains=q)
             )
 
-        ctx.update(
-            page_obj=Paginator(qs, 50).get_page(g.get("page")),
-            categorias=Categoria.objects.exclude(prefijo="").order_by("nombre"),
-            cargas=CargaSAP.objects.order_by("-fecha", "-pk")[:30],
-            tipos_error=[{"codigo": k, "label": v} for k, v in services_sap.TIPOS_ERROR.items()],
-            carga_sel=carga_sel, tipo_sel=tipo, estado_sel=estado,
-            error_sel=error, q=q,
-            n_ok=resumen.get(E.OK, 0), n_error=resumen.get(E.ERROR, 0),
+        # --------------------------------------------------
+        # CONTADORES SAP: antes del filtro de resultado.
+        # Así las tarjetas no se ponen en cero al seleccionarlas.
+        # --------------------------------------------------
+        n_ok = qs.filter(estado=E.OK).count()
+        n_error = qs.filter(
+            estado=E.ERROR,
+            vigente=True,
+        ).count()
+
+        # --------------------------------------------------
+        # PENDIENTES FIVE
+        # --------------------------------------------------
+        pendientes = list(
+            services_sap.instalados_sin_sap()
         )
+
+        # Categoría de producto
+        if tipo.isdigit():
+            categoria_id = int(tipo)
+            pendientes = [
+                a for a in pendientes
+                if a.producto
+                and a.producto.categoria_id == categoria_id
+            ]
+
+        # Búsqueda de pendientes por identificador, producto,
+        # orden, cuenta de contrato o técnico.
+        if q:
+            termino = q.casefold()
+            filtrados = []
+
+            for a in pendientes:
+                unidad = getattr(a, "unidad_serializada", None)
+                operacion = getattr(a, "operacion", None)
+                tecnico = getattr(a, "tecnico", None)
+                producto = getattr(a, "producto", None)
+
+                valores = [
+                    getattr(unidad, "numero_serie", ""),
+                    getattr(unidad, "codigo", ""),
+                    getattr(producto, "codigo_producto", ""),
+                    getattr(producto, "nombre_completo", ""),
+                    getattr(operacion, "numero_orden", ""),
+                    getattr(operacion, "numero_cuenta_contrato", ""),
+                    getattr(tecnico, "first_name", ""),
+                    getattr(tecnico, "last_name", ""),
+                    getattr(tecnico, "username", ""),
+                ]
+
+                if any(
+                    termino in str(valor or "").casefold()
+                    for valor in valores
+                ):
+                    filtrados.append(a)
+
+            pendientes = filtrados
+
+        n_pendientes = len(pendientes)
+
+        # --------------------------------------------------
+        # FILTRO DE RESULTADO
+        # OK y ERROR muestran SAP.
+        # PENDIENTE muestra instalaciones FIVE sin conciliar.
+        # --------------------------------------------------
+        if estado == "PENDIENTE":
+            resultados = qs.none()
+        elif estado in (E.OK, E.ERROR):
+            resultados = qs.filter(estado=estado)
+        else:
+            resultados = qs
+
+        ctx.update(
+            page_obj=Paginator(resultados, 50).get_page(
+                g.get("page")
+            ),
+            categorias=Categoria.objects.exclude(
+                prefijo=""
+            ).order_by("nombre"),
+            cargas=CargaSAP.objects.order_by(
+                "-fecha", "-pk"
+            )[:30],
+            tipos_error=[
+                {"codigo": k, "label": v}
+                for k, v in services_sap.TIPOS_ERROR.items()
+            ],
+            carga_sel=carga_sel,
+            tipo_sel=tipo,
+            estado_sel=estado,
+            error_sel=error,
+            q=q,
+            n_ok=n_ok,
+            n_error=n_error,
+            instalados_pendientes=pendientes,
+            n_pendientes=n_pendientes,
+            mostrar_pendientes=(estado == "PENDIENTE"),
+        )
+
         return ctx
 
-
-# ------------------------------------------------------------------ consulta por orden / serie
 class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_ALMACEN
     template_name = "operaciones/consulta_orden.html"
+    por_pagina = 25
+
+    @staticmethod
+    def _n(valor):
+        return str(valor or "").strip().upper()
+
+    # ---------- detalle de una orden ----------
+    def _detalle(self, ctx, operacion):
+        IGN = RegistroSAP.Estado.IGNORADO
+
+        registros = list(
+            RegistroSAP.objects
+            .filter(Q(numero_orden=operacion.numero_orden) | Q(operacion=operacion))
+            .select_related("carga", "producto", "operacion", "tecnico", "unidad_serializada")
+            .order_by("-carga__fecha", "-fila", "-pk")
+            .distinct()
+        )
+
+        OK = RegistroSAP.Estado.OK
+        por_serie, por_unidad, por_producto = {}, {}, {}
+
+        def guardar(indice, clave, r):
+            """Un OK siempre gana; entre iguales gana el más reciente (primero en la lista)."""
+            actual = indice.get(clave)
+            if actual is None or (actual.estado != OK and r.estado == OK):
+                indice[clave] = r
+
+        for r in registros:                 # ya vienen del más nuevo al más viejo
+            if r.estado == IGN:             # los ignorados nunca cuentan
+                continue
+            if r.numero_serie:
+                guardar(por_serie, self._n(r.numero_serie), r)
+            if r.codigo_unidad:
+                guardar(por_unidad, self._n(r.codigo_unidad), r)
+            if r.codigo_producto:
+                guardar(por_producto, self._n(r.codigo_producto), r)
+
+        # En _detalle: borra la línea .prefetch_related("evidencias")
+        materiales = list(
+            operacion.materiales
+            .select_related("producto", "unidad_serializada", "tecnico")
+            .order_by("producto__nombre", "pk")
+        )
+
+        for m in materiales:
+            u = m.unidad_serializada if m.unidad_serializada_id else None
+
+            if u and u.numero_serie:                       # medidor: serie / código
+                m.identificador_consulta = f"{u.numero_serie} / {u.codigo}"
+                m.tipo_identificador = "Serie / código de unidad"
+                m.sap = (por_serie.get(self._n(u.numero_serie))
+                         or por_unidad.get(self._n(u.codigo)))
+            elif u:                                        # regulador, válvula: código de unidad
+                m.identificador_consulta = u.codigo
+                m.tipo_identificador = "Código de unidad"
+                m.sap = por_unidad.get(self._n(u.codigo))
+            else:                                          # por cantidad: código de producto
+                m.identificador_consulta = m.producto.codigo_producto
+                m.tipo_identificador = "Código de producto"
+                m.sap = por_producto.get(self._n(m.producto.codigo_producto))
+
+        ctx.update(operacion=operacion, materiales=materiales, registros=registros)
+
+    # ---------- consulta por serie o código de unidad ----------
+    def _bloques(self, q):
+        bloques = []
+        for u in (UnidadSerializada.objects
+                  .filter(Q(numero_serie__iexact=q) | Q(codigo__iexact=q))
+                  .select_related("producto")):
+            filtro = Q(codigo_unidad=u.codigo)
+            if u.numero_serie:
+                filtro |= Q(numero_serie=u.numero_serie)
+            bloques.append({
+                "unidad": u,
+                # En _bloques: borra .prefetch_related("evidencias")
+                "asignaciones": (u.asignaciones.select_related("operacion", "tecnico")
+                                .order_by("-id")),
+                "registros": (RegistroSAP.objects.filter(filtro)
+                              .select_related("carga").order_by("-carga__fecha")),
+            })
+        return bloques
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        q = self.request.GET.get("q", "").strip()
-        ctx["q"] = q
-        if not q:
+        g = self.request.GET
+        q = g.get("q", "").strip()
+        estado = g.get("estado", "").strip()
+        tipo = g.get("tipo", "").strip()
+        tecnico = g.get("tecnico", "").strip()
+        detalle = g.get("detalle", "").strip()
+
+        ctx.update(
+            q=q, estado_sel=estado, tipo_sel=tipo, tecnico_sel=tecnico,
+            estados_orden=Operacion.Estado.choices,
+            tipos_operacion=Operacion.TipoOperacion.choices,
+            tecnicos=User.objects.filter(is_active=True, rol="TECNICO")
+                         .order_by("first_name", "last_name", "username"),
+            mostrar_listado=True,
+        )
+
+        # Una orden escrita exacta en el buscador abre el detalle directo
+        if not detalle and q and Operacion.objects.filter(numero_orden=q).exists():
+            detalle = q
+
+        if detalle:
+            ctx["mostrar_listado"] = False
+            op = Operacion.objects.select_related("tecnico").filter(
+                numero_orden=detalle).first()
+            if op:
+                self._detalle(ctx, op)
+            else:
+                ctx["error_detalle"] = f"No se encontró la orden {detalle}."
             return ctx
 
-        operacion = (
-            Operacion.objects.select_related("tecnico").filter(numero_orden=q).first()
-        )
-        if operacion:
-            registros = list(
-                RegistroSAP.objects.filter(numero_orden=q)
-                .select_related("carga", "producto").order_by("-carga__fecha", "fila")
-            )
-            ultimo_por_serie = {}
-            for r in registros:
-                if r.numero_serie:
-                    ultimo_por_serie.setdefault(r.numero_serie, r)
+        # Serie o código de unidad exactos
+        if q:
+            bloques = self._bloques(q)
+            if bloques:
+                ctx.update(bloques=bloques, mostrar_listado=False)
+                return ctx
 
-            materiales = list(
-                operacion.materiales
-                .select_related("producto", "unidad_serializada", "tecnico")
-                .prefetch_related("evidencias")
-                .order_by("producto__nombre", "id")
-            )
-            for m in materiales:
-                serie = m.unidad_serializada.numero_serie if m.unidad_serializada_id else ""
-                m.sap = ultimo_por_serie.get(serie)
-            ctx.update(operacion=operacion, materiales=materiales, registros=registros)
-            return ctx
+        # Listado
+        qs = Operacion.objects.select_related("tecnico").order_by("-fecha_operacion", "-pk")
+        if q:
+            qs = qs.filter(Q(numero_orden__icontains=q) | Q(numero_cuenta_contrato__icontains=q))
+        if estado:
+            qs = qs.filter(estado=estado)
+        if tipo:
+            qs = qs.filter(tipo_operacion=tipo)
+        if tecnico.isdigit():
+            qs = qs.filter(tecnico_id=int(tecnico))
 
-        # No es una orden exacta: ¿es una serie / código de unidad?
-        unidades = list(
-            UnidadSerializada.objects
-            .filter(Q(numero_serie=q) | Q(codigo=q)).select_related("producto")
-        )
-        bloques = []
-        for u in unidades:
-            bloques.append({
-                "unidad": u,
-                "asignaciones": (
-                    u.asignaciones.select_related("operacion", "tecnico")
-                    .prefetch_related("evidencias").order_by("-id")
-                ),
-                "registros": (
-                    RegistroSAP.objects.filter(numero_serie=u.numero_serie)
-                    .select_related("carga").order_by("-carga__fecha")
-                ),
-            })
-        ctx["bloques"] = bloques
-        if not bloques:
-            ctx["candidatas"] = Operacion.objects.filter(numero_orden__icontains=q)[:10]
+        paginator = Paginator(qs, self.por_pagina)
+        ctx.update(page_obj=paginator.get_page(g.get("page")),
+                   total_ordenes=paginator.count)
         return ctx
     
 class ErroresActualesView(QuerystringMixin, RolRequeridoMixin, TemplateView):

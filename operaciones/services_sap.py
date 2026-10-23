@@ -29,7 +29,13 @@ def _quien(previo, nuevo):
         for k, v in (nuevo.comparacion or {}).items()
     )
     return "AMBOS" if sap and five else "SAP" if sap else "FIVE"
-
+def _familia(r):
+    """Distingue el tipo de material dentro de una misma orden."""
+    if r.numero_serie:
+        return "S"
+    if r.codigo_unidad:
+        return "U"
+    return f"P:{r.codigo_producto}"
 
 def _actualizar_vigencia(carga, registros):
     """Cierra o reemplaza los errores abiertos de cargas anteriores que esta carga vuelve a tocar."""
@@ -54,17 +60,11 @@ def _actualizar_vigencia(carga, registros):
         return
 
     def llaves(r):
-        ks = [
-            ("c", r.clave_unica),
-            ("oc", r.numero_orden),
-        ]
-
+        ks = [("c", r.clave_unica), ("oc", r.numero_orden, _familia(r))]
         if r.numero_serie:
             ks.append(("s", r.numero_serie))
-
         if r.codigo_unidad:
             ks.append(("u", r.codigo_unidad))
-
         return ks
 
     indice = defaultdict(list)
@@ -100,9 +100,12 @@ CATALOGO = {
         "Usar Instalación, Retiro o Mantenimiento en el Excel y recargar."),
     "VARIOS_DIFIEREN": ("Varios datos distintos", "MEDIA",
         "Probablemente es otra instalación. Investigar el caso completo."),
-    # codigo: (etiqueta, severidad, acción sugerida)
+    "IDENTIFICADOR_INCORRECTO": ("Identificador equivocado", "MEDIA",
+        "Medidores se reportan por número de serie; reguladores y válvulas por código de unidad."),
+    "FALTA_CODIGO_UNIDAD": ("Falta el código de unidad", "BAJA",
+        "SAP debe enviar el código de unidad (ej. REG-001). Corregir el archivo y recargar."),
     "FALTA_DATO": ("Fila incompleta", "BAJA",
-        "Completar orden y código de producto en el Excel y recargar."),
+        "Cada fila necesita orden, cuenta, tipo y: serie, código de unidad, o código de producto + cantidad."),
     "FALTA_SERIE": ("Falta el número de serie", "BAJA",
         "SAP debe enviar el serial. Corregir el archivo y recargar."),
     "CANTIDAD_INVALIDA": ("Cantidad inválida", "BAJA",
@@ -215,6 +218,7 @@ def leer_excel(archivo):
             "orden": _s(d.get("numero_orden")),
             "cuenta": _s(d.get("cuenta_contrato")),
             "tipo_raw": _s(d.get("tipo_operacion")),
+            "codigo": _s(d.get("codigo_producto")),
             "serie": _s(d.get("numero_serie")),
             "codigo_unidad": _s(d.get("codigo_unidad")),
             "cantidad_raw": _s(d.get("cantidad")),
@@ -227,57 +231,58 @@ def _cantidad(raw):
         return 1
     try:
         n = float(raw.replace(",", "."))
-        return int(n) if n.is_integer() and n >= 0 else None
+        return int(n) if n.is_integer() and n > 0 else None
     except ValueError:
         return None
 
 
 def _clave(f):
     base = (
-        f"{f['orden']}|{f['cuenta']}|"
-        f"{_tipo(f['tipo_raw']) or f['tipo_raw']}|"
+        f"{f['orden']}|{f['cuenta']}|{_tipo(f['tipo_raw']) or f['tipo_raw']}|"
         f"{f['serie']}|{f['codigo_unidad']}"
     )
-
     if not f["serie"] and not f["codigo_unidad"]:
-        base += f"|{f['cantidad_raw']}"
-
+        base += f"|{f['codigo']}|{f['cantidad_raw']}"
     return hashlib.sha1(base.encode()).hexdigest()
-
 
 # ---------------------------------------------------------------- contexto
 class _Contexto:
     def __init__(self, filas):
-        codigos_unidad = {
-            f["codigo_unidad"]
-            for f in filas
-            if f["codigo_unidad"]
-        }
         series = {f["serie"] for f in filas if f["serie"]}
+        codigos_unidad = {f["codigo_unidad"] for f in filas if f["codigo_unidad"]}
         ordenes = {f["orden"] for f in filas if f["orden"]}
+        codigos_prod = {f["codigo"] for f in filas if f["codigo"]}
         E = Asignacion.Estado
 
+        self.productos = {
+            p.codigo_producto: p
+            for p in Producto.objects.filter(codigo_producto__in=codigos_prod)
+        }
         self.ops = {o.numero_orden: o
                     for o in Operacion.objects.filter(numero_orden__in=ordenes)}
-        self.unidades = defaultdict(list)
+
+        # Se busca cada identificador por serie Y por código, para detectar
+        # cuando SAP mandó un identificador en la columna equivocada.
+        buscar = series | codigos_unidad
+        self.por_serie = defaultdict(list)
+        self.por_codigo = {}
         for u in UnidadSerializada.objects.filter(
-            numero_serie__in=series
+            Q(numero_serie__in=buscar) | Q(codigo__in=buscar)
         ).select_related("producto"):
-            self.unidades[u.numero_serie].append(u)
-        
-        self.unidades_codigo = {
-            u.codigo: u
-            for u in UnidadSerializada.objects.filter(
-                codigo__in=codigos_unidad
-            ).select_related("producto")
-        }
+            if u.numero_serie:
+                self.por_serie[u.numero_serie].append(u)
+            self.por_codigo[u.codigo] = u
+
+        ids = ({u.pk for l in self.por_serie.values() for u in l}
+               | {u.pk for u in self.por_codigo.values()})
 
         self.asig_unidad = {}
-        self.series_orden = defaultdict(list)
+        self.series_orden = defaultdict(list)    # pista de typo en seriales
+        self.codigos_orden = defaultdict(list)   # pista de typo en códigos
         asigs = (
             Asignacion.objects
             .filter(unidad_serializada__isnull=False)
-            .filter(Q(unidad_serializada__numero_serie__in=series)
+            .filter(Q(unidad_serializada_id__in=ids)
                     | Q(operacion__numero_orden__in=ordenes))
             .exclude(estado=E.DEVUELTA)
             .select_related("operacion", "unidad_serializada")
@@ -287,11 +292,13 @@ class _Contexto:
             prev = self.asig_unidad.get(a.unidad_serializada_id)
             if prev is None or not (prev.estado == E.INSTALADA and a.estado != E.INSTALADA):
                 self.asig_unidad[a.unidad_serializada_id] = a
-            if a.operacion_id and a.unidad_serializada.numero_serie:
-                self.series_orden[a.operacion.numero_orden].append(
-                    a.unidad_serializada.numero_serie)
+            if a.operacion_id:
+                orden = a.operacion.numero_orden
+                self.codigos_orden[orden].append(a.unidad_serializada.codigo)
+                if a.unidad_serializada.numero_serie:
+                    self.series_orden[orden].append(a.unidad_serializada.numero_serie)
 
-        # Por cantidad: total instalado en Five por orden (todos los productos sin serie)
+        # Por cantidad: instalado en Five por (orden, producto)
         self.cantidad = {}
         for a in (
             Asignacion.objects
@@ -300,7 +307,7 @@ class _Contexto:
             .select_related("operacion")
         ):
             q = a.cantidad if a.estado == E.INSTALADA else a.cantidad_instalada
-            k = a.operacion.numero_orden
+            k = (a.operacion.numero_orden, a.producto_id)
             self.cantidad[k] = self.cantidad.get(k, 0) + (q or 0)
 
 
@@ -325,225 +332,155 @@ def _detalle(comp, malos):
     return "; ".join(
         f"{comp[k]['label'].lower()}: Five={comp[k]['five'] or '—'} / SAP={comp[k]['sap'] or '—'}"
         for k in malos)
-def _conciliar_codigo_unidad(f, ctx, tipo):
-    codigo = f["codigo_unidad"]
-    orden = f["orden"]
-    cuenta = f["cuenta"]
-
-    ERR = RegistroSAP.Estado.ERROR
-    E_U = UnidadSerializada.Estado
-
-    unidad = ctx.unidades_codigo.get(codigo)
-    op_sap = ctx.ops.get(orden)
-
-    if unidad is None:
-        return _res(
-            ERR,
-            "UNIDAD_NO_EXISTE",
-            f"El código de unidad {codigo} no existe en Five.",
-            {},
-            op_sap,
-        )
-
-    asignaciones = (
-        unidad.asignaciones
-        .select_related("operacion", "tecnico")
-        .exclude(estado=Asignacion.Estado.DEVUELTA)
-        .order_by("id")
-    )
-
-    asig = None
-    for a in asignaciones:
-        if asig is None or not (
-            asig.estado == Asignacion.Estado.INSTALADA
-            and a.estado != Asignacion.Estado.INSTALADA
-        ):
-            asig = a
-
-    op_five = asig.operacion if asig and asig.operacion_id else None
-    instalado = unidad.estado == E_U.INSTALADO
-
-    ref = op_five or op_sap
-    f_ord = ref.numero_orden if ref else ""
-    f_cta = ref.numero_cuenta_contrato if ref else ""
-    f_tip = ref.get_tipo_operacion_display() if ref else ""
-
-    comp = {
-        "unidad": _item(
-            "Código de unidad",
-            unidad.codigo,
-            codigo,
-            True,
-        ),
-        "orden": _item(
-            "Orden", f_ord, orden, f_ord == orden
-        ),
-        "cuenta_contrato": _item(
-            "Cuenta contrato", f_cta, cuenta, f_cta == cuenta
-        ),
-        "tipo_operacion": _item(
-            "Tipo de operación",
-            f_tip,
-            Operacion.TipoOperacion(tipo).label,
-            ref is not None and ref.tipo_operacion == tipo,
-        ),
-    }
-
-    if not instalado:
-        if unidad.estado == E_U.DISPONIBLE:
-            error = "INSTALADO_SAP_EN_ALMACEN"
-        elif unidad.estado == E_U.ASIGNADO:
-            error = "ASIGNADO_NO_INSTALADO"
-        else:
-            error = "ESTADO_INVALIDO"
-
-        return _res(
-            ERR,
-            error,
-            f"SAP reporta la unidad {codigo} instalada, "
-            f"pero en Five está {unidad.get_estado_display()}.",
-            comp,
-            op_five or op_sap,
-            unidad,
-            unidad.producto,
-        )
-
-    if op_five is None:
-        return _res(
-            ERR,
-            "SIN_ORDEN_EN_FIVE",
-            f"La unidad {codigo} está instalada en Five "
-            f"sin orden asociada.",
-            comp,
-            None,
-            unidad,
-            unidad.producto,
-        )
-
-    malos = [
-        k for k in ("orden", "cuenta_contrato", "tipo_operacion")
-        if not comp[k]["ok"]
-    ]
-
-    if malos:
-        return _res(
-            ERR,
-            _tipo_final(malos),
-            f"La unidad {codigo} difiere en {_detalle(comp, malos)}.",
-            comp,
-            op_five,
-            unidad,
-            unidad.producto,
-        )
-
-    return _res(
-        RegistroSAP.Estado.OK,
-        "",
-        "Todo coincide.",
-        comp,
-        op_five,
-        unidad,
-        unidad.producto,
-    )
-
-def _conciliar_serie(f, ctx, tipo):
-    serie, orden, cuenta = f["serie"], f["orden"], f["cuenta"]
+def _conciliar_unidad(f, ctx, tipo):
+    por_serie = bool(f["serie"])
+    ident = f["serie"] if por_serie else f["codigo_unidad"]
+    nombre = "Medidor" if por_serie else "Unidad"
+    orden, cuenta = f["orden"], f["cuenta"]
     ERR, E_U = RegistroSAP.Estado.ERROR, UnidadSerializada.Estado
-    unidades = ctx.unidades.get(serie, [])
     op_sap = ctx.ops.get(orden)
 
-    if len(unidades) > 1:
-        cods = ", ".join(u.codigo for u in unidades)
-        return _res(ERR, "SERIE_DUP_FIVE",
-                    f"La serie {serie} está repetida {len(unidades)} veces en Five "
-                    f"(códigos {cods}). Corrija el inventario.", {}, op_sap)
+    if por_serie:
+        lista = ctx.por_serie.get(ident, [])
+        if len(lista) > 1:
+            cods = ", ".join(u.codigo for u in lista)
+            return _res(ERR, "SERIE_DUP_FIVE",
+                        f"La serie {ident} está repetida {len(lista)} veces en Five "
+                        f"(códigos {cods}). Corrija el inventario.", {}, op_sap)
+        unidad = lista[0] if lista else None
+        cruzada = ctx.por_codigo.get(ident)                # ¿mandaron un código como serial?
+        pistas = ctx.series_orden.get(orden, [])
+    else:
+        unidad = ctx.por_codigo.get(ident)
+        cruz = ctx.por_serie.get(ident, [])
+        cruzada = cruz[0] if cruz else None                # ¿mandaron un serial como código?
+        pistas = ctx.codigos_orden.get(orden, [])
 
-    unidad = unidades[0] if unidades else None
+    # ---- identificador en la columna equivocada ----
+    if unidad is None and cruzada is not None:
+        if por_serie:
+            msg = (f"'{ident}' es el código de unidad de {cruzada.producto.nombre_completo}, "
+                   f"no un número de serie. Repórtelo en la columna codigo_unidad.")
+        else:
+            msg = (f"'{ident}' es el número de serie de un medidor "
+                   f"({cruzada.codigo}), no un código de unidad. "
+                   f"Repórtelo en la columna numero_serie.")
+        return _res(ERR, "IDENTIFICADOR_INCORRECTO", msg, {}, op_sap, cruzada, cruzada.producto)
+
+    if unidad is not None and not por_serie and unidad.producto.requiere_numero_serie:
+        return _res(ERR, "IDENTIFICADOR_INCORRECTO",
+                    f"{unidad.codigo} es un medidor: debe reportarse por número de serie "
+                    f"({unidad.numero_serie or 'sin serial en Five'}), no por código de unidad.",
+                    {}, op_sap, unidad, unidad.producto)
+
+    cerca = difflib.get_close_matches(ident, pistas, n=1, cutoff=0.75)
+    pista = f" ¿Quiso decir {cerca[0]}?" if cerca else ""
+
     asig = ctx.asig_unidad.get(unidad.pk) if unidad else None
     op_five = asig.operacion if asig and asig.operacion_id else None
     prod = unidad.producto if unidad else None
     instalado = bool(unidad and unidad.estado == E_U.INSTALADO)
 
-    cerca = difflib.get_close_matches(serie, ctx.series_orden.get(orden, []), n=1, cutoff=0.75)
-    pista = f" ¿Quiso decir {cerca[0]}?" if cerca else ""
-
     ref = op_five if unidad else op_sap
-    f_med = unidad.numero_serie if unidad else ", ".join(ctx.series_orden.get(orden, []))
+    f_ident = ((unidad.numero_serie if por_serie else unidad.codigo) if unidad
+               else ", ".join(pistas))
     f_ord = ref.numero_orden if ref else ""
     f_cta = ref.numero_cuenta_contrato if ref else ""
     f_tip = ref.get_tipo_operacion_display() if ref else ""
-    tipo_txt = Operacion.TipoOperacion(tipo).label
 
     comp = {
-        "medidor": _item("Medidor", f_med, serie, instalado),
+        "medidor": _item(nombre, f_ident, ident, instalado),
         "orden": _item("Orden", f_ord, orden, f_ord and f_ord == orden),
         "cuenta_contrato": _item("Cuenta contrato", f_cta, cuenta, f_cta and f_cta == cuenta),
-        "tipo_operacion": _item("Tipo de operación", f_tip, tipo_txt,
+        "tipo_operacion": _item("Tipo de operación", f_tip,
+                                Operacion.TipoOperacion(tipo).label,
                                 ref is not None and ref.tipo_operacion == tipo),
     }
-
-    # ---- el medidor no existe en Five ----
+            # ---- no existe en Five ----
     if unidad is None:
         if op_sap is None:
             return _res(ERR, "NO_EXISTE_EN_FIVE",
-                        f"Ni el medidor {serie} ni la orden {orden} existen en Five.", comp)
+                        f"Ni el identificador {ident} ni la orden {orden} existen en Five.",
+                        comp)
+
+        if not por_serie:
+            return _res(ERR, "UNIDAD_NO_EXISTE",
+                        f"El código de unidad {ident} no existe en Five.{pista}",
+                        comp, op_sap)
+
         if op_sap.numero_cuenta_contrato == cuenta:
             return _res(ERR, "SERIE_DIFIERE",
                         f"La orden {orden} y la cuenta {cuenta} coinciden con Five, pero el "
-                        f"medidor no: SAP reporta {serie} y Five tiene "
-                        f"{f_med or 'ningún medidor'} en esa orden.{pista}", comp, op_sap)
+                        f"medidor no: SAP reporta {ident} y Five tiene "
+                        f"{f_ident or 'ningún medidor'} en esa orden.{pista}", comp, op_sap)
+
         return _res(ERR, "SERIE_NO_EXISTE",
-                    f"El medidor {serie} no existe en Five. La orden {orden} sí existe, pero "
+                    f"El medidor {ident} no existe en Five. La orden {orden} sí existe, pero "
                     f"con otra cuenta (Five: {op_sap.numero_cuenta_contrato}, "
                     f"SAP: {cuenta}).{pista}", comp, op_sap)
 
-    # ---- el medidor existe, pero no está instalado ----
+    # ---- existe pero no está instalado ----
     if not instalado:
         if unidad.estado == E_U.DISPONIBLE:
             t, d = "INSTALADO_SAP_EN_ALMACEN", (
-                f"SAP reporta el medidor {serie} instalado, pero en Five está DISPONIBLE "
-                f"en almacén (nunca fue asignado).")
+                f"SAP reporta {nombre.lower()} {ident} instalado, pero en Five está "
+                f"DISPONIBLE en almacén (nunca fue asignado).")
         elif unidad.estado == E_U.ASIGNADO:
             t, d = "ASIGNADO_NO_INSTALADO", (
-                f"SAP reporta el medidor {serie} instalado, pero en Five sigue asignado "
-                f"al técnico sin registrar la instalación.")
+                f"SAP reporta {nombre.lower()} {ident} instalado, pero en Five sigue "
+                f"asignado al técnico sin registrar la instalación.")
         else:
             t, d = "ESTADO_INVALIDO", (
-                f"SAP reporta el medidor {serie} instalado, pero en Five está "
+                f"SAP reporta {nombre.lower()} {ident} instalado, pero en Five está "
                 f"'{unidad.get_estado_display()}'.")
         return _res(ERR, t, d, comp, op_five, unidad, prod)
 
     if op_five is None:
         return _res(ERR, "SIN_ORDEN_EN_FIVE",
-                    f"El medidor {serie} figura instalado en Five pero sin orden asociada. "
+                    f"{nombre} {ident} figura instalado en Five pero sin orden asociada. "
                     f"SAP lo reporta en la orden {orden}.", comp, None, unidad, prod)
 
-    # ---- instalado: comparar orden, cuenta y tipo ----
     malos = [k for k in ("orden", "cuenta_contrato", "tipo_operacion") if not comp[k]["ok"]]
     if not malos:
         return _res(RegistroSAP.Estado.OK, "", "Todo coincide.", comp, op_five, unidad, prod)
     return _res(ERR, _tipo_final(malos),
-                f"El medidor {serie} coincide, pero difiere en {_detalle(comp, malos)}.",
+                f"{nombre} {ident} coincide, pero difiere en {_detalle(comp, malos)}.",
                 comp, op_five, unidad, prod)
 
 
 def _conciliar_cantidad(f, ctx, tipo):
     orden, cuenta = f["orden"], f["cuenta"]
     ERR = RegistroSAP.Estado.ERROR
-    cant = _cantidad(f["cantidad_raw"])
     op = ctx.ops.get(orden)
+    prod = ctx.productos.get(f["codigo"])
 
+    if prod is None:
+        return _res(ERR, "PRODUCTO_NO_EXISTE",
+                    f"El código de producto {f['codigo']} no existe en Five.", {}, op)
+
+    if prod.es_serializado:
+        if prod.requiere_numero_serie:
+            return _res(ERR, "FALTA_SERIE",
+                        f"{prod.nombre} es un medidor: SAP debe reportarlo por numero_serie, "
+                        f"no por código de producto y cantidad.", {}, op, None, prod)
+        return _res(ERR, "FALTA_CODIGO_UNIDAD",
+                    f"{prod.nombre} se reporta por código de unidad (ej. {prod.categoria.prefijo}-001), "
+                    f"no por código de producto y cantidad.", {}, op, None, prod)
+
+    cant = _cantidad(f["cantidad_raw"]) if f["cantidad_raw"] else None
     if cant is None:
         return _res(ERR, "CANTIDAD_INVALIDA",
-                    f"La cantidad '{f['cantidad_raw']}' no es un número entero válido.", {}, op)
+                    f"La cantidad '{f['cantidad_raw']}' no es un entero positivo.",
+                    {}, op, None, prod)
     if op is None:
-        return _res(ERR, "ORDEN_NO_EXISTE", f"La orden {orden} no existe en Five.", {})
+        return _res(ERR, "ORDEN_NO_EXISTE", f"La orden {orden} no existe en Five.",
+                    {}, None, None, prod)
 
-    five = ctx.cantidad.get(orden)
+    five = ctx.cantidad.get((orden, prod.pk))
     if five is None:
         return _res(ERR, "SIN_MATERIAL_EN_ORDEN",
-                    f"La orden {orden} existe, pero no tiene material por cantidad "
-                    f"instalado en Five.", {}, op)
+                    f"La orden {orden} existe, pero no tiene {prod.nombre} instalado en Five.",
+                    {}, op, None, prod)
 
     comp = {
         "orden": _item("Orden", op.numero_orden, orden, True),
@@ -556,9 +493,10 @@ def _conciliar_cantidad(f, ctx, tipo):
     }
     malos = [k for k in ("cuenta_contrato", "tipo_operacion", "cantidad") if not comp[k]["ok"]]
     if not malos:
-        return _res(RegistroSAP.Estado.OK, "", "Todo coincide.", comp, op)
+        return _res(RegistroSAP.Estado.OK, "", "Todo coincide.", comp, op, None, prod)
     return _res(ERR, _tipo_final(malos),
-                f"La orden {orden} difiere en {_detalle(comp, malos)}.", comp, op)
+                f"{prod.nombre} en la orden {orden} difiere en {_detalle(comp, malos)}.",
+                comp, op, None, prod)
 
 
 def conciliar(f, ctx):
@@ -566,51 +504,28 @@ def conciliar(f, ctx):
     op = ctx.ops.get(f["orden"])
 
     if not f["orden"] or not f["cuenta"]:
-        return _res(
-            ERR,
-            "FALTA_DATO",
-            "La fila no trae número de orden o cuenta contrato.",
-            {},
-            op,
-        )
+        return _res(ERR, "FALTA_DATO",
+                    "La fila no trae número de orden o cuenta contrato.", {}, op)
 
     tipo = _tipo(f["tipo_raw"])
-
     if tipo is None:
-        return _res(
-            ERR,
-            "TIPO_INVALIDO",
-            f"El tipo de operación '{f['tipo_raw']}' no es válido.",
-            {},
-            op,
-        )
+        return _res(ERR, "TIPO_INVALIDO",
+                    f"El tipo de operación '{f['tipo_raw']}' no es válido "
+                    f"(use Instalación, Retiro o Mantenimiento).", {}, op)
 
     if f["serie"] and f["codigo_unidad"]:
-        return _res(
-            ERR,
-            "FALTA_DATO",
-            "Indique número de serie o código de unidad, no ambos.",
-            {},
-            op,
-        )
+        return _res(ERR, "FALTA_DATO",
+                    "Indique número de serie o código de unidad, no ambos.", {}, op)
 
-    if f["serie"]:
-        return _conciliar_serie(f, ctx, tipo)
+    if f["serie"] or f["codigo_unidad"]:
+        return _conciliar_unidad(f, ctx, tipo)
 
-    if f["codigo_unidad"]:
-        return _conciliar_codigo_unidad(f, ctx, tipo)
+    if f["codigo"]:
+        return _conciliar_cantidad(f, ctx, tipo)
 
-    if not f["cantidad_raw"]:
-        return _res(
-            ERR,
-            "FALTA_DATO",
-            "La fila debe traer número de serie, código de unidad "
-            "o cantidad.",
-            {},
-            op,
-        )
-
-    return _conciliar_cantidad(f, ctx, tipo)
+    return _res(ERR, "FALTA_DATO",
+                "La fila debe traer numero_serie, codigo_unidad, o codigo_producto con cantidad.",
+                {}, op)
 
 # ---------------------------------------------------------------- carga
 @transaction.atomic
@@ -625,11 +540,12 @@ def procesar_carga(archivo, usuario):
     )
 
     claves = {_clave(f) for f in filas}
-    previas = dict(
-        RegistroSAP.objects
+    previas = {
+        r.clave_unica: r
+        for r in RegistroSAP.objects
         .filter(estado=RegistroSAP.Estado.OK, clave_unica__in=claves)
-        .values_list("clave_unica", "pk")
-    )
+        .order_by("pk")
+    }
 
     E = RegistroSAP.Estado
     vistas, registros = set(), []
@@ -638,14 +554,16 @@ def procesar_carga(archivo, usuario):
     for f in filas:
         clave = _clave(f)
         cant = _cantidad(f["cantidad_raw"])
+        es_unidad = bool(f["serie"] or f["codigo_unidad"])
         reg = RegistroSAP(
             carga=carga,
             fila=f["fila"],
             numero_orden=f["orden"],
+            codigo_producto=f["codigo"],                      # <-- faltaba
             codigo_unidad=f["codigo_unidad"],
             numero_serie=f["serie"],
             cuenta_contrato=f["cuenta"],
-            cantidad=cant if cant is not None else 1,
+            cantidad=1 if es_unidad else (cant if cant is not None else 1),
             cantidad_sap_original=f["cantidad_raw"],
             clave_unica=clave,
         )
@@ -654,8 +572,14 @@ def procesar_carga(archivo, usuario):
             reg.estado, reg.tipo_error = E.ERROR, "DUPLICADA_EN_ARCHIVO"
             reg.diagnostico = "Esta fila está repetida en el mismo archivo."
         elif clave in previas:
+            orig = previas[clave]
             reg.estado = E.IGNORADO
-            reg.registro_original_id = previas[clave]
+            reg.registro_original_id = orig.pk
+            reg.operacion_id = orig.operacion_id
+            reg.tecnico_id = orig.tecnico_id
+            reg.producto_id = orig.producto_id
+            reg.unidad_serializada_id = orig.unidad_serializada_id
+            reg.comparacion = orig.comparacion
             reg.diagnostico = "Ya fue cargada y conciliada antes; no se vuelve a procesar."
         else:
             r = conciliar(f, ctx)
@@ -686,19 +610,21 @@ DIAS_GRACIA_SAP = 3     # SAP suele tardar días en reportar; ajústalo
 
 
 def instalados_sin_sap():
-    """Medidores instalados en Five que ninguna carga ha conciliado como OK."""
-    reportados = (
+    """
+    Unidades serializadas (medidores, reguladores, válvulas) instaladas en Five
+    que ninguna carga ha conciliado como OK. Los productos por cantidad NO se
+    exigen: son opcionales en SAP.
+    """
+    reportadas = (
         RegistroSAP.objects
-        .filter(estado=RegistroSAP.Estado.OK)
-        .exclude(numero_serie="")
-        .values("numero_serie")
+        .filter(estado=RegistroSAP.Estado.OK, unidad_serializada__isnull=False)
+        .values("unidad_serializada_id")
     )
     return (
         Asignacion.objects
         .filter(estado=Asignacion.Estado.INSTALADA,
-                unidad_serializada__isnull=False,
-                unidad_serializada__numero_serie__isnull=False)
-        .exclude(unidad_serializada__numero_serie__in=reportados)
+                unidad_serializada__isnull=False)
+        .exclude(unidad_serializada_id__in=reportadas)
         .select_related("producto", "unidad_serializada", "operacion", "tecnico")
         .order_by("fecha_instalacion")
     )

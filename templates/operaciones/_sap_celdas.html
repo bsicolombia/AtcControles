@@ -1,9 +1,10 @@
+{% load sap_extras %}
 {% if r.comparacion %}
-{% with c=r.comparacion %}
-<td class="{% if c.medidor.ok %}table-success{% else %}table-danger{% endif %}">{{ c.medidor.five|default:"—" }}</td>
+{% with c=r.comparacion item=r.comparacion|sap_item %}
+<td class="{% if item.ok %}table-success{% else %}table-danger{% endif %}">{{ item.five|default:"—" }}</td>
 <td class="{% if c.orden.ok %}table-success{% else %}table-danger{% endif %}">{{ c.orden.five|default:"—" }}</td>
 <td class="{% if c.cuenta_contrato.ok %}table-success{% else %}table-danger{% endif %}">{{ c.cuenta_contrato.five|default:"—" }}</td>
-<td class="{% if c.medidor.ok %}table-success{% else %}table-danger{% endif %}">{{ c.medidor.sap|default:"—" }}</td>
+<td class="{% if item.ok %}table-success{% else %}table-danger{% endif %}">{{ item.sap|default:"—" }}</td>
 <td class="{% if c.orden.ok %}table-success{% else %}table-danger{% endif %}">{{ c.orden.sap|default:"—" }}</td>
 <td class="{% if c.cuenta_contrato.ok %}table-success{% else %}table-danger{% endif %}">{{ c.cuenta_contrato.sap|default:"—" }}</td>
 {% endwith %}

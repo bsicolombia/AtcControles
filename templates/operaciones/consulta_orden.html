@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load sap_extras %}
 {% block titulo %}Consulta de orden{% endblock %}
 
 {% block contenido %}
@@ -7,12 +8,184 @@
     <p class="text-muted">Escriba un número de orden, o un serial / código de medidor.</p>
 
     <form method="get" class="card card-body mb-4">
-        <div class="input-group">
-            <input type="search" name="q" value="{{ q }}" class="form-control"
-                   placeholder="Número de orden o serial" autofocus>
-            <button class="btn btn-primary">Buscar</button>
+    <div class="row g-3">
+
+        <div class="col-md-4">
+            <label for="q" class="form-label">
+                Orden o cuenta contrato
+            </label>
+            <input
+                type="search"
+                id="q"
+                name="q"
+                value="{{ q }}"
+                class="form-control"
+                placeholder="Escriba el número de orden..."
+            >
         </div>
-    </form>
+
+        <div class="col-md-2">
+            <label for="estado" class="form-label">Estado</label>
+            <select id="estado" name="estado" class="form-select">
+                <option value="">Todos los estados</option>
+                {% for valor, etiqueta in estados_orden %}
+                    <option value="{{ valor }}"
+                        {% if estado_sel == valor|stringformat:"s" %}
+                            selected
+                        {% endif %}>
+                        {{ etiqueta }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="tipo" class="form-label">
+                Tipo de operación
+            </label>
+            <select id="tipo" name="tipo" class="form-select">
+                <option value="">Todos los tipos</option>
+                {% for valor, etiqueta in tipos_operacion %}
+                    <option value="{{ valor }}"
+                        {% if tipo_sel == valor|stringformat:"s" %}
+                            selected
+                        {% endif %}>
+                        {{ etiqueta }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="tecnico" class="form-label">Técnico</label>
+            <select id="tecnico" name="tecnico" class="form-select">
+                <option value="">Todos los técnicos</option>
+                {% for t in tecnicos %}
+                    <option value="{{ t.pk }}"
+                        {% if tecnico_sel == t.pk|stringformat:"s" %}
+                            selected
+                        {% endif %}>
+                        {{ t.get_full_name|default:t.username }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                Buscar
+            </button>
+            <a href="{% url 'operaciones:consulta_orden' %}"
+               class="btn btn-outline-secondary">
+                Limpiar filtros
+            </a>
+        </div>
+
+    </div>
+</form>
+
+{% if error_detalle %}
+    <div class="alert alert-warning">
+        {{ error_detalle }}
+    </div>
+{% endif %}
+
+{% if mostrar_listado %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Órdenes registradas</h2>
+        <span class="text-muted">
+            Total: {{ total_ordenes }}
+        </span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover table-bordered align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Orden</th>
+                    <th>Cuenta contrato</th>
+                    <th>Tipo de operación</th>
+                    <th>Estado</th>
+                    <th>Técnico</th>
+                    <th>Fecha</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for o in page_obj %}
+                    <tr>
+                        <td>
+                            <a href="?detalle={{ o.numero_orden|urlencode }}"
+                               class="fw-bold text-decoration-none">
+                                {{ o.numero_orden }}
+                            </a>
+                        </td>
+
+                        <td>{{ o.numero_cuenta_contrato|default:"—" }}</td>
+
+                        <td>{{ o.get_tipo_operacion_display }}</td>
+
+                        <td>
+                            <span class="badge bg-info text-dark">
+                                {{ o.get_estado_display }}
+                            </span>
+                        </td>
+
+                        <td>
+                            {% if o.tecnico %}
+                                {{ o.tecnico.get_full_name|default:o.tecnico.username }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {{ o.fecha_operacion|date:"d/m/Y"|default:"—" }}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4">
+                            No se encontraron órdenes con los filtros seleccionados.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+        <nav aria-label="Paginación de órdenes">
+            <ul class="pagination justify-content-center">
+
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?q={{ q|urlencode }}&estado={{ estado_sel|urlencode }}&tipo={{ tipo_sel|urlencode }}&tecnico={{ tecnico_sel|urlencode }}&page={{ page_obj.previous_page_number }}">
+                            Anterior
+                        </a>
+                    </li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link">
+                        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                    </span>
+                </li>
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?q={{ q|urlencode }}&estado={{ estado_sel|urlencode }}&tipo={{ tipo_sel|urlencode }}&tecnico={{ tecnico_sel|urlencode }}&page={{ page_obj.next_page_number }}">
+                            Siguiente
+                        </a>
+                    </li>
+                {% endif %}
+
+            </ul>
+        </nav>
+    {% endif %}
+{% endif %}
 
     {% if operacion %}
     <div class="card mb-4">
@@ -31,28 +204,36 @@
     <table class="table table-bordered align-middle">
         <thead class="table-dark"><tr>
             <th>Producto</th><th>Serie</th><th>Cant.</th><th>Estado</th><th>Técnico</th>
-            <th>Instalado</th><th>Evidencias</th><th>En SAP</th></tr></thead>
+            <th>Instalado</th><th>En SAP</th></tr></thead>
         <tbody>
         {% for m in materiales %}
             <tr>
                 <td>{{ m.producto.nombre_completo }}</td>
-                <td>{{ m.unidad_serializada.numero_serie|default:"—" }}</td>
+                <td>
+                    <div class="fw-semibold">
+                        {{ m.identificador_consulta }}
+                    </div>
+                    <div class="small text-muted">
+                        {{ m.tipo_identificador }}
+                    </div>
+                </td>
                 <td>{% if m.unidad_serializada_id %}1{% else %}{{ m.cantidad_instalada }} / {{ m.cantidad }}{% endif %}</td>
                 <td><span class="badge bg-secondary">{{ m.get_estado_display }}</span></td>
                 <td>{{ m.tecnico.get_full_name|default:m.tecnico.username }}</td>
                 <td>{{ m.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
+                
                 <td>
-                    {% for ev in m.evidencias.all %}
-                        <a href="{{ ev.imagen.url }}" target="_blank">
-                            <img src="{{ ev.imagen.url }}" alt="{{ ev.descripcion }}" height="40" class="rounded border">
-                        </a>
-                    {% empty %}<span class="text-muted">—</span>{% endfor %}
-                </td>
-                <td>
-                    {% if not m.unidad_serializada_id %}<span class="text-muted small">Ver tabla de abajo</span>
-                    {% elif m.sap.estado == "OK" %}<span class="badge bg-success">Coincide</span>
-                    {% elif m.sap.estado == "ERROR" %}<span class="badge bg-danger">{{ m.sap.tipo_error }}</span>
-                    {% else %}<span class="badge bg-warning text-dark">No reportado en SAP</span>{% endif %}
+                    {% if m.sap %}
+                        {% if m.sap.estado == "OK" %}
+                            <span class="badge bg-success">Coincide</span>
+                        {% else %}
+                            <span class="badge bg-danger">{{ m.sap.tipo_error|sap_meta:"etiqueta" }}</span>
+                        {% endif %}
+                    {% elif m.unidad_serializada_id %}
+                        <span class="badge bg-warning text-dark">No reportado en SAP</span>
+                    {% else %}
+                        <span class="badge bg-light text-muted border">Opcional · no reportado</span>
+                    {% endif %}
                 </td>
             </tr>
         {% empty %}
@@ -76,12 +257,12 @@
             <tr>
                 <td><a href="{% url 'operaciones:carga_sap_detalle' r.carga_id %}">#{{ r.carga_id }}</a>
                     <div class="small text-muted">{{ r.carga.fecha|date:"d/m/Y H:i" }}</div></td>
-                <td>{{ r.numero_serie|default:r.codigo_producto }}</td>
+                <td>{{ r.numero_serie|default:r.codigo_unidad|default:r.codigo_producto|default:"—" }}</td>
                 {% include "operaciones/_sap_celdas.html" with r=r %}
                 <td class="text-start">
                     {% if r.estado == "OK" %}<span class="badge bg-success">Coincide</span>
                     {% elif r.estado == "IGNORADO" %}<span class="badge bg-secondary">Ignorado</span>
-                    {% else %}<span class="badge bg-danger">{{ r.tipo_error }}</span>
+                    {% else %}<span class="badge bg-danger">{{ r.tipo_error|sap_meta:"etiqueta" }}</span>
                         <div class="small mt-1">{{ r.diagnostico }}</div>{% endif %}
                 </td>
             </tr>
@@ -106,11 +287,11 @@
                 {% for a in b.asignaciones %}
                     <li>
                         Orden
-                        {% if a.operacion %}<a href="?q={{ a.operacion.numero_orden }}">{{ a.operacion.numero_orden }}</a>
+                        {% if a.operacion %}<a href="?detalle={{ a.operacion.numero_orden|urlencode }}">{{ a.operacion.numero_orden }}</a>
                         (cuenta {{ a.operacion.numero_cuenta_contrato }}){% else %}—{% endif %}
                         · {{ a.get_estado_display }} · {{ a.tecnico.get_full_name|default:a.tecnico.username }}
                         · {{ a.fecha_instalacion|date:"d/m/Y"|default:"sin fecha" }}
-                        · {{ a.evidencias.count }} evidencia(s)
+                        
                     </li>
                 {% empty %}<li class="text-muted">Sin asignaciones.</li>{% endfor %}
                 </ul>

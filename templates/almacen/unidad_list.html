@@ -113,11 +113,9 @@
     FIVE y SAP coinciden
   </option>
 
-  <option
-    value="diferentes"
-    {% if comparacion_sel == "diferentes" %}selected{% endif %}
-  >
-    FIVE y SAP no coinciden
+
+    <option value="pendientes" {% if comparacion_sel == "pendientes" %}selected{% endif %}>
+    FIVE y SAP No Coinciden
   </option>
 </select>
 
@@ -295,9 +293,9 @@
               <!-- SAP -->
               <td class="num">
                 <a
-                  class="cantidad-enlace {% if u.coincide_sap_five %}cantidad-ok{% else %}cantidad-error{% endif %}"
-                  href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.producto.codigo_producto|default:u.producto.nombre|urlencode }}"
-                  title="{% if u.coincide_sap_five %}FIVE y SAP coinciden{% else %}FIVE y SAP no coinciden{% endif %}"
+                  class="cantidad-enlace {% if u.estado_sap == 'ok' %}cantidad-ok{% elif u.estado_sap == 'error' %}cantidad-error{% endif %}"
+                  href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.codigo|urlencode }}"
+                  title="{% if u.estado_sap == 'ok' %}FIVE y SAP coinciden{% elif u.estado_sap == 'error' %}FIVE y SAP no coinciden{% else %}Aún no aplica{% endif %}"
                 >
                   {{ u.sap }}
                 </a>

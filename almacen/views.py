@@ -70,7 +70,14 @@ def tecnicos_queryset():
         .select_related("supervisor")
         .order_by("first_name", "last_name", "username")
     )
-
+    
+def _unidades_conciliadas_sap():
+    """IDs de unidades que SAP ya reportó y que coinciden con Five (en cualquier carga)."""
+    return set(
+        RegistroSAP.objects
+        .filter(estado=RegistroSAP.Estado.OK, unidad_serializada__isnull=False)
+        .values_list("unidad_serializada_id", flat=True)
+    )
 # ============================================================
 # UTILIDADES
 # ============================================================
@@ -226,21 +233,26 @@ def _sap_total_por_producto():
     return {r["producto_id"]: r["total"] or 0 for r in registros}
 
 
+
+
 def _obtener_datos_sap():
     """
-    Total reportado por SAP en la última carga, agrupado por
-    (técnico, producto). Incluye filas OK y ERROR si tienen
-    técnico y producto identificados.
+    Totales SAP por (técnico, producto).
+    Conserva las conciliaciones OK de cargas anteriores,
+    aunque la última carga haya ignorado registros repetidos.
     """
-    ultima_carga = CargaSAP.objects.order_by("-fecha", "-pk").first()
+    from django.db.models import Q, Sum
+    from operaciones.models import RegistroSAP
 
-    if not ultima_carga:
-        return {}
+    E = RegistroSAP.Estado
 
     registros = (
         RegistroSAP.objects
         .filter(
-            carga=ultima_carga,
+            Q(estado=E.OK)
+            | Q(estado=E.ERROR, vigente=True)
+        )
+        .filter(
             tecnico__isnull=False,
             producto__isnull=False,
         )
@@ -252,6 +264,8 @@ def _obtener_datos_sap():
         (r["tecnico_id"], r["producto_id"]): r["total"] or 0
         for r in registros
     }
+
+
 # ============================================================
 # DASHBOARD
 # ============================================================
@@ -703,9 +717,7 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
             filtros |= Q(**{f"{campo}__icontains": termino})
 
         return qs.filter(filtros).distinct()
-
-
-
+    
     def get_queryset(self):
         tecnico_id = self.request.GET.get("tecnico", "").strip()
         estado = self.request.GET.get("estado", "").strip()
@@ -719,8 +731,7 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
         )
 
         qs = (
-            super()
-            .get_queryset()
+            super().get_queryset()
             .select_related("producto", "remision")
         )
 
@@ -760,55 +771,28 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
             )
         )
 
-        # Comparación por técnico y producto.
-        if comparacion in ("coinciden", "diferentes"):
-            five = _five_total_por_tecnico_producto()
-            sap = _obtener_datos_sap()
-
-            # Se obtienen las unidades que coinciden con los
-            # estados y asignaciones que corresponden a cada técnico.
-            unidades = list(qs)
-
+        if comparacion in ("coinciden", "diferentes", "pendientes"):
+            sap_ok = _unidades_conciliadas_sap()
             ids_validos = []
 
-            for unidad in unidades:
-                if unidad.estado == UnidadSerializada.Estado.ASIGNADO:
-                    estado_asignacion = Asignacion.Estado.ASIGNADA
-                elif unidad.estado == UnidadSerializada.Estado.INSTALADO:
-                    estado_asignacion = Asignacion.Estado.INSTALADA
+            for pk, est in qs.values_list("pk", "estado"):
+                five = 1 if est == UnidadSerializada.Estado.INSTALADO else 0
+                sap = 1 if pk in sap_ok else 0
+
+                if five and sap:
+                    resultado = "coinciden"
+                elif five and not sap:
+                    resultado = "pendientes"      # instalado en Five, SAP aún no lo reporta
                 else:
-                    continue
+                    resultado = "diferentes"      # SAP dice algo que Five no respalda
 
-                asignacion = next(
-                    (
-                        a for a in getattr(
-                            unidad, "asignaciones_lista", []
-                        )
-                        if a.estado == estado_asignacion
-                    ),
-                    None,
-                )
-
-                if asignacion is None:
-                    continue
-
-                clave = (asignacion.tecnico_id, unidad.producto_id)
-
-                cantidad_five = five.get(clave, 0)
-                cantidad_sap = sap.get(clave, 0)
-
-                coincide = cantidad_five == cantidad_sap
-
-                if (
-                    (comparacion == "coinciden" and coincide)
-                    or
-                    (comparacion == "diferentes" and not coincide)
-                ):
-                    ids_validos.append(unidad.pk)
+                if resultado == comparacion:
+                    ids_validos.append(pk)
 
             qs = qs.filter(pk__in=ids_validos)
 
         return qs
+
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -859,32 +843,19 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
                     None,
                 )
 
-        # Valores de FIVE y SAP agrupados por técnico y producto.
-        five = _five_total_por_tecnico_producto()
-        sap = _obtener_datos_sap()
+        # FIVE y SAP por unidad (0 o 1)
+        sap_ok = _unidades_conciliadas_sap()
 
         for unidad in ctx["object_list"]:
-            asignacion = unidad.asignacion_relevante
+            unidad.five = 1 if unidad.estado == UnidadSerializada.Estado.INSTALADO else 0
+            unidad.sap = 1 if unidad.pk in sap_ok else 0
 
-            if asignacion:
-                clave = (
-                    asignacion.tecnico_id,
-                    unidad.producto_id,
-                )
-
-                unidad.five = five.get(clave, 0)
-                unidad.sap = sap.get(clave, 0)
+            if unidad.five and unidad.sap:
+                unidad.estado_sap = "ok"
+            elif unidad.five or unidad.sap:
+                unidad.estado_sap = "error"
             else:
-                unidad.five = 0
-                unidad.sap = 0
-
-            unidad.coincide_sap_five = (
-                unidad.five == unidad.sap
-            )
-
-        ctx["comparacion_sel"] = self.request.GET.get(
-            "comparacion", ""
-        ).strip()
+                unidad.estado_sap = "neutro"      # disponible, asignado, dañado...
 
         return ctx
 
