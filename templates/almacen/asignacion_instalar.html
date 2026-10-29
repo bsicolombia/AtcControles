@@ -3,132 +3,122 @@
 
 {% block titulo %}Registrar operación · {{ tecnico.tecnico_apellido_nombres }}{% endblock %}
 
+
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/formulario.css' %}">
 <link rel="stylesheet" href="{% static 'css/tecnico_asignaciones.css' %}">
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+
+<style>
+    #form-instalar .ts-wrapper {
+        width: 100%;
+        font-size: inherit;
+    }
+
+    #form-instalar .ts-wrapper .ts-control {
+        min-height: 42px;
+        padding: 10px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: none;
+        color: #212529;
+    }
+
+    #form-instalar .ts-wrapper.focus .ts-control {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    }
+
+    #form-instalar .ts-dropdown {
+        z-index: 1000;
+        background: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    #form-instalar .ts-dropdown .option {
+        padding: 9px 12px;
+        cursor: pointer;
+    }
+
+    #form-instalar .ts-dropdown .active {
+        background: #e9f2ff;
+        color: #212529;
+    }
+
+    #form-instalar .ts-dropdown .no-results {
+        padding: 10px 12px;
+        color: #6c757d;
+    }
+</style>
 {% endblock %}
+
 
 {% block contenido %}
 
 <header class="cabecera">
     <div>
         <h1>{{ tecnico.tecnico_apellido_nombres }}</h1>
-
         <div class="tecnico-datos">
             <span>CC {{ tecnico.tecnico_cedula }}</span>
-
-            {% if tecnico.supervisor %}
-                <span>Supervisor: {{ tecnico.supervisor }}</span>
-            {% endif %}
+            {% if tecnico.supervisor %}<span>Supervisor: {{ tecnico.supervisor }}</span>{% endif %}
         </div>
     </div>
-
     <div class="acciones">
-        <a class="btn btn-secundario" href="{% url 'almacen:asignaciones' %}">
-            Volver
-        </a>
+        <a class="btn btn-secundario" href="{% url 'almacen:asignaciones' %}">Volver</a>
     </div>
 </header>
 
-{% if pendientes %}
+{{ estados_instalan|json_script:"estados-instalan" }}
 
-<form method="post" id="form-instalar" novalidate>
+<form method="post" id="form-instalar" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
 
-    <section class="tarjeta">
-        <div class="tarjeta-cab">
-            <h2>Datos de la operación</h2>
-        </div>
+    {% if form.non_field_errors %}
+        <div class="error">{{ form.non_field_errors }}</div>
+    {% endif %}
 
+    <section class="tarjeta">
+        <div class="tarjeta-cab"><h2>Datos de la operación</h2></div>
         <div class="tarjeta-cuerpo">
 
             <div class="rejilla-3">
-
-                <div class="campo {% if form.fecha_instalacion.errors %}campo-error{% endif %}">
-                    {{ form.fecha_instalacion.label_tag }}
-                    {{ form.fecha_instalacion }}
-
-                    {% if form.fecha_instalacion.errors %}
-                        <div class="error">
-                            {{ form.fecha_instalacion.errors }}
-                        </div>
+                {% for campo in form %}
+                    {% if campo.name != "observaciones" %}
+                    <div class="campo {% if campo.errors %}campo-error{% endif %}">
+                        {{ campo.label_tag }}
+                        {{ campo }}
+                        {% if campo.help_text %}<small>{{ campo.help_text }}</small>{% endif %}
+                        {% if campo.errors %}<div class="error">{{ campo.errors }}</div>{% endif %}
+                    </div>
                     {% endif %}
-                </div>
-
-                <div class="campo {% if form.tipo_operacion.errors %}campo-error{% endif %}">
-                    {{ form.tipo_operacion.label_tag }}
-                    {{ form.tipo_operacion }}
-
-                    {% if form.tipo_operacion.errors %}
-                        <div class="error">
-                            {{ form.tipo_operacion.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="campo {% if form.numero_cuenta_contrato.errors %}campo-error{% endif %}">
-                    {{ form.numero_cuenta_contrato.label_tag }}
-                    {{ form.numero_cuenta_contrato }}
-
-                    {% if form.numero_cuenta_contrato.errors %}
-                        <div class="error">
-                            {{ form.numero_cuenta_contrato.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="campo {% if form.numero_orden.errors %}campo-error{% endif %}">
-                    {{ form.numero_orden.label_tag }}
-                    {{ form.numero_orden }}
-
-                    {% if form.numero_orden.errors %}
-                        <div class="error">
-                            {{ form.numero_orden.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="campo {% if form.ubicacion.errors %}campo-error{% endif %}">
-                    {{ form.ubicacion.label_tag }}
-                    {{ form.ubicacion }}
-
-                    {% if form.ubicacion.errors %}
-                        <div class="error">
-                            {{ form.ubicacion.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
+                {% endfor %}
             </div>
 
-            <div class="campo" style="margin-bottom: 0;">
-                {{ form.observaciones.label_tag }}
+            <div class="campo {% if form.observaciones.errors %}campo-error{% endif %}" style="margin-bottom: 0;">
+                <label for="{{ form.observaciones.id_for_label }}">Observaciones *</label>
                 {{ form.observaciones }}
-
                 {% if form.observaciones.errors %}
-                    <div class="error">
-                        {{ form.observaciones.errors }}
-                    </div>
+                    <div class="error">{{ form.observaciones.errors }}</div>
                 {% endif %}
             </div>
 
         </div>
     </section>
 
-    <section class="tarjeta">
-
+    <section class="tarjeta" id="bloque-materiales">
         <div class="tarjeta-cab">
             <h2>Material en poder del técnico</h2>
-
-            <button
-                type="button"
-                class="btn btn-secundario btn-chico"
-                id="llenar-todo"
-            >
+            {% if pendientes %}
+            <button type="button" class="btn btn-secundario btn-chico" id="llenar-todo">
                 Marcar todo como instalado
             </button>
+            {% endif %}
         </div>
 
+        {% if pendientes %}
         <div class="tabla-instalar">
             <table>
                 <thead>
@@ -138,134 +128,124 @@
                         <th class="num">Pendiente</th>
                         <th class="num">Instalar</th>
                         {% if puede_ver_almacen %}
-                        <th>
-                            <span class="sr-only">Devolver</span>
-                        </th>
-                        {%endif%}
+                        <th><span class="sr-only">Devolver</span></th>
+                        {% endif %}
                     </tr>
                 </thead>
-
                 <tbody>
                     {% for a in pendientes %}
                     <tr>
                         <td>
                             <strong>{{ a.producto.nombre_completo }}</strong>
-
                             {% if a.unidad_serializada %}
-                                <div class="codigo">
-                                    {{ a.unidad_serializada.codigo }}
-                                </div>
+                                <div class="codigo">{{ a.unidad_serializada.codigo }}</div>
                             {% endif %}
                         </td>
-
-                        <td>
-                            {{ a.fecha_asignacion|date:"d/m/Y" }}
-                        </td>
-
-                        <td class="num">
-                            {{ a.cantidad_pendiente }}
-                        </td>
-
+                        <td>{{ a.fecha_asignacion|date:"d/m/Y" }}</td>
+                        <td class="num">{{ a.cantidad_pendiente }}</td>
                         <td class="num">
                             {% if a.unidad_serializada_id %}
-
                                 <label class="marca-inst">
-                                    <input
-                                        class="check"
-                                        type="checkbox"
-                                        name="inst_{{ a.pk }}"
-                                        {% if a.marcado %}checked{% endif %}
-                                    >
+                                    <input class="check" type="checkbox"
+                                           name="inst_{{ a.pk }}"
+                                           {% if a.marcado %}checked{% endif %}>
                                     Instalada
                                 </label>
-
                             {% else %}
-
-                                <input
-                                    class="input input-cant"
-                                    type="number"
-                                    name="cant_{{ a.pk }}"
-                                    min="0"
-                                    max="{{ a.cantidad_pendiente }}"
-                                    data-max="{{ a.cantidad_pendiente }}"
-                                    value="{{ a.valor }}"
-                                    placeholder="0"
-                                >
-
+                                <input class="input input-cant" type="number"
+                                       name="cant_{{ a.pk }}" min="0"
+                                       max="{{ a.cantidad_pendiente }}"
+                                       data-max="{{ a.cantidad_pendiente }}"
+                                       value="{{ a.valor }}" placeholder="0">
                             {% endif %}
                         </td>
-
-                        
-                            <td class="col-acciones">
-                                {% if puede_ver_almacen %}
-                                    <button
-                                        type="submit"
-                                        form="devolver-{{ a.pk }}"
-                                        class="btn btn-secundario btn-chico"
-                                        onclick="return confirm('¿Devolver {{ a.producto.nombre_completo|escapejs }} al almacén?')"
-                                    >
-                                        Devolver
-                                    </button>
-                                {% endif %}
+                        {% if puede_ver_almacen %}
+                        <td class="col-acciones">
+                            <button type="submit" form="devolver-{{ a.pk }}"
+                                    class="btn btn-secundario btn-chico"
+                                    onclick="return confirm('¿Devolver {{ a.producto.nombre_completo|escapejs }} al almacén?')">
+                                Devolver
+                            </button>
                         </td>
-
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-
-        <div class="form-acciones tarjeta-pie">
-            <a
-                class="btn btn-secundario"
-                href="{% url 'almacen:asignaciones' %}"
-            >
-                Cancelar
-            </a>
-
-            <button type="submit" class="btn btn-primario">
-                Registrar operación
-            </button>
+        {% else %}
+        <div class="vacio">
+            <strong>Este técnico no tiene material pendiente</strong>
+            Solo podrá registrar órdenes que no instalan material
+            (no ejecutada, cancelada, anulada…).
         </div>
-
+        {% endif %}
     </section>
+
+    <div class="form-acciones">
+        <a class="btn btn-secundario" href="{% url 'almacen:asignaciones' %}">Cancelar</a>
+        <button type="submit" class="btn btn-primario">Registrar operación</button>
+    </div>
 </form>
 
 {% for a in pendientes %}
-<form
-    id="devolver-{{ a.pk }}"
-    method="post"
-    action="{% url 'almacen:asignacion_devolver' a.pk %}"
->
+<form id="devolver-{{ a.pk }}" method="post"
+      action="{% url 'almacen:asignacion_devolver' a.pk %}">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ request.path }}">
 </form>
 {% endfor %}
 
-{% else %}
-
-<div class="tarjeta">
-    <div class="vacio">
-        <strong>Este técnico no tiene material pendiente</strong>
-        Todo lo asignado ya fue instalado o devuelto.
-    </div>
-</div>
-
-{% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
-document.getElementById('llenar-todo')?.addEventListener('click', function () {
-    document.querySelectorAll('input[data-max]').forEach(function (input) {
-        input.value = input.dataset.max;
-    });
+(function () {
+    const selAnomalia = document.getElementById('id_anomalia');
 
-    document.querySelectorAll('input[type="checkbox"][name^="inst_"]').forEach(function (checkbox) {
-        checkbox.checked = true;
+    if (selAnomalia && window.TomSelect) {
+        new TomSelect(selAnomalia, {
+            maxOptions: 300,
+            create: false,
+            allowEmptyOption: true,
+            placeholder: 'Buscar o seleccionar una anomalía...',
+            searchField: ['text'],
+            closeAfterSelect: true,
+            render: {
+                no_results: function () {
+                    return '<div class="no-results">No se encontraron anomalías</div>';
+                }
+            }
+        });
+    }
+
+    const estado = document.getElementById('id_estado');
+    const bloque = document.getElementById('bloque-materiales');
+    const datosInstalan = document.getElementById('estados-instalan');
+
+    if (!estado || !bloque || !datosInstalan) return;
+
+    const instalan = JSON.parse(datosInstalan.textContent);
+
+    function actualizar() {
+        const instala = instalan.includes(estado.value);
+        bloque.style.display = instala ? '' : 'none';
+
+        if (!instala) {
+            bloque.querySelectorAll('input[data-max]').forEach(i => i.value = '');
+            bloque.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+        }
+    }
+
+    estado.addEventListener('change', actualizar);
+    actualizar();
+
+    document.getElementById('llenar-todo')?.addEventListener('click', function () {
+        document.querySelectorAll('input[data-max]').forEach(i => i.value = i.dataset.max);
+        document.querySelectorAll('input[type="checkbox"][name^="inst_"]').forEach(c => c.checked = true);
     });
-});
+})();
 </script>
 {% endblock %}
 

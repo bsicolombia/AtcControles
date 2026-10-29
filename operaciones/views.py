@@ -21,6 +21,12 @@ from operaciones.models import Operacion, RegistroSAP, CargaSAP
 from . import services_sap
 from usuarios.roles import ROLES_ALMACEN, DIGITADOR, COORDINADOR,ROLES_DIGITADOR
 # + sus imports de RolRequeridoMixin y FormPageMixin
+import os
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404
+from django.views import View
+from operaciones.models import Anomalia, Operacion, RegistroSAP, CargaSAP
+
 
 E = RegistroSAP.Estado
 
@@ -403,8 +409,18 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
 
         registros = list(
             RegistroSAP.objects
-            .filter(Q(numero_orden=operacion.numero_orden) | Q(operacion=operacion))
-            .select_related("carga", "producto", "operacion", "tecnico", "unidad_serializada")
+            .filter(
+                Q(numero_orden=operacion.numero_orden)
+                | Q(operacion=operacion)
+            )
+            .exclude(estado=RegistroSAP.Estado.IGNORADO)
+            .select_related(
+                "carga",
+                "producto",
+                "operacion",
+                "tecnico",
+                "unidad_serializada",
+            )
             .order_by("-carga__fecha", "-fila", "-pk")
             .distinct()
         )
@@ -481,6 +497,22 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
         tipo = g.get("tipo", "").strip()
         tecnico = g.get("tecnico", "").strip()
         detalle = g.get("detalle", "").strip()
+        
+        anomalia = g.get("anomalia", "").strip()
+
+        ctx.update(
+            anomalia_sel=anomalia,
+            anomalias=Anomalia.objects.filter(activa=True),
+        )
+        
+        op = Operacion.objects.select_related("tecnico", "anomalia").filter(
+            numero_orden=detalle).first()
+        
+        qs = Operacion.objects.select_related("tecnico", "anomalia").order_by(
+            "-fecha_operacion", "-pk")
+        
+        if anomalia.isdigit():
+            qs = qs.filter(anomalia_id=int(anomalia))
 
         ctx.update(
             q=q, estado_sel=estado, tipo_sel=tipo, tecnico_sel=tecnico,
@@ -528,6 +560,18 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
                    total_ordenes=paginator.count)
         return ctx
     
+class SoporteOperacionView(RolRequeridoMixin, View):
+    roles_permitidos = ROLES_ALMACEN   # agregue ROLES_DIGITADOR si ellos también deben verlo
+
+    def get(self, request, pk):
+        op = get_object_or_404(Operacion, pk=pk)
+        if not op.archivo_soporte:
+            raise Http404("Esta operación no tiene soporte.")
+        return FileResponse(
+            op.archivo_soporte.open("rb"),
+            filename=os.path.basename(op.archivo_soporte.name),
+        )
+        
 class ErroresActualesView(QuerystringMixin, RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_ALMACEN
     template_name = "operaciones/errores_actuales.html"

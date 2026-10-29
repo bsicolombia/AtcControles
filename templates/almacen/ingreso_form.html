@@ -238,24 +238,73 @@
             </div>
 
 
-            <!-- ==========================================
-                  FOTO / COMPROBANTE DE REMISIÓN
+                        <!-- ==========================================
+                  DATOS DE RECEPCIÓN DE LA REMISIÓN
                  ========================================== -->
 
-            <div class="campo ingreso-campo">
-                <label for="{{ form.comprobante_imagen.id_for_label }}">
-                    {{ form.comprobante_imagen.label }}
-                </label>
+            <div id="aviso-remision-existe" class="aviso-codigo">
+                <strong>Remisión ya registrada.</strong>
+                <span id="resumen-remision"></span>
+                Solo seleccione el producto que ingresa.
+            </div>
 
-                {{ form.comprobante_imagen }}
+            <div id="datos-remision-nueva">
 
-                {% if form.comprobante_imagen.help_text %}
-                    <span class="ayuda">{{ form.comprobante_imagen.help_text }}</span>
-                {% endif %}
+                <div class="campo ingreso-campo">
+                    <label for="{{ form.comprobante_imagen.id_for_label }}">
+                        {{ form.comprobante_imagen.label }}
+                    </label>
 
-                {% for error in form.comprobante_imagen.errors %}
-                    <span class="error-campo">{{ error }}</span>
-                {% endfor %}
+                    {{ form.comprobante_imagen }}
+
+                    {% if form.comprobante_imagen.help_text %}
+                        <span class="ayuda">{{ form.comprobante_imagen.help_text }}</span>
+                    {% endif %}
+
+                    {% for error in form.comprobante_imagen.errors %}
+                        <span class="error-campo">{{ error }}</span>
+                    {% endfor %}
+                </div>
+
+                <div class="remision-grid">
+
+                    <div class="campo ingreso-campo">
+                        <label for="{{ form.fecha_recibo_bsi.id_for_label }}">
+                            {{ form.fecha_recibo_bsi.label }}
+                        </label>
+
+                        {{ form.fecha_recibo_bsi }}
+
+                        {% for error in form.fecha_recibo_bsi.errors %}
+                            <span class="error-campo">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <div class="campo ingreso-campo">
+                        <label for="{{ form.recogido_por.id_for_label }}">
+                            {{ form.recogido_por.label }}
+                        </label>
+
+                        {{ form.recogido_por }}
+
+                        {% for error in form.recogido_por.errors %}
+                            <span class="error-campo">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <div class="campo ingreso-campo">
+                        <label for="{{ form.recibido_almacen_por.id_for_label }}">
+                            {{ form.recibido_almacen_por.label }}
+                        </label>
+
+                        {{ form.recibido_almacen_por }}
+
+                        {% for error in form.recibido_almacen_por.errors %}
+                            <span class="error-campo">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+
+                </div>
             </div>
 
 

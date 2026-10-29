@@ -26,6 +26,18 @@ class RemisionIngreso(models.Model):
         null=True
     )
     
+    fecha_recibo_bsi = models.DateField(
+        "Fecha en que recibió BSI", null=True, blank=True
+    )
+    
+    recogido_por = models.CharField(
+        "Recogido en VANTI por", max_length=100, blank=True
+    )
+    
+    recibido_almacen_por = models.CharField(
+        "Recibido en almacén por", max_length=100, blank=True
+    )
+    
     fecha_registro = models.DateTimeField(auto_now_add=True)
     
     usuario = models.ForeignKey(
@@ -175,9 +187,11 @@ class Producto(models.Model):
         return self.tipo_inventario == self.TipoInventario.SERIALIZADO
 
     @property
+
     def nombre_completo(self):
         extra = " ".join(
             x for x in (
+                self.marca,
                 self.medida,
                 self.color,
                 self.presentacion

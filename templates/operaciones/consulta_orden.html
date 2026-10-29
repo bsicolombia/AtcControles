@@ -108,6 +108,7 @@
                     <th>Estado</th>
                     <th>Técnico</th>
                     <th>Fecha</th>
+                    <th>Soporte</th>
                 </tr>
             </thead>
 
@@ -142,6 +143,20 @@
                         <td>
                             {{ o.fecha_operacion|date:"d/m/Y"|default:"—" }}
                         </td>
+                        <td>
+                            {% if o.archivo_soporte %}
+                                <a href="{% url 'operaciones:soporte' o.pk %}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-file-earmark-text"></i>
+                                    Ver soporte
+                                </a>
+                            {% else %}
+                                <span class="text-muted">Sin soporte</span>
+                            {% endif %}
+                        </td>
+                        
                     </tr>
                 {% empty %}
                     <tr>
@@ -196,6 +211,21 @@
             <div class="col-md-2"><div class="small text-muted">Estado</div><div><span class="badge bg-info text-dark">{{ operacion.get_estado_display }}</span></div></div>
             <div class="col-md-2"><div class="small text-muted">Técnico</div><div>{{ operacion.tecnico.get_full_name|default:operacion.tecnico.username }}</div></div>
             <div class="col-md-2"><div class="small text-muted">Fecha</div><div>{{ operacion.fecha_operacion|date:"d/m/Y" }}</div></div>
+            <div class="col-md-2">
+    <div class="small text-muted">Soporte</div>
+    <div>
+        {% if operacion.archivo_soporte %}
+            <a href="{% url 'operaciones:soporte' operacion.pk %}"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="btn btn-sm btn-outline-primary">
+                Ver soporte
+            </a>
+        {% else %}
+            <span class="text-muted">Sin soporte</span>
+        {% endif %}
+    </div>
+</div>
         </div>
     </div>
 
@@ -226,13 +256,19 @@
                     {% if m.sap %}
                         {% if m.sap.estado == "OK" %}
                             <span class="badge bg-success">Coincide</span>
+                        {% elif m.sap.estado == "IGNORADO" %}
+                            {# No mostrar nada cuando SAP lo ha ignorado #}
                         {% else %}
-                            <span class="badge bg-danger">{{ m.sap.tipo_error|sap_meta:"etiqueta" }}</span>
+                            <span class="badge bg-danger">
+                                {{ m.sap.tipo_error|sap_meta:"etiqueta" }}
+                            </span>
                         {% endif %}
                     {% elif m.unidad_serializada_id %}
                         <span class="badge bg-warning text-dark">No reportado en SAP</span>
                     {% else %}
-                        <span class="badge bg-light text-muted border">Opcional · no reportado</span>
+                        <span class="badge bg-light text-muted border">
+                            Opcional · no reportado
+                        </span>
                     {% endif %}
                 </td>
             </tr>

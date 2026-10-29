@@ -8,6 +8,7 @@ from .models import (
     Producto,
     UnidadSerializada,
 )
+from .models import RemisionIngreso
 Mov = MovimientoInventario.TipoMovimiento
 EstadoU = UnidadSerializada.Estado
 EstadoA = Asignacion.Estado
@@ -133,6 +134,51 @@ def generar_codigo_producto(categoria):
 
     return f"{base}-{numero:03d}"
 
+@transaction.atomic
+def obtener_o_crear_remision(
+    *,
+    numero,
+    usuario,
+    imagen=None,
+    fecha_recibo_bsi=None,
+    recogido_por="",
+    recibido_almacen_por="",
+):
+    """
+    Busca la remisión por número o la crea con sus datos de recepción.
+    Si ya existía, solo completa lo que esté vacío; nunca pisa lo guardado.
+    """
+    remision, creada = RemisionIngreso.objects.get_or_create(
+        numero_remision=numero,
+        defaults={
+            "comprobante_imagen": imagen,
+            "fecha_recibo_bsi": fecha_recibo_bsi,
+            "recogido_por": recogido_por or "",
+            "recibido_almacen_por": recibido_almacen_por or "",
+            "usuario": usuario,
+        },
+    )
+
+    if not creada:
+        cambios = []
+
+        if imagen and not remision.comprobante_imagen:
+            remision.comprobante_imagen = imagen
+            cambios.append("comprobante_imagen")
+        if fecha_recibo_bsi and not remision.fecha_recibo_bsi:
+            remision.fecha_recibo_bsi = fecha_recibo_bsi
+            cambios.append("fecha_recibo_bsi")
+        if recogido_por and not remision.recogido_por:
+            remision.recogido_por = recogido_por
+            cambios.append("recogido_por")
+        if recibido_almacen_por and not remision.recibido_almacen_por:
+            remision.recibido_almacen_por = recibido_almacen_por
+            cambios.append("recibido_almacen_por")
+
+        if cambios:
+            remision.save(update_fields=cambios)
+
+    return remision
 
 # ============================================================
 # REGISTRAR INGRESO
@@ -145,12 +191,12 @@ def registrar_ingreso(
     cantidad,
     usuario,
     fecha_ingreso,
+    remision=None,
     seriales=None,
     observacion="",
-    remision=None,  # <-- 1. Añadimos el parámetro remision aquí
 ):
     """
-    Registra el ingreso de material al almacén.
+    Registra el ingreso de material al almacén, asociado a una remisión.
 
     Productos serializados:
         - Si requieren número de serie físico:
@@ -163,9 +209,7 @@ def registrar_ingreso(
     """
 
     if cantidad < 1:
-        raise ErrorInventario(
-            "La cantidad debe ser mayor que cero."
-        )
+        raise ErrorInventario("La cantidad debe ser mayor que cero.")
 
     seriales = seriales or []
 
@@ -179,9 +223,7 @@ def registrar_ingreso(
 
     if producto.es_serializado:
 
-        prefijo = (
-            producto.categoria.prefijo or ""
-        ).strip().upper()
+        prefijo = (producto.categoria.prefijo or "").strip().upper()
 
         if not prefijo:
             raise ErrorInventario(
@@ -189,10 +231,7 @@ def registrar_ingreso(
                 "no tiene prefijo. Edítela antes de registrar unidades."
             )
 
-        # ====================================================
-        # PRODUCTO QUE REQUIERE SERIAL FÍSICO
-        # EJEMPLO: MEDIDOR
-        # ====================================================
+        # ----- Producto que requiere serial físico (ej. medidor) -----
 
         if producto.requiere_numero_serie:
 
@@ -202,43 +241,24 @@ def registrar_ingreso(
                     f"y se recibieron {len(seriales)}."
                 )
 
-            seriales_normalizados = [
-                serie.strip().upper()
-                for serie in seriales
-            ]
+            seriales_normalizados = [s.strip().upper() for s in seriales]
 
             # No permitir duplicados dentro del mismo ingreso.
-            if (
-                len(seriales_normalizados)
-                != len(set(seriales_normalizados))
-            ):
-                raise ErrorInventario(
-                    "No puede repetir números de serie."
-                )
+            if len(seriales_normalizados) != len(set(seriales_normalizados)):
+                raise ErrorInventario("No puede repetir números de serie.")
 
             # Buscar seriales que ya existan.
-            existentes = (
-                UnidadSerializada.objects
-                .filter(
-                    numero_serie__in=seriales_normalizados
-                )
-                .values_list(
-                    "numero_serie",
-                    flat=True,
-                )
-            )
-
             existentes = {
                 serie.upper()
-                for serie in existentes
+                for serie in (
+                    UnidadSerializada.objects
+                    .filter(numero_serie__in=seriales_normalizados)
+                    .values_list("numero_serie", flat=True)
+                )
                 if serie
             }
 
-            repetidos = [
-                serie
-                for serie in seriales
-                if serie.strip().upper() in existentes
-            ]
+            repetidos = [s for s in seriales_normalizados if s in existentes]
 
             if repetidos:
                 raise ErrorInventario(
@@ -246,39 +266,31 @@ def registrar_ingreso(
                     + ", ".join(repetidos)
                 )
 
-        # ====================================================
-        # SERIALIZADO SIN SERIAL FÍSICO
-        # EJEMPLO: REGULADOR / VALVULA
-        # ====================================================
+        # ----- Serializado sin serial físico (ej. regulador, válvula) -----
 
         else:
+            seriales_normalizados = []
 
             if seriales:
                 raise ErrorInventario(
                     "Este producto no requiere número de serie físico."
                 )
 
-        # ====================================================
-        # GENERAR CÓDIGOS INTERNOS
-        # ====================================================
+        # ----- Generar códigos internos -----
 
         numero = _siguiente_numero(prefijo)
 
         for i in range(cantidad):
 
-            numero_serie = None
-
-            # Solo productos configurados con serial físico
-            # reciben numero_serie.
-            if producto.requiere_numero_serie:
-                numero_serie = (
-                    seriales[i]
-                    .strip()
-                    .upper()
-                )
+            numero_serie = (
+                seriales_normalizados[i]
+                if producto.requiere_numero_serie
+                else None
+            )
 
             unidad = UnidadSerializada.objects.create(
                 producto=producto,
+                remision=remision,
                 codigo=f"{prefijo}-{numero + i:03d}",
                 numero_serie=numero_serie,
                 marca=producto.marca,
@@ -288,17 +300,16 @@ def registrar_ingreso(
                 estado=UnidadSerializada.Estado.DISPONIBLE,
                 fecha_cambio_estado=timezone.now(),
                 observaciones=observacion,
-                remision=remision,
             )
 
             MovimientoInventario.objects.create(
                 producto=producto,
                 unidad_serializada=unidad,
+                remision=remision,
                 tipo_movimiento=Mov.ENTRADA,
                 cantidad=1,
                 usuario=usuario,
                 observacion=observacion,
-                remision=remision,  # <-- 3. Asociamos la remisión al movimiento de la unidad
             )
 
             creadas.append(unidad)
@@ -312,16 +323,16 @@ def registrar_ingreso(
         if seriales:
             raise ErrorInventario(
                 "Este producto se maneja por cantidad "
-                "y não utiliza números de serie."
+                "y no utiliza números de serie."
             )
 
         MovimientoInventario.objects.create(
             producto=producto,
+            remision=remision,
             tipo_movimiento=Mov.ENTRADA,
             cantidad=cantidad,
             usuario=usuario,
             observacion=observacion,
-            remision=remision,      # <-- 4. Asociamos la remisión al movimiento de inventario general
         )
 
     # ========================================================
@@ -567,10 +578,22 @@ def instalar(
 
 
 @transaction.atomic
+def _sumar_observacion(actual, nueva):
+    nueva = (nueva or "").strip()
+    if not actual:
+        return nueva
+    if nueva in actual:
+        return actual
+    return f"{actual}\n[{timezone.localdate():%d/%m/%Y}] {nueva}"
+
+
+@transaction.atomic
 def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
-                              tecnico, usuario, fecha):
+                              tecnico, usuario, fecha, estado, anomalia,
+                              observaciones, archivo=None):
     numero_orden = numero_orden.strip().upper()
     cuenta = cuenta_contrato.strip()
+    ejecutada = estado in Operacion.ESTADOS_QUE_INSTALAN
 
     op, creada = (
         Operacion.objects.select_for_update()
@@ -580,10 +603,13 @@ def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
                 numero_cuenta_contrato=cuenta,
                 tipo_operacion=tipo,
                 tecnico=tecnico,
-                estado=Operacion.Estado.EJECUTADA,
+                estado=estado,
+                anomalia=anomalia,
+                observaciones=(observaciones or "").strip(),
+                archivo_soporte=archivo,
                 origen=Operacion.Origen.MANUAL,
                 fecha_operacion=fecha,
-                fecha_ejecucion=fecha,
+                fecha_ejecucion=fecha if ejecutada else None,
                 usuario=usuario,
             ),
         )
@@ -592,9 +618,11 @@ def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
     if creada:
         return op
 
-    # La orden ya existe (manual previa o, en etapa 2, cargada del Excel)
+    # La orden ya existía (manual previa o cargada del Excel)
     if op.estado in (Operacion.Estado.CANCELADA, Operacion.Estado.ANULADA):
-        raise ErrorInventario(f"La orden {numero_orden} está {op.get_estado_display().lower()}.")
+        raise ErrorInventario(
+            f"La orden {numero_orden} está {op.get_estado_display().lower()}."
+        )
     if op.numero_cuenta_contrato != cuenta:
         raise ErrorInventario(
             f"La orden {numero_orden} pertenece a la cuenta contrato "
@@ -607,16 +635,21 @@ def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
     if op.tecnico_id and op.tecnico_id != tecnico.id:
         raise ErrorInventario(f"La orden {numero_orden} está asignada a {op.tecnico}.")
 
-    op.tecnico = op.tecnico or tecnico   # <-- fuera del if
+    op.tecnico = op.tecnico or tecnico
 
-    # Solo avanza estados "previos"; no pisa EFECTIVA / NO_EJECUTADA.
+    # Solo avanza desde estados "previos"; no pisa EFECTIVA / NO_EJECUTADA.
     if op.estado in (
         Operacion.Estado.CREADA,
         Operacion.Estado.PENDIENTE,
         Operacion.Estado.ASIGNADA,
     ):
-        op.estado = Operacion.Estado.EJECUTADA
-        op.fecha_ejecucion = fecha
+        op.estado = estado
+        op.fecha_ejecucion = fecha if ejecutada else None
+
+    op.anomalia = anomalia
+    op.observaciones = _sumar_observacion(op.observaciones, observaciones)
+    if archivo:
+        op.archivo_soporte = archivo   # el save() del model borra el anterior
 
     op.save()
     return op

@@ -92,6 +92,10 @@ def _actualizar_vigencia(carga, registros):
     )
 CATALOGO = {
     
+    "ORDEN_NO_EJECUTADA": ("Orden no ejecutada en Five", "ALTA",
+        "SAP reporta trabajo en una orden que Five tiene como no ejecutada, cancelada o anulada. "
+        "Revisar la anomalía registrada y corregir donde esté mal."),
+    
     "UNIDAD_NO_EXISTE": ("Unidad no existe en Five","ALTA",
         "Verificar el código de unidad o registrar su ingreso en Five.",),
     "TIPO_DIFIERE": ("Tipo de operación distinto", "BAJA",
@@ -260,6 +264,10 @@ class _Contexto:
         }
         self.ops = {o.numero_orden: o
                     for o in Operacion.objects.filter(numero_orden__in=ordenes)}
+        
+        self.ops = {o.numero_orden: o
+                    for o in Operacion.objects.select_related("anomalia")
+                    .filter(numero_orden__in=ordenes)}
 
         # Se busca cada identificador por serie Y por código, para detectar
         # cuando SAP mandó un identificador en la columna equivocada.
@@ -516,7 +524,16 @@ def conciliar(f, ctx):
     if f["serie"] and f["codigo_unidad"]:
         return _res(ERR, "FALTA_DATO",
                     "Indique número de serie o código de unidad, no ambos.", {}, op)
-
+        
+    if op and op.estado in Operacion.ESTADOS_NEGATIVOS:
+        anom = f" Anomalía: {op.anomalia}." if op.anomalia_id else ""
+        return _res(
+            ERR, "ORDEN_NO_EJECUTADA",
+            f"SAP reporta la orden {f['orden']}, pero en Five está "
+            f"{op.get_estado_display().lower()}.{anom}",
+            {}, op,
+        )
+        
     if f["serie"] or f["codigo_unidad"]:
         return _conciliar_unidad(f, ctx, tipo)
 

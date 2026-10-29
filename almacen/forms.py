@@ -5,7 +5,11 @@ User = get_user_model()
 from operaciones.models import Operacion
 from . import services
 from .models import Categoria, Inventario, Producto, UnidadSerializada
-
+from django.core.validators import FileExtensionValidator
+from operaciones.models import (
+    Anomalia, Operacion, SIN_ANOMALIA,
+    EXTENSIONES_SOPORTE, validar_tamano_archivo,
+)
 
 class EstiloMixin:
     """Aplica las clases CSS del diseño a todos los campos."""
@@ -226,6 +230,25 @@ class IngresoForm(EstiloMixin, forms.Form):
         required=False,
         help_text="Obligatorio solo si el número de remisión es nuevo."
     )
+    
+    fecha_recibo_bsi = forms.DateField(
+        label="Fecha en que recibió BSI",
+        required=False,
+        widget=DateInput(),
+        initial=timezone.localdate,
+    )
+
+    recogido_por = forms.CharField(
+        label="Recogido en VANI por",
+        max_length=100,
+        required=False,
+    )
+
+    recibido_almacen_por = forms.CharField(
+        label="Recibido en almacén por",
+        max_length=100,
+        required=False,
+    )
 
     producto = forms.ModelChoiceField(
         queryset=Producto.objects.none(),
@@ -315,16 +338,32 @@ class IngresoForm(EstiloMixin, forms.Form):
         if num_orden:
             num_orden = num_orden.strip().upper()
             cleaned_data["numero_orden"] = num_orden
-            
-            # Verificamos si la remisión ya existe en la BD
-            existe = RemisionIngreso.objects.filter(numero_remision=num_orden).exists()
-            
-            # Si NO existe y tampoco subió imagen, lanzamos error
-            if not existe and not imagen:
-                self.add_error(
-                    "comprobante_imagen", 
-                    "Este número de remisión es nuevo. Debe adjuntar la foto del comprobante."
-                )
+
+            existe = RemisionIngreso.objects.filter(
+                numero_remision=num_orden
+            ).exists()
+
+            # Remisión nueva: se exigen la foto y los datos de recepción.
+            if not existe:
+                if not imagen:
+                    self.add_error(
+                        "comprobante_imagen",
+                        "Este número de remisión es nuevo. "
+                        "Debe adjuntar la foto del comprobante.",
+                    )
+
+                obligatorios = {
+                    "fecha_recibo_bsi": "Indique la fecha en que recibió BSI.",
+                    "recogido_por": "Indique quién recogió el material en VANI.",
+                    "recibido_almacen_por": "Indique quién lo recibió en almacén.",
+                }
+                for campo, mensaje in obligatorios.items():
+                    if not cleaned_data.get(campo):
+                        self.add_error(campo, mensaje)
+
+            for campo in ("recogido_por", "recibido_almacen_por"):
+                if cleaned_data.get(campo):
+                    cleaned_data[campo] = cleaned_data[campo].strip().upper()
 
         if not producto or not cantidad:
             return cleaned_data
@@ -489,9 +528,16 @@ class AsignacionForm(EstiloMixin, forms.Form):
             estado=True
         ).select_related("categoria")
 
-        self.fields["producto"].label_from_instance = (
-            lambda p: f"{p.nombre_completo} · {p.codigo_producto}"
-        )
+        def etiqueta_producto(producto):
+            partes = [
+                producto.nombre,          # ej: Medidor
+                producto.marca,           # ej: Elster
+                producto.medida,          # ej: 1/2"
+            ]
+            texto = " ".join(str(p) for p in partes if p)
+            return f"{texto} · {producto.codigo_producto}"
+
+        self.fields["producto"].label_from_instance = etiqueta_producto
 
         self.fields["unidad"].queryset = (
             UnidadSerializada.objects
@@ -541,46 +587,81 @@ class AsignacionForm(EstiloMixin, forms.Form):
 
 
 
-# ---------------------------------------------------------
-# INSTALACIÓN
-# ---------------------------------------------------------
 class DatosOperacionForm(EstiloMixin, forms.Form):
-    """Datos de la orden. Comunes a toda instalación."""
+    """Datos de la orden. Comunes a toda operación."""
 
     tipo_operacion = forms.ChoiceField(
         label="Tipo de operación",
         choices=Operacion.TipoOperacion.choices,
     )
 
-    numero_orden = forms.CharField(
-        label="Número de orden",
-        max_length=10,
+    estado = forms.ChoiceField(
+        label="Estado de la operación",
+        choices=Operacion.Estado.choices,
+        initial=Operacion.Estado.EJECUTADA,
     )
 
+    numero_orden = forms.CharField(label="Número de orden", max_length=10)
+
     numero_cuenta_contrato = forms.CharField(
-        label="Número de cuenta contrato",
-        max_length=10,
+        label="Número de cuenta contrato", max_length=10
     )
 
     fecha_instalacion = forms.DateField(
         widget=DateInput(),
         initial=timezone.localdate,
-        label="Fecha de instalación",
+        label="Fecha de la operación",
+    )
+
+    anomalia = forms.ModelChoiceField(
+        queryset=Anomalia.objects.none(),
+        label="Anomalía",
+        empty_label="Seleccione una anomalía",
+        required=True,
+    )
+
+    archivo_soporte = forms.FileField(
+        label="Soporte (PDF o imagen)",
+        required=False,   # se exige en clean() solo si la orden aún no tiene archivo
+        validators=[
+            FileExtensionValidator(EXTENSIONES_SOPORTE),
+            validar_tamano_archivo,
+        ],
+        widget=forms.FileInput(attrs={"accept": ".pdf,.jpg,.jpeg,.png"}),
+        help_text="PDF, JPG o PNG. Máximo 5 MB.",
     )
 
     observaciones = forms.CharField(
         label="Observaciones",
         widget=forms.Textarea(attrs={"rows": 3}),
-        required=False,
+        required=True,
+        error_messages={"required": "La observación es obligatoria."},
     )
 
     field_order = [
         "tipo_operacion",
+        "estado",
         "numero_orden",
         "numero_cuenta_contrato",
         "fecha_instalacion",
+        "anomalia",
+        "archivo_soporte",
         "observaciones",
     ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["anomalia"].queryset = Anomalia.objects.filter(
+            activa=True
+        ).order_by("codigo")
+
+        sin = self.fields["anomalia"].queryset.filter(
+            codigo=SIN_ANOMALIA
+        ).first()
+
+        if sin:
+            self.fields["anomalia"].initial = sin.pk
 
     def clean_numero_orden(self):
         return self.cleaned_data["numero_orden"].strip().upper()
@@ -588,26 +669,53 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
     def clean_numero_cuenta_contrato(self):
         return self.cleaned_data["numero_cuenta_contrato"].strip()
 
+    def clean(self):
+        data = super().clean()
+        estado = data.get("estado")
+        anomalia = data.get("anomalia")
+
+        if (
+            estado in Operacion.ESTADOS_NEGATIVOS
+            and anomalia
+            and anomalia.es_sin_anomalia
+        ):
+            self.add_error(
+                "anomalia",
+                "Si la orden no se ejecutó, fue cancelada o anulada, "
+                "indique la anomalía que lo causó.",
+            )
+
+        orden = data.get("numero_orden")
+        if orden and not data.get("archivo_soporte"):
+            op = Operacion.objects.filter(numero_orden=orden).first()
+            if not (op and op.archivo_soporte):
+                self.add_error(
+                    "archivo_soporte",
+                    "Adjunte el soporte (PDF o imagen) de la orden.",
+                )
+        return data
+
 
 class InstalacionForm(DatosOperacionForm):
     """Instalación de UNA asignación (con su cantidad)."""
 
-    cantidad = forms.IntegerField(
-        label="Cantidad instalada",
-        min_value=1,
-    )
+    cantidad = forms.IntegerField(label="Cantidad instalada", min_value=1)
 
     def __init__(self, *args, asignacion=None, **kwargs):
-        # Se guarda ANTES de super() para que EstiloMixin no lo reciba
         self.asignacion = asignacion
-
         super().__init__(*args, **kwargs)
+
+        # Aquí siempre se instala: solo estados que instalan
+        self.fields["estado"].choices = [
+            (e.value, e.label)
+            for e in Operacion.Estado
+            if e in Operacion.ESTADOS_QUE_INSTALAN
+        ]
 
         if asignacion is None:
             return
 
         if asignacion.unidad_serializada_id:
-            # Una unidad con código siempre es exactamente 1
             del self.fields["cantidad"]
         else:
             pendiente = asignacion.cantidad_pendiente
@@ -621,15 +729,12 @@ class InstalacionForm(DatosOperacionForm):
 
     def clean_cantidad(self):
         cantidad = self.cleaned_data["cantidad"]
-
         if self.asignacion and cantidad > self.asignacion.cantidad_pendiente:
             raise forms.ValidationError(
                 f"Solo tiene {self.asignacion.cantidad_pendiente} "
                 "pendiente(s) por instalar."
             )
-
         return cantidad
-
 
 class InstalacionMasivaForm(DatosOperacionForm):
     """Datos comunes de la orden. Las cantidades van por fila en la plantilla."""

@@ -11,6 +11,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.http import HttpResponseRedirect
+from django.db.models import F, Q, Exists, OuterRef
 from django.views import View
 from django.views.generic import (
     CreateView,
@@ -29,7 +30,6 @@ User = get_user_model()
 from usuarios.roles import ADMINISTRADOR
 from urllib.parse import urlencode
 from . import services
-from operaciones import services_sap
 from .forms import (
     AsignacionForm,
     CambioEstadoForm,
@@ -50,7 +50,7 @@ from .models import (
     Producto,
     UnidadSerializada,
 )
-from operaciones.models import CargaSAP
+from operaciones.models import CargaSAP, Operacion
 from .forms import CargaSAPForm
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -456,6 +456,9 @@ class ProductoUpdateView(ProductoFormMixin, UpdateView):
 # INVENTARIO
 # ============================================================
 
+from django.db.models import F, Q, Exists, OuterRef
+
+
 class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
     roles_permitidos = ROLES_ALMACEN
 
@@ -486,9 +489,44 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
     def get_queryset(self):
         qs = (
             super()
+            
+            
+            
+            
+            
             .get_queryset()
             .select_related("producto", "producto__categoria")
         )
+
+        q = self.request.GET.get("q", "").strip()
+
+        if q:
+            movimientos_remision = MovimientoInventario.objects.filter(
+                producto_id=OuterRef("producto_id"),
+                remision__numero_remision__icontains=q,
+                tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
+            )
+
+            unidades_remision = UnidadSerializada.objects.filter(
+                producto_id=OuterRef("producto_id"),
+                remision__numero_remision__icontains=q,
+            )
+
+            qs = qs.annotate(
+                tiene_remision_movimiento=Exists(
+                    movimientos_remision
+                ),
+                tiene_remision_unidad=Exists(
+                    unidades_remision
+                ),
+            ).filter(
+                Q(producto__nombre__icontains=q)
+                | Q(producto__codigo_producto__icontains=q)
+                | Q(producto__medida__icontains=q)
+                | Q(producto__categoria__nombre__icontains=q)
+                | Q(tiene_remision_movimiento=True)
+                | Q(tiene_remision_unidad=True)
+            ).distinct()
 
         if self.request.GET.get("bajo"):
             qs = qs.filter(
@@ -496,7 +534,9 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
                 cantidad_actual__lte=F("cantidad_minima"),
             )
 
-        comparacion = self.request.GET.get("comparacion", "").strip()
+        comparacion = self.request.GET.get(
+            "comparacion", ""
+        ).strip()
 
         if comparacion in ("coinciden", "diferentes"):
             five = _five_total_por_producto()
@@ -521,19 +561,25 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
 
         return qs
 
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+
         ctx["comparacion_sel"] = self.request.GET.get(
             "comparacion", ""
         ).strip()
 
-        tecnico_sel = self.request.GET.get("tecnico", "").strip()
+        tecnico_sel = self.request.GET.get(
+            "tecnico", ""
+        ).strip()
 
         ctx["tecnicos_lista"] = tecnicos_queryset()
         ctx["tecnico_sel"] = tecnico_sel
 
         if tecnico_sel.isdigit():
-            ctx.update(_obtener_contexto_asignaciones(self.request))
+            ctx.update(
+                _obtener_contexto_asignaciones(self.request)
+            )
         else:
             five = _five_total_por_producto()
             sap = _sap_total_por_producto()
@@ -623,43 +669,48 @@ class IngresoView(FormPageMixin, RolRequeridoMixin, FormView):
         d = form.cleaned_data
         producto = d["producto"]
         num_orden = d["numero_orden"]
-        imagen = d.get("comprobante_imagen")
 
         try:
             with transaction.atomic():
-                # Buscar o crear la remisión
-                remision, creada = RemisionIngreso.objects.get_or_create(
-                    numero_remision=num_orden,
-                    defaults={
-                        "comprobante_imagen": imagen,
-                        "usuario": self.request.user,
-                    }
+                remision = services.obtener_o_crear_remision(
+                    numero=num_orden,
+                    usuario=self.request.user,
+                    imagen=d.get("comprobante_imagen"),
+                    fecha_recibo_bsi=d.get("fecha_recibo_bsi"),
+                    recogido_por=d.get("recogido_por", ""),
+                    recibido_almacen_por=d.get("recibido_almacen_por", ""),
                 )
 
-                # Si ya existía pero subieron foto nueva, la guardamos
-                if not creada and imagen and not remision.comprobante_imagen:
-                    remision.comprobante_imagen = imagen
-                    remision.save()
-
-                # Registrar el ingreso asociando la remisión
                 unidades = services.registrar_ingreso(
                     producto=producto,
                     cantidad=d["cantidad"],
                     usuario=self.request.user,
                     fecha_ingreso=timezone.localdate(),
+                    remision=remision,
                     seriales=d.get("seriales", []),
                     observacion=d["observacion"],
-                    remision=remision
                 )
-
         except services.ErrorInventario as e:
             form.add_error(None, str(e))
-            return self.render_to_response(self.get_context_data(form=form))
+            return self.form_invalid(form)
 
-        messages.success(
-            self.request,
-            f"Ingreso registrado con éxito asociado a la remisión {num_orden}."
-        )
+        if unidades:
+            mensaje = (
+                f"Ingresaron {len(unidades)} unidad(es) de "
+                f"{producto.nombre_completo} con la remisión {num_orden}."
+            )
+            if not producto.requiere_numero_serie:
+                mensaje += " Los códigos internos fueron generados automáticamente."
+
+            self.success_url = reverse("almacen:unidades")
+        else:
+            mensaje = (
+                f"Ingresaron {d['cantidad']} {producto.nombre_completo} "
+                f"con la remisión {num_orden}."
+            )
+            self.success_url = reverse("almacen:inventario")
+
+        messages.success(self.request, mensaje)
         return super().form_valid(form)
 
 # ============================================================
@@ -1369,41 +1420,34 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 
         ctx["tecnico"] = self.tecnico
         ctx["pendientes"] = self.pendientes
+        ctx["estados_instalan"] = sorted(
+            e.value for e in Operacion.ESTADOS_QUE_INSTALAN
+        )
         ctx["form"] = (
             kwargs.get("form") or InstalacionMasivaForm()
         )
 
         return ctx
 
-    def post(self, request, *args, **kwargs):
-        self._cargar()
-        form = InstalacionMasivaForm(request.POST)
-
-        items = []
-        errores = []
+    def _leer_items(self, request):
+        items, errores = [], []
 
         for a in self.pendientes:
             nombre = a.producto.nombre_completo
 
-            # Unidad serializada: se marca como instalada.
             if a.unidad_serializada_id:
                 if request.POST.get(f"inst_{a.pk}"):
                     items.append((a, None))
                 continue
 
-            raw = request.POST.get(
-                f"cant_{a.pk}", ""
-            ).strip()
-
+            raw = request.POST.get(f"cant_{a.pk}", "").strip()
             if not raw:
                 continue
 
             try:
                 cant = int(raw)
             except ValueError:
-                errores.append(
-                    f"{nombre}: la cantidad no es válida."
-                )
+                errores.append(f"{nombre}: la cantidad no es válida.")
                 continue
 
             if cant <= 0:
@@ -1411,25 +1455,36 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 
             if cant > a.cantidad_pendiente:
                 errores.append(
-                    f"{nombre}: solo tiene "
-                    f"{a.cantidad_pendiente} pendiente(s)."
+                    f"{nombre}: solo tiene {a.cantidad_pendiente} pendiente(s)."
                 )
                 continue
 
             items.append((a, cant))
 
-        if not items and not errores:
-            errores.append(
-                "Indique al menos un material para instalar."
-            )
+        return items, errores
 
-        if errores or not form.is_valid():
+    def post(self, request, *args, **kwargs):
+        self._cargar()
+        form = InstalacionMasivaForm(request.POST, request.FILES)
+        items, errores = self._leer_items(request)
+
+        form_ok = form.is_valid()
+
+        if form_ok:
+            instala = form.cleaned_data["estado"] in Operacion.ESTADOS_QUE_INSTALAN
+            if instala and not items and not errores:
+                errores.append("Indique al menos un material para instalar.")
+            elif not instala and (items or errores):
+                errores = [
+                    "Con este estado no se instala material: "
+                    "deje las cantidades vacías y sin marcar."
+                ]
+                items = []
+
+        if errores or not form_ok:
             for error in errores:
                 messages.error(request, error)
-
-            return self.render_to_response(
-                self.get_context_data(form=form)
-            )
+            return self.render_to_response(self.get_context_data(form=form))
 
         d = form.cleaned_data
 
@@ -1440,8 +1495,12 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     cuenta_contrato=d["numero_cuenta_contrato"],
                     tipo=d["tipo_operacion"],
                     tecnico=self.tecnico,
-                    usuario=request.user,
+                    usuario=self.request.user,
                     fecha=d["fecha_instalacion"],
+                    estado=d["estado"],
+                    anomalia=d["anomalia"],
+                    observaciones=d["observaciones"],
+                    archivo=d.get("archivo_soporte"),
                 )
 
                 for asignacion, cantidad in items:
@@ -1456,20 +1515,22 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 
         except services.ErrorInventario as e:
             messages.error(request, str(e))
-            return self.render_to_response(
-                self.get_context_data(form=form)
+            return self.render_to_response(self.get_context_data(form=form))
+
+        if items:
+            messages.success(
+                request,
+                f"Instalación registrada en la orden {op.numero_orden} "
+                f"({len(items)} material(es)).",
+            )
+        else:
+            messages.success(
+                request,
+                f"Orden {op.numero_orden} registrada como "
+                f"{op.get_estado_display().lower()}.",
             )
 
-        messages.success(
-            request,
-            f"Instalación registrada en la orden "
-            f"{op.numero_orden} ({len(items)} material(es)).",
-        )
-
-        return redirect(
-            "almacen:tecnico_asignaciones",
-            pk=self.tecnico.pk,
-        )
+        return redirect("almacen:tecnico_asignaciones", pk=self.tecnico.pk)
 
 
 
@@ -1537,7 +1598,7 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
                     numero_orden=d["numero_orden"],
                     cuenta_contrato=d["numero_cuenta_contrato"],
                     tipo=d["tipo_operacion"],
-                    tecnico=self.asignacion.tecnico,
+                    tecnico=self.tecnico,
                     usuario=self.request.user,
                     fecha=d["fecha_instalacion"],
                 )
