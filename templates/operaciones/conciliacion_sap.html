@@ -3,282 +3,115 @@
 
 {% block contenido %}
 <style>
-    .conciliacion-page {
-        color: #263445;
-    }
 
-    .conciliacion-page .page-title {
-        font-weight: 750;
-        letter-spacing: -.035em;
-    }
+/* ==========================================
+   CONCILIACIÓN FIVE VS SAP
+   IDENTIDAD VISUAL UNIFICADA
+========================================== */
 
-    .conciliacion-page .subtitle {
-        color: #718096;
-    }
+/* ==========================================
+   FIVE - VERDE
+========================================== */
 
-    .conciliacion-page .summary-card {
-        background: #fff;
-        border: 1px solid #e7ecf2;
-        border-radius: 14px;
-        padding: 18px 20px;
-        height: 100%;
-        box-shadow: 0 3px 12px rgba(15, 23, 42, .035);
-    }
-
-    .conciliacion-page .summary-label {
-        color: #718096;
-        font-size: .82rem;
-        font-weight: 600;
-    }
-
-    .conciliacion-page .summary-number {
-        font-size: 1.8rem;
-        font-weight: 750;
-        line-height: 1.3;
-    }
-
-    .conciliacion-page .panel {
-        background: #fff;
-        border: 1px solid #e7ecf2;
-        border-radius: 14px;
-        box-shadow: 0 3px 12px rgba(15, 23, 42, .035);
-        overflow: hidden;
-    }
-
-    .conciliacion-page .panel-heading {
-        padding: 18px 20px;
-        border-bottom: 1px solid #e9edf2;
-    }
-
-    .conciliacion-page .filter-panel {
-        padding: 20px;
-    }
-
-    .conciliacion-page .form-label {
-        font-size: .82rem;
-        font-weight: 650;
-        color: #526174;
-    }
-
-    .conciliacion-page .form-control,
-    .conciliacion-page .form-select {
-        min-height: 42px;
-        border-color: #dce3eb;
-        border-radius: 8px;
-    }
-
-    .conciliacion-page .form-control:focus,
-    .conciliacion-page .form-select:focus {
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 .2rem rgba(13, 110, 253, .10);
-    }
-
-    .conciliacion-page .category-filter {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .conciliacion-page .category-filter .btn {
-        border-radius: 8px !important;
-        font-size: .84rem;
-    }
-
-    .conciliacion-page .table {
-        margin-bottom: 0;
-    }
-
-    .conciliacion-page .table thead th {
-        padding: 12px 14px;
-        font-size: .78rem;
-        font-weight: 700;
-        white-space: nowrap;
-        vertical-align: middle;
-        border-color: #e3e8ef;
-    }
-
-    .conciliacion-page .table tbody td {
-        padding: 13px 14px;
-        font-size: .86rem;
-        border-color: #e8edf2;
-        vertical-align: middle;
-    }
-
-    .conciliacion-page .table .group-five {
-        background: #176b45 !important;
-        color: #fff !important;
-    }
-
-    .conciliacion-page .table .group-sap {
-        background: #f4c95d !important;
-        color: #3e3210 !important;
-    }
-
-    .conciliacion-page .table .subhead {
-        background: #f5f7fa;
-        color: #526174;
-    }
-
-    .conciliacion-page .fila-correcta > td {
-        background-color: #f0faf4;
-    }
-
-    .conciliacion-page .fila-correcta > td:first-child {
-        border-left: 4px solid #198754;
-    }
-
-    .conciliacion-page .fila-error > td {
-        background-color: #fff4f3;
-    }
-
-    .conciliacion-page .fila-error > td:first-child {
-        border-left: 4px solid #dc3545;
-    }
-
-    .conciliacion-page .fila-pendiente > td {
-        background-color: #fff9e9;
-    }
-
-    .conciliacion-page .fila-pendiente > td:first-child {
-        border-left: 4px solid #e0a800;
-    }
-
-    .conciliacion-page .table-hover tbody tr:hover > * {
-        filter: brightness(.975);
-    }
-
-    .conciliacion-page .status-badge {
-        display: inline-block;
-        padding: 6px 10px;
-        border-radius: 6px;
-        font-size: .75rem;
-        font-weight: 750;
-        white-space: nowrap;
-    }
-
-    .conciliacion-page .status-ok {
-        background: #d8f3e3;
-        color: #146c43;
-    }
-
-    .conciliacion-page .status-error {
-        background: #fce1e1;
-        color: #b42332;
-    }
-
-    .conciliacion-page .status-pending {
-        background: #fff0c2;
-        color: #805b00;
-    }
-
-    .conciliacion-page .identifier {
-        font-weight: 700;
-        color: #24364b;
-        white-space: nowrap;
-    }
-
-    .conciliacion-page .diagnostic {
-        color: #657387;
-        line-height: 1.5;
-        min-width: 220px;
-        max-width: 440px;
-        white-space: normal;
-    }
-
-    .conciliacion-page .table-link {
-        font-weight: 700;
-        text-decoration: none;
-    }
-
-    .conciliacion-page .table-link:hover {
-        text-decoration: underline;
-    }
-
-    .conciliacion-page .empty-state {
-        padding: 35px 20px !important;
-        color: #718096;
-        text-align: center;
-    }
-
-    .conciliacion-page .legend-dot {
-        display: inline-block;
-        height: 9px;
-        width: 9px;
-        border-radius: 50%;
-        margin-right: 6px;
-    }
-
-    .conciliacion-page .pagination .page-link {
-        border-radius: 7px;
-        margin: 0 3px;
-    }
-
-    @media (max-width: 767px) {
-        .conciliacion-page .summary-number {
-            font-size: 1.5rem;
-        }
-
-        .conciliacion-page .filter-panel {
-            padding: 15px;
-        }
-    }
-.resumen-conciliacion {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 170px));
-    gap: 10px;
-    align-items: stretch;
-}
-
-.resumen-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-    padding: 9px 12px;
-    border: 1px solid #e2e8e4;
-    border-radius: 8px;
-    background: #fff;
-    color: #26352c;
-    text-decoration: none;
-    transition: background .15s ease;
-}
-
-.resumen-item:hover {
-    background: #f5f8f6;
-}
-
-.resumen-numero {
-    font-size: 21px;
-    line-height: 1;
+.conciliacion-page .five-head {
+    background-color: #176b45 !important;
+    color: #ffffff !important;
+    border-color: #176b45 !important;
+    text-align: center;
     font-weight: 800;
 }
 
-.resumen-texto {
-    font-size: 12px;
-    font-weight: 600;
+.conciliacion-page .five-cell,
+.conciliacion-page .celda-five {
+    background-color: #e5f3e9 !important;
+    color: #145c39 !important;
+    border-color: #c5e2ce !important;
+    font-weight: 700;
 }
 
-@media (max-width: 600px) {
-    .resumen-conciliacion {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
-    }
+/* ==========================================
+   SAP - DORADO
+========================================== */
 
-    .resumen-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
-        padding: 8px;
-    }
-
-    .resumen-numero {
-        font-size: 19px;
-    }
-
-    .resumen-texto {
-        font-size: 11px;
-    }
+.conciliacion-page .sap-head {
+    background-color: #d9a928 !important;
+    color: #3e3210 !important;
+    border-color: #c99b21 !important;
+    text-align: center;
+    font-weight: 800;
 }
+
+.conciliacion-page .sap-cell,
+.conciliacion-page .celda-sap {
+    background-color: #fff0c2 !important;
+    color: #765400 !important;
+    border-color: #efdda5 !important;
+    font-weight: 700;
+}
+
+/* ==========================================
+   DIFERENCIAS - ROJO
+========================================== */
+
+.conciliacion-page .valor-diferente,
+.conciliacion-page .valor-ausente {
+    background-color: #fee2e2 !important;
+    color: #a31925 !important;
+    border-color: #fecaca !important;
+    font-weight: 850 !important;
+}
+
+/* ==========================================
+   RESULTADOS CORRECTOS
+========================================== */
+
+.conciliacion-page .valor-correcto {
+    background-color: #dcfce7 !important;
+    color: #166534 !important;
+    font-weight: 800 !important;
+}
+
+/* ==========================================
+   HOVER FIVE
+========================================== */
+
+.conciliacion-page tbody tr:hover .five-cell,
+.conciliacion-page tbody tr:hover .celda-five {
+    background-color: #d7eddf !important;
+}
+
+/* ==========================================
+   HOVER SAP
+========================================== */
+
+.conciliacion-page tbody tr:hover .sap-cell,
+.conciliacion-page tbody tr:hover .celda-sap {
+    background-color: #ffebad !important;
+}
+
+/* ==========================================
+   HOVER DIFERENCIAS
+========================================== */
+
+.conciliacion-page tbody tr:hover .valor-diferente,
+.conciliacion-page tbody tr:hover .valor-ausente {
+    background-color: #fecaca !important;
+}
+
+/* ==========================================
+   BORDES Y ALINEACIÓN
+========================================== */
+
+.conciliacion-page table th,
+.conciliacion-page table td {
+    vertical-align: middle;
+}
+
+.conciliacion-page table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
 </style>
 
 <div class="container-fluid py-4 conciliacion-page">
@@ -286,29 +119,9 @@
     <!-- Encabezado -->
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
         <div>
-            <div class="text-primary small fw-bold text-uppercase mb-2">
-                Control de inventario
-            </div>
-            <h1 class="page-title h2 mb-2">Consolidacion Five vs SAP</h1>
-            <p class="subtitle mb-0">
-                Compara los materiales instalados, las órdenes, las cuentas y el tipo de operación.
-            </p>
+            <h1 class="page-title h2 mb-2">Resultado De Material Instalado Five vs Sap</h1>
         </div>
 
-        <div class="d-flex flex-wrap gap-3 small pt-2">
-            <span>
-                <span class="legend-dot" style="background:#198754"></span>
-                Coincide
-            </span>
-            <span>
-                <span class="legend-dot" style="background:#dc3545"></span>
-                Con diferencias
-            </span>
-            <span>
-                <span class="legend-dot" style="background:#e0a800"></span>
-                Pendiente
-            </span>
-        </div>
     </div>
 
     <!-- Resumen -->
@@ -337,10 +150,7 @@
     <!-- Filtros -->
     <div class="panel mb-4">
         <div class="panel-heading">
-            <h2 class="h6 fw-bold mb-1">Filtros de Consolidacion</h2>
-            <p class="text-muted small mb-0">
-                Selecciona una categoría, carga o resultado para encontrar registros.
-            </p>
+            <h2 class="h6 fw-bold mb-1">Filtros de Verificacion De Material Instalado</h2>
         </div>
 
         <form method="get" class="filter-panel">
@@ -453,7 +263,7 @@
     <div class="panel mb-4">
         <div class="panel-heading d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div>
-                <h2 class="h6 fw-bold mb-1">Resultados de conciliación</h2>
+                <h2 class="h6 fw-bold mb-1">Resultado De  Verificacionm De Material Instalado Five vs Sap</h2>
                 <p class="text-muted small mb-0">
                     Registros SAP correctos y discrepancias que siguen vigentes.
                 </p>
@@ -465,23 +275,36 @@
 
         <div class="table-responsive">
             <table class="table table-hover align-middle text-center">
-                <thead>
-                    <tr>
-                        <th rowspan="2">Carga / fila</th>
-                        <th rowspan="2">Producto</th>
-                        <th colspan="3" class="group-five">Five</th>
-                        <th colspan="3" class="group-sap">SAP</th>
-                        <th rowspan="2" style="min-width:280px">Resultado</th>
-                    </tr>
-                    <tr>
-                        <th class="subhead">Instalado</th>
-                        <th class="subhead">Orden</th>
-                        <th class="subhead">Cuenta contrato</th>
-                        <th class="subhead">Identificador</th>
-                        <th class="subhead">Orden</th>
-                        <th class="subhead">Cuenta contrato</th>
-                    </tr>
-                </thead>
+                
+                
+            <thead>
+                <tr>
+                    <th rowspan="2">Validación SAP</th>
+                    <th rowspan="2">Material</th>
+
+                    <th colspan="3" class="group-five">
+                        FIVE · Datos de instalación
+                    </th>
+
+                    <th colspan="3" class="group-sap">
+                        SAP · Datos reportados
+                    </th>
+
+                    <th rowspan="2">Resultado</th>
+                </tr>
+
+                <tr>
+                    <th class="five-head">Instalado</th>
+                    <th class="five-head">Orden</th>
+                    <th class="five-head">Cuenta contrato</th>
+
+                    <th class="sap-head">Identificador</th>
+                    <th class="sap-head">Orden</th>
+                    <th class="sap-head">Cuenta contrato</th>
+                </tr>
+            </thead>
+
+
                 <tbody>
                     {% for r in page_obj %}
                     <tr class="{% if r.estado == 'OK' %}fila-correcta{% else %}fila-error{% endif %}">
@@ -597,10 +420,10 @@
         <div class="panel-heading d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div>
                 <h2 class="h6 fw-bold mb-1">
-                    Instalados en Five pendientes de conciliación
+                    Material Instalado en Five pendientes para Verificar en Sap
                 </h2>
                 <p class="text-muted small mb-0">
-                    Equipos instalados que no aparecen conciliados como correctos.
+                    Materiales instalados que no aparecen en SAP
                 </p>
             </div>
             <span class="status-badge status-pending">

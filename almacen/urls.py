@@ -26,7 +26,7 @@ urlpatterns = [
     path("unidades/<int:pk>/estado/", views.UnidadEstadoView.as_view(), name="unidad_estado"),
 
     path("asignaciones/", views.AsignacionListView.as_view(), name="asignaciones"),
-    path("asignaciones/nueva/", views.AsignacionCreateView.as_view(), name="asignacion_crear"),
+    path("asignaciones/nueva/", views.EntregaCreateView.as_view(), name="asignacion_crear"),
     path("asignaciones/<int:pk>/instalar/", views.AsignacionInstalarView.as_view(), name="asignacion_instalar"),
     path("asignaciones/<int:pk>/devolver/", views.AsignacionDevolverView.as_view(), name="asignacion_devolver"),
     path("tecnicos/<int:pk>/asignaciones/", views.TecnicoAsignacionesView.as_view(), name="tecnico_asignaciones"),
@@ -35,6 +35,12 @@ urlpatterns = [
     path("movimientos/", views.MovimientoListView.as_view(), name="movimientos"),
     
     path("inventario/", views.InventarioListView.as_view(), name="inventario"), 
-    
+    path("entregas/", views.EntregaListView.as_view(), name="entregas"),
+    path("entregas/nueva/", views.EntregaCreateView.as_view(), name="entrega_nueva"),
+    path("entregas/<int:pk>/", views.EntregaDetailView.as_view(), name="entrega_detalle"),
+    path("entregas/<int:pk>/pdf/", views.EntregaPdfView.as_view(), name="entrega_pdf"),
+    path("entregas/<int:pk>/excel/", views.EntregaExcelView.as_view(), name="entrega_excel"),
+    path("api/validar-serial/", views.ValidarSerialJson.as_view(), name="api_validar_serial"),
+        
 
 ]

@@ -559,3 +559,42 @@ class MovimientoInventario(models.Model):
 
     def __str__(self):
         return f"{self.producto.nombre} - {self.tipo_movimiento} ({self.cantidad})"
+    
+from django.conf import settings
+from django.db import models
+
+
+class EntregaMaterial(models.Model):
+    codigo = models.CharField(max_length=30, unique=True, null=True, blank=True, editable=False)
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                related_name="entregas_recibidas")
+    entregado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                      related_name="entregas_realizadas")
+    fecha = models.DateField()
+    observaciones = models.TextField(blank=True)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha", "-id"]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.codigo:
+            self.codigo = f"ENT-{self.fecha:%Y%m}-{self.pk:05d}"
+            super().save(update_fields=["codigo"])
+
+    def __str__(self):
+        return self.codigo or f"Entrega {self.pk}"
+
+    @property
+    def total_cantidad(self):
+        return sum(i.cantidad for i in self.items.all())
+
+
+class EntregaItem(models.Model):
+    entrega = models.ForeignKey(EntregaMaterial, on_delete=models.CASCADE, related_name="items")
+    producto = models.ForeignKey("almacen.Producto", on_delete=models.PROTECT)
+    unidad = models.ForeignKey("almacen.UnidadSerializada", null=True, blank=True,
+                               on_delete=models.PROTECT)
+    serial = models.CharField(max_length=100, blank=True)   # copia del serial/código al entregar
+    cantidad = models.PositiveIntegerField(default=1)

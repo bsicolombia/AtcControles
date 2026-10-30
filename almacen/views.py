@@ -21,6 +21,7 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
+
 from usuarios.roles import DIGITADOR, tiene_rol
 from django.db.models import Prefetch
 from usuarios.mixins import RolRequeridoMixin
@@ -42,6 +43,14 @@ from .forms import (
     ProductoForm,
     UnidadForm,
 )
+    
+import json
+from django.contrib.staticfiles import finders
+from django.http import HttpResponse
+from django.views.generic import DetailView
+from .forms import EntregaForm
+from .models import EntregaMaterial, EntregaItem
+
 from .models import (
     Asignacion,
     Categoria,
@@ -1364,130 +1373,167 @@ class AsignacionCreateView(FormPageMixin, RolRequeridoMixin, FormView):
 # ============================================================
 
 
+import json  # arriba del archivo
+
 class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_DIGITADOR
-    """
-    Un técnico, un formulario: se escribe la operación una sola vez
-    y las cantidades o unidades instaladas de cada material.
-    """
-
     template_name = "almacen/asignacion_instalar.html"
 
     def _cargar(self):
         self.tecnico = get_object_or_404(
-            User.objects.select_related("supervisor").filter(
-                rol="TECNICO"
-            ),
+            User.objects.select_related("supervisor").filter(rol="TECNICO"),
             pk=self.kwargs["pk"],
         )
-
         pendientes = (
             Asignacion.objects
-            .filter(
-                tecnico=self.tecnico,
-                estado=Asignacion.Estado.ASIGNADA,
-            )
-            .select_related(
-                "producto",
-                "unidad_serializada",
-                "operacion",
-            )
-            .order_by(
-                "producto__nombre",
-                "producto__medida",
-                "id",
-            )
+            .filter(tecnico=self.tecnico, estado=Asignacion.Estado.ASIGNADA)
+            .select_related("producto", "unidad_serializada", "operacion")
+            .order_by("producto__nombre", "producto__medida", "id")
         )
+        self.pendientes = [a for a in pendientes if a.cantidad_pendiente > 0]
 
-        self.pendientes = [
-            a for a in pendientes
-            if a.cantidad_pendiente > 0
-        ]
+    def _datos_pendientes(self):
+        """Lo que el técnico tiene en su poder: por cantidad y por serial."""
+        cantidad, seriales = OrderedDict(), []
+        for a in self.pendientes:
+            if a.unidad_serializada_id:
+                u = a.unidad_serializada
+                seriales.append({
+                    "id": u.pk,
+                    "serial": u.numero_serie or u.codigo,
+                    "codigo": u.codigo,
+                    "producto": a.producto_id,
+                    "nombre": a.producto.nombre_completo,
+                })
+            else:
+                d = cantidad.setdefault(a.producto_id, {
+                    "id": a.producto_id,
+                    "nombre": a.producto.nombre_completo,
+                    "pendiente": 0,
+                })
+                d["pendiente"] += a.cantidad_pendiente
+        return list(cantidad.values()), seriales
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         self._cargar()
 
-        # Conservar los valores del formulario si hubo errores.
-        if self.request.method == "POST":
-            for a in self.pendientes:
-                a.valor = self.request.POST.get(
-                    f"cant_{a.pk}", ""
-                )
-                a.marcado = bool(
-                    self.request.POST.get(f"inst_{a.pk}")
-                )
+        pend_cantidad, pend_seriales = self._datos_pendientes()
+
+        # Conservar lo cargado si hubo errores (debe ser una LISTA, no texto)
+        try:
+            payload_previo = json.loads(self.request.POST.get("payload", "[]"))
+            if not isinstance(payload_previo, list):
+                payload_previo = []
+        except ValueError:
+            payload_previo = []
 
         ctx["tecnico"] = self.tecnico
         ctx["pendientes"] = self.pendientes
+        ctx["pend_cantidad"] = pend_cantidad
+        ctx["pend_seriales"] = pend_seriales
+        ctx["payload_previo"] = payload_previo
         ctx["estados_instalan"] = sorted(
             e.value for e in Operacion.ESTADOS_QUE_INSTALAN
         )
-        ctx["form"] = (
-            kwargs.get("form") or InstalacionMasivaForm()
-        )
-
+        ctx["form"] = kwargs.get("form") or InstalacionMasivaForm()
         return ctx
 
-    def _leer_items(self, request):
+    def _resolver_items(self, lineas):
+        """Convierte el JSON del navegador en (asignación, cantidad), validando todo."""
         items, errores = [], []
 
+        por_unidad = {
+            a.unidad_serializada_id: a
+            for a in self.pendientes if a.unidad_serializada_id
+        }
+        por_producto = {}
         for a in self.pendientes:
-            nombre = a.producto.nombre_completo
+            if not a.unidad_serializada_id:
+                por_producto.setdefault(a.producto_id, []).append(a)
 
-            if a.unidad_serializada_id:
-                if request.POST.get(f"inst_{a.pk}"):
+        vistas = set()
+        for l in lineas:
+            if l.get("serializado"):
+                for u in l.get("unidades", []):
+                    try:
+                        uid = int(u.get("id"))
+                    except (TypeError, ValueError):
+                        errores.append("Hay una unidad inválida en la lista.")
+                        continue
+                    if uid in vistas:
+                        continue
+                    a = por_unidad.get(uid)
+                    if not a:
+                        errores.append(
+                            f"El serial {u.get('serial', '')} no está asignado "
+                            "a este técnico o ya fue instalado."
+                        )
+                        continue
+                    vistas.add(uid)
                     items.append((a, None))
-                continue
+            else:
+                nombre = l.get("nombre", "Material")
+                try:
+                    pid = int(l.get("producto"))
+                    cant = int(l.get("cantidad", 0))
+                except (TypeError, ValueError):
+                    errores.append(f"{nombre}: datos inválidos.")
+                    continue
+                if cant <= 0:
+                    continue
 
-            raw = request.POST.get(f"cant_{a.pk}", "").strip()
-            if not raw:
-                continue
+                asigs = sorted(por_producto.get(pid, []), key=lambda x: x.pk)
+                total = sum(a.cantidad_pendiente for a in asigs)
+                if cant > total:
+                    errores.append(
+                        f"{nombre}: solo tiene {total} pendiente(s) y está "
+                        f"intentando instalar {cant}."
+                    )
+                    continue
 
-            try:
-                cant = int(raw)
-            except ValueError:
-                errores.append(f"{nombre}: la cantidad no es válida.")
-                continue
-
-            if cant <= 0:
-                continue
-
-            if cant > a.cantidad_pendiente:
-                errores.append(
-                    f"{nombre}: solo tiene {a.cantidad_pendiente} pendiente(s)."
-                )
-                continue
-
-            items.append((a, cant))
+                # Reparte la cantidad entre las asignaciones del mismo material
+                resto = cant
+                for a in asigs:
+                    if resto <= 0:
+                        break
+                    tomar = min(resto, a.cantidad_pendiente)
+                    items.append((a, tomar))
+                    resto -= tomar
 
         return items, errores
 
     def post(self, request, *args, **kwargs):
         self._cargar()
         form = InstalacionMasivaForm(request.POST, request.FILES)
-        items, errores = self._leer_items(request)
 
+        try:
+            lineas = json.loads(request.POST.get("payload", "[]"))
+            if not isinstance(lineas, list):
+                lineas = []
+        except ValueError:
+            lineas = []
+
+        errores, items = [], []
         form_ok = form.is_valid()
 
         if form_ok:
             instala = form.cleaned_data["estado"] in Operacion.ESTADOS_QUE_INSTALAN
-            if instala and not items and not errores:
-                errores.append("Indique al menos un material para instalar.")
-            elif not instala and (items or errores):
-                errores = [
-                    "Con este estado no se instala material: "
-                    "deje las cantidades vacías y sin marcar."
-                ]
-                items = []
+            if instala:
+                items, errores = self._resolver_items(lineas)
+                if not items and not errores:
+                    errores.append("Indique al menos un material o unidad para instalar.")
+            elif lineas:
+                errores.append(
+                    "Con este estado no se instala material: deje la lista vacía."
+                )
 
         if errores or not form_ok:
-            for error in errores:
-                messages.error(request, error)
+            for e in errores:
+                messages.error(request, e)
             return self.render_to_response(self.get_context_data(form=form))
 
         d = form.cleaned_data
-
         try:
             with transaction.atomic():
                 op = services.obtener_o_crear_operacion(
@@ -1495,14 +1541,13 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     cuenta_contrato=d["numero_cuenta_contrato"],
                     tipo=d["tipo_operacion"],
                     tecnico=self.tecnico,
-                    usuario=self.request.user,
+                    usuario=request.user,
                     fecha=d["fecha_instalacion"],
                     estado=d["estado"],
                     anomalia=d["anomalia"],
                     observaciones=d["observaciones"],
                     archivo=d.get("archivo_soporte"),
                 )
-
                 for asignacion, cantidad in items:
                     services.instalar(
                         asignacion=asignacion,
@@ -1512,7 +1557,6 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                         operacion=op,
                         observaciones=d["observaciones"],
                     )
-
         except services.ErrorInventario as e:
             messages.error(request, str(e))
             return self.render_to_response(self.get_context_data(form=form))
@@ -1521,7 +1565,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
             messages.success(
                 request,
                 f"Instalación registrada en la orden {op.numero_orden} "
-                f"({len(items)} material(es)).",
+                f"({len(items)} registro(s)).",
             )
         else:
             messages.success(
@@ -1529,11 +1573,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                 f"Orden {op.numero_orden} registrada como "
                 f"{op.get_estado_display().lower()}.",
             )
-
         return redirect("almacen:tecnico_asignaciones", pk=self.tecnico.pk)
-
-
-
 # ============================================================
 # INSTALAR · UNA SOLA ASIGNACIÓN
 # ============================================================
@@ -1720,4 +1760,400 @@ class MovimientoListView(RolRequeridoMixin, BuscarMixin, ListView):
         ctx["tipos"] = MovimientoInventario.TipoMovimiento.choices
         ctx["tipo_sel"] = self.request.GET.get("tipo", "")
         return ctx
-    
+
+# ---------- helpers ----------
+def _nombre(u):
+    return (u.get_full_name() or u.username) if u else ""
+
+def _cedula(u):
+    return getattr(u, "cedula", "") or ""
+
+
+# ---------- validar serial (JSON) ----------
+class ValidarSerialJson(RolRequeridoMixin, View):
+    roles_permitidos = ROLES_ALMACEN
+
+    def get(self, request):
+        producto = request.GET.get("producto", "").strip()
+        serial = request.GET.get("serial", "").strip()
+
+        if not serial:
+            return JsonResponse({"ok": False, "mensaje": "Escriba el serial."})
+
+        u = (
+            UnidadSerializada.objects
+            .select_related("producto")
+            .filter(Q(numero_serie__iexact=serial) | Q(codigo__iexact=serial))
+            .first()
+        )
+        if not u:
+            return JsonResponse({"ok": False, "mensaje": "El serial no existe en el sistema."})
+
+        if producto.isdigit() and u.producto_id != int(producto):
+            return JsonResponse({
+                "ok": False,
+                "mensaje": f"Ese serial pertenece a otro material: {u.producto.nombre_completo}.",
+            })
+
+        if u.estado != UnidadSerializada.Estado.DISPONIBLE:
+            return JsonResponse({
+                "ok": False,
+                "mensaje": f"No está disponible (estado: {u.get_estado_display()}).",
+            })
+
+        return JsonResponse({
+            "ok": True,
+            "id": u.pk,
+            "serial": u.numero_serie or u.codigo,
+            "mensaje": "Serial correcto y disponible.",
+        })
+
+
+# ---------- crear entrega ----------
+class EntregaCreateView(RolRequeridoMixin, TemplateView):
+    roles_permitidos = ROLES_ALMACEN
+    template_name = "almacen/entrega_form.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = kwargs.get("form") or EntregaForm()
+        ctx["productos"] = Producto.objects.filter(estado=True).order_by("nombre", "medida")
+        ctx["payload_previo"] = kwargs.get("payload", [])
+        return ctx
+
+    def _resolver(self, items):
+        """Valida el JSON del navegador contra la BD (no se confía en el cliente)."""
+        resueltos, errores = [], []
+        for it in items:
+            try:
+                p = Producto.objects.get(pk=int(it["producto"]), estado=True)
+            except (Producto.DoesNotExist, KeyError, ValueError, TypeError):
+                errores.append("Hay un material inválido en la lista.")
+                continue
+
+            if p.es_serializado:
+                ids = [int(u["id"]) for u in it.get("unidades", [])]
+                unidades = list(UnidadSerializada.objects.filter(pk__in=ids, producto=p))
+                if not ids or len(unidades) != len(set(ids)):
+                    errores.append(f"{p.nombre_completo}: seriales inválidos.")
+                    continue
+                resueltos.append((p, len(unidades), unidades))
+            else:
+                try:
+                    cant = int(it.get("cantidad", 0))
+                except (ValueError, TypeError):
+                    cant = 0
+                if cant <= 0:
+                    errores.append(f"{p.nombre_completo}: cantidad inválida.")
+                    continue
+                resueltos.append((p, cant, []))
+        return resueltos, errores
+
+    def post(self, request, *args, **kwargs):
+        form = EntregaForm(request.POST)
+        try:
+            items = json.loads(request.POST.get("payload", "[]"))
+        except ValueError:
+            items = []
+
+        def volver():
+            return self.render_to_response(self.get_context_data(form=form, payload=items))
+
+        if not form.is_valid():
+            return volver()
+        if not items:
+            messages.error(request, "Agregue al menos un material.")
+            return volver()
+
+        resueltos, errores = self._resolver(items)
+        if errores:
+            for e in errores:
+                messages.error(request, e)
+            return volver()
+
+        d = form.cleaned_data
+        try:
+            with transaction.atomic():
+                entrega = EntregaMaterial.objects.create(
+                    tecnico=d["tecnico"], entregado_por=request.user,
+                    fecha=d["fecha"], observaciones=d["observaciones"],
+                )
+                for producto, cantidad, unidades in resueltos:
+                    if producto.es_serializado:
+                        for u in unidades:
+                            services.asignar(
+                                producto=producto, tecnico=d["tecnico"], usuario=request.user,
+                                cantidad=1, unidad=u, fecha=d["fecha"],
+                                observaciones=d["observaciones"],
+                            )
+                            EntregaItem.objects.create(
+                                entrega=entrega, producto=producto, unidad=u,
+                                serial=u.numero_serie or u.codigo, cantidad=1,
+                            )
+                    else:
+                        services.asignar(
+                            producto=producto, tecnico=d["tecnico"], usuario=request.user,
+                            cantidad=cantidad, unidad=None, fecha=d["fecha"],
+                            observaciones=d["observaciones"],
+                        )
+                        EntregaItem.objects.create(
+                            entrega=entrega, producto=producto, cantidad=cantidad,
+                        )
+        except services.ErrorInventario as e:
+            messages.error(request, str(e))
+            return volver()
+
+        messages.success(request, f"Entrega {entrega.codigo} registrada.")
+        return redirect("almacen:entrega_detalle", pk=entrega.pk)
+
+
+class EntregaDetailView(RolRequeridoMixin, DetailView):
+    roles_permitidos = ROLES_ALMACEN
+    model = EntregaMaterial
+    template_name = "almacen/entrega_detail.html"
+
+    def get_queryset(self):
+        return (super().get_queryset()
+                .select_related("tecnico", "entregado_por")
+                .prefetch_related("items__producto"))
+
+
+# ---------- PDF de una entrega ----------
+class EntregaPdfView(RolRequeridoMixin, View):
+    roles_permitidos = ROLES_ALMACEN
+
+    def get(self, request, pk):
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate,
+                                        Spacer, Table, TableStyle)
+
+        e = get_object_or_404(
+            EntregaMaterial.objects.select_related("tecnico", "entregado_por")
+            .prefetch_related("items__producto"), pk=pk)
+
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, title=e.codigo,
+                                leftMargin=1.6*cm, rightMargin=1.6*cm,
+                                topMargin=1.4*cm, bottomMargin=1.4*cm)
+        ss = getSampleStyleSheet()
+        normal = ParagraphStyle("n", parent=ss["Normal"], fontSize=9, leading=11)
+        small = ParagraphStyle("s", parent=normal, fontSize=8, textColor=colors.grey)
+        titulo = ParagraphStyle("t", parent=ss["Title"], fontSize=15, leading=18)
+        AZUL = colors.HexColor("#1f3a5f")
+
+        # Encabezado: logo | título | código
+        ruta_logo = finders.find("almacen/img/logo.png")
+        logo = Image(ruta_logo, width=3.2*cm, height=1.6*cm, kind="proportional") if ruta_logo else ""
+        cab = Table(
+            [[logo,
+              Paragraph("ACTA DE ENTREGA DE MATERIAL", titulo),
+              Paragraph(f"<b>N.º</b><br/>{e.codigo}<br/><b>Fecha</b><br/>{e.fecha:%d/%m/%Y}", normal)]],
+            colWidths=[3.8*cm, 9.2*cm, 4.4*cm])
+        cab.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BOX", (2, 0), (2, 0), 0.8, AZUL),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.2, AZUL),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+
+        # Partes
+        partes = Table([
+            [Paragraph("<b>Técnico (recibe)</b>", normal), Paragraph("<b>Entrega</b>", normal)],
+            [Paragraph(f"{_nombre(e.tecnico)}<br/>C.C. {_cedula(e.tecnico)}", normal),
+             Paragraph(f"{_nombre(e.entregado_por)}<br/>C.C. {_cedula(e.entregado_por)}", normal)],
+        ], colWidths=[8.7*cm, 8.7*cm])
+        partes.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef6")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+
+        # Materiales
+        filas = [["#", "Código", "Material", "Serial / código unidad", "Cant."]]
+        for i, it in enumerate(e.items.all(), 1):
+            filas.append([i, it.producto.codigo_producto or "", Paragraph(it.producto.nombre_completo, normal),
+                          it.serial or "—", it.cantidad])
+        filas.append(["", "", "", "TOTAL", e.total_cantidad])
+        tabla = Table(filas, colWidths=[1*cm, 2.8*cm, 7.2*cm, 4.4*cm, 2*cm], repeatRows=1)
+        tabla.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), AZUL), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+            ("ALIGN", (-1, 0), (-1, -1), "CENTER"), ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("FONTNAME", (-2, -1), (-1, -1), "Helvetica-Bold"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#f5f7fa")]),
+        ]))
+
+        # Firmas
+        firmas = Table([
+            ["", "", ""],
+            [Paragraph(f"<b>{_nombre(e.entregado_por)}</b><br/>C.C. {_cedula(e.entregado_por)}<br/>Entrega (Almacén)", normal),
+             "",
+             Paragraph(f"<b>{_nombre(e.tecnico)}</b><br/>C.C. {_cedula(e.tecnico)}<br/>Recibe (Técnico)", normal)],
+        ], colWidths=[7.4*cm, 2.6*cm, 7.4*cm], rowHeights=[2.2*cm, None])
+        firmas.setStyle(TableStyle([
+            ("LINEABOVE", (0, 1), (0, 1), 0.8, colors.black),
+            ("LINEABOVE", (2, 1), (2, 1), 0.8, colors.black),
+            ("VALIGN", (0, 1), (-1, 1), "TOP"),
+        ]))
+
+        story = [cab, Spacer(1, 10), partes, Spacer(1, 10), tabla]
+        if e.observaciones:
+            story += [Spacer(1, 8), Paragraph(f"<b>Observaciones:</b> {e.observaciones}", normal)]
+        story += [Spacer(1, 10),
+                  Paragraph("El técnico declara recibir los materiales relacionados y se hace "
+                            "responsable de su custodia y uso.", small),
+                  Spacer(1, 20), firmas, Spacer(1, 16),
+                  Paragraph(f"Documento generado el {timezone.localtime():%d/%m/%Y %H:%M} · {e.codigo}", small)]
+        doc.build(story)
+
+        resp = HttpResponse(buf.getvalue(), content_type="application/pdf")
+        resp["Content-Disposition"] = f'inline; filename="{e.codigo}.pdf"'
+        return resp
+
+
+# ---------- Excel de una entrega ----------
+class EntregaExcelView(RolRequeridoMixin, View):
+    roles_permitidos = ROLES_ALMACEN
+
+    def get(self, request, pk):
+        e = get_object_or_404(
+            EntregaMaterial.objects.select_related("tecnico", "entregado_por")
+            .prefetch_related("items__producto"), pk=pk)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Entrega"
+        negrita = Font(bold=True)
+        head = PatternFill("solid", fgColor="1F3A5F")
+
+        ws["A1"] = "ACTA DE ENTREGA DE MATERIAL"; ws["A1"].font = Font(bold=True, size=14)
+        datos = [
+            ("N.º", e.codigo), ("Fecha", e.fecha.strftime("%d/%m/%Y")),
+            ("Técnico", _nombre(e.tecnico)), ("C.C. técnico", _cedula(e.tecnico)),
+            ("Entregado por", _nombre(e.entregado_por)), ("C.C. entrega", _cedula(e.entregado_por)),
+            ("Observaciones", e.observaciones),
+        ]
+        for i, (k, v) in enumerate(datos, start=3):
+            ws.cell(i, 1, k).font = negrita
+            ws.cell(i, 2, v)
+
+        fila = len(datos) + 4
+        for c, t in enumerate(["#", "Código", "Material", "Serial / código unidad", "Cantidad"], 1):
+            cel = ws.cell(fila, c, t)
+            cel.font = Font(bold=True, color="FFFFFF"); cel.fill = head
+            cel.alignment = Alignment(horizontal="center")
+        for i, it in enumerate(e.items.all(), 1):
+            fila += 1
+            for c, v in enumerate([i, it.producto.codigo_producto or "", it.producto.nombre_completo,
+                                   it.serial or "", it.cantidad], 1):
+                ws.cell(fila, c, v)
+        fila += 1
+        ws.cell(fila, 4, "TOTAL").font = negrita
+        ws.cell(fila, 5, e.total_cantidad).font = negrita
+
+        fila += 3
+        ws.cell(fila, 1, "Firma entrega: ____________________"); ws.cell(fila, 4, "Firma técnico: ____________________")
+        for col, w in zip("ABCDE", (8, 16, 38, 26, 12)):
+            ws.column_dimensions[col].width = w
+
+        buf = BytesIO(); wb.save(buf)
+        resp = HttpResponse(buf.getvalue(),
+                            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="{e.codigo}.xlsx"'
+        return resp
+
+
+# ---------- Informe general (matriz como tu Excel) ----------
+def _matriz_entregas(request):
+    qs = (EntregaMaterial.objects
+          .select_related("tecnico", "entregado_por")
+          .prefetch_related("items__producto"))
+
+    tecnico = request.GET.get("tecnico", "").strip()
+    desde = request.GET.get("desde", "").strip()
+    hasta = request.GET.get("hasta", "").strip()
+    q = request.GET.get("q", "").strip()
+
+    if tecnico.isdigit():
+        qs = qs.filter(tecnico_id=int(tecnico))
+    if desde:
+        qs = qs.filter(fecha__gte=desde)
+    if hasta:
+        qs = qs.filter(fecha__lte=hasta)
+    if q:
+        qs = qs.filter(
+            Q(codigo__icontains=q) | Q(items__serial__icontains=q)
+            | Q(items__producto__nombre__icontains=q)
+            | Q(tecnico__first_name__icontains=q) | Q(tecnico__last_name__icontains=q)
+            | Q(tecnico__cedula__icontains=q)
+        ).distinct()
+
+    columnas, filas = {}, []
+    for e in qs.order_by("-fecha", "-id"):
+        cants = {}
+        for it in e.items.all():
+            columnas.setdefault(it.producto_id, it.producto)
+            cants[it.producto_id] = cants.get(it.producto_id, 0) + it.cantidad
+        filas.append({"entrega": e, "cants": cants, "total": sum(cants.values())})
+
+    # Solo columnas de materiales que realmente se entregaron
+    cols = sorted(columnas.values(), key=lambda p: (p.nombre, p.medida or ""))
+    for f in filas:
+        f["celdas"] = [f["cants"].get(p.pk, 0) for p in cols]
+    totales = [sum(f["cants"].get(p.pk, 0) for f in filas) for p in cols]
+
+    return {
+        "filas": filas, "cols": cols, "totales": totales,
+        "total_general": sum(totales),
+        "tecnico_sel": tecnico, "desde": desde, "hasta": hasta, "q": q,
+    }
+
+
+class EntregaListView(RolRequeridoMixin, TemplateView):
+    roles_permitidos = ROLES_ALMACEN
+    template_name = "almacen/entrega_list.html"
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("export") == "xlsx":
+            return self._excel(request)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx.update(_matriz_entregas(self.request))
+        ctx["tecnicos_lista"] = tecnicos_queryset()
+        return ctx
+
+    def _excel(self, request):
+        m = _matriz_entregas(request)
+        wb = Workbook(); ws = wb.active; ws.title = "Informe entregas"
+        head = PatternFill("solid", fgColor="1F3A5F")
+        enc = ["Código", "Fecha", "Técnico", "C.C.", "Entregado por"] + \
+              [p.nombre_completo for p in m["cols"]] + ["Total"]
+        for c, t in enumerate(enc, 1):
+            cel = ws.cell(1, c, t)
+            cel.font = Font(bold=True, color="FFFFFF"); cel.fill = head
+            cel.alignment = Alignment(horizontal="center", wrap_text=True)
+        for r, f in enumerate(m["filas"], 2):
+            e = f["entrega"]
+            vals = [e.codigo, e.fecha.strftime("%d/%m/%Y"), _nombre(e.tecnico),
+                    _cedula(e.tecnico), _nombre(e.entregado_por)] + \
+                   [v or None for v in f["celdas"]] + [f["total"]]
+            for c, v in enumerate(vals, 1):
+                ws.cell(r, c, v)
+        r = len(m["filas"]) + 2
+        ws.cell(r, 5, "TOTALES").font = Font(bold=True)
+        for c, v in enumerate(m["totales"] + [m["total_general"]], 6):
+            ws.cell(r, c, v).font = Font(bold=True)
+        ws.freeze_panes = "F2"
+        for c in range(1, len(enc) + 1):
+            ws.column_dimensions[get_column_letter(c)].width = 14 if c > 5 else 22
+        buf = BytesIO(); wb.save(buf)
+        resp = HttpResponse(buf.getvalue(),
+                            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = 'attachment; filename="informe_entregas.xlsx"'
+        return resp

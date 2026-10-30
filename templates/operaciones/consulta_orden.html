@@ -247,7 +247,7 @@
                         {{ m.tipo_identificador }}
                     </div>
                 </td>
-                <td>{% if m.unidad_serializada_id %}1{% else %}{{ m.cantidad_instalada }} / {{ m.cantidad }}{% endif %}</td>
+                <td>{% if m.unidad_serializada_id %}1{% else %} {{ m.cantidad }}{% endif %}</td>
                 <td><span class="badge bg-secondary">{{ m.get_estado_display }}</span></td>
                 <td>{{ m.tecnico.get_full_name|default:m.tecnico.username }}</td>
                 <td>{{ m.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>

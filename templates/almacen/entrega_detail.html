@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div style="max-width:820px;margin:auto">
+  <h2>Entrega {{ object.codigo }}</h2>
+  <p>
+    <b>Técnico:</b> {{ object.tecnico.get_full_name|default:object.tecnico.username }} (C.C. {{ object.tecnico.cedula }})<br>
+    <b>Entregó:</b> {{ object.entregado_por.get_full_name|default:object.entregado_por.username }} (C.C. {{ object.entregado_por.cedula }})<br>
+    <b>Fecha:</b> {{ object.fecha|date:"d/m/Y" }}
+  </p>
+  <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%">
+    <tr><th>Código</th><th>Material</th><th>Serial</th><th>Cant.</th></tr>
+    {% for i in object.items.all %}
+      <tr><td>{{ i.producto.codigo_producto }}</td><td>{{ i.producto.nombre_completo }}</td>
+          <td>{{ i.serial|default:"—" }}</td><td>{{ i.cantidad }}</td></tr>
+    {% endfor %}
+    <tr><td colspan="3" align="right"><b>Total</b></td><td><b>{{ object.total_cantidad }}</b></td></tr>
+  </table>
+  <p style="margin-top:12px">
+    <a href="{% url 'almacen:entrega_pdf' object.pk %}" target="_blank">🖨 PDF para imprimir</a> ·
+    <a href="{% url 'almacen:entrega_excel' object.pk %}">📥 Excel</a> ·
+    <a href="{% url 'almacen:entrega_nueva' %}">Nueva entrega</a> ·
+    <a href="{% url 'almacen:entregas' %}">Informe general</a>
+  </p>
+</div>
+{% endblock %}

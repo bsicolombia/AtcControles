@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block contenido %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css" rel="stylesheet">
+<style>
+  .ent{--ok:#2d6a4f;--err:#b42318;--line:#d9dee7;--bg:#f6f8fb;--ac:#1f3a5f;font-size:13px}
+  .ent h2{margin:0 0 8px;font-size:17px}
+  .ent .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .ent .top{display:grid;grid-template-columns:2fr 1fr 2fr;gap:10px;margin-bottom:10px}
+  .ent label{display:block;font-weight:600;font-size:12px;margin-bottom:3px;color:#444}
+  .ent input,.ent select,.ent textarea{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;box-sizing:border-box}
+  .ent .main{display:grid;grid-template-columns:minmax(290px,360px) 1fr;gap:10px}
+  .ent .row{display:flex;gap:6px;align-items:flex-end;margin-top:8px}
+  .ent .row>div{flex:1}
+  .ent .btn{padding:7px 12px;border:0;border-radius:6px;background:var(--ac);color:#fff;font-weight:600;cursor:pointer;white-space:nowrap}
+  .ent .btn.sec{background:#fff;color:var(--ac);border:1px solid var(--ac)}
+  .ent .btn:disabled{opacity:.45;cursor:not-allowed}
+  .ent .msg{margin-top:6px;font-weight:600;min-height:18px}
+  .ent .msg.ok{color:var(--ok)} .ent .msg.err{color:var(--err)}
+  .ent .scroll{max-height:200px;overflow:auto}
+  .ent table{border-collapse:collapse;width:100%}
+  .ent th,.ent td{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}
+  .ent th{background:var(--ac);color:#fff;font-size:12px;position:sticky;top:0}
+  .ent td.n,.ent th.n{text-align:center}
+  .ent .chip{display:inline-flex;gap:4px;align-items:center;background:#e7f4ec;color:var(--ok);border:1px solid #b7dcc6;border-radius:12px;padding:1px 7px;margin:1px 3px 1px 0;font-size:12px}
+  .ent .chip button,.ent .x{border:0;background:none;cursor:pointer;color:var(--err);font-weight:700}
+  .ent .informe{margin-top:10px}
+  .ent .informe .scroll{max-height:150px}
+  .ent .informe th{font-size:11px;white-space:normal;min-width:80px}
+  .ent .foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+  .ent .hidden{display:none}
+  @media(max-width:900px){.ent .top,.ent .main{grid-template-columns:1fr}}
+</style>
+
+<div class="ent">
+  <h2>Nueva entrega de material</h2>
+
+  {% if messages %}{% for m in messages %}
+    <div class="card" style="margin-bottom:8px;border-color:{% if m.tags == 'error' %}#b42318{% else %}#2d6a4f{% endif %}">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <form method="post" id="form-entrega">
+    {% csrf_token %}
+    <input type="hidden" name="payload" id="payload">
+
+    <!-- Fila 1: datos generales -->
+    <div class="card top">
+      <div><label for="id_tecnico">Técnico</label>{{ form.tecnico }}{{ form.tecnico.errors }}</div>
+      <div><label for="id_fecha">Fecha</label>{{ form.fecha }}{{ form.fecha.errors }}</div>
+      <div><label for="id_observaciones">Observaciones</label>{{ form.observaciones }}</div>
+    </div>
+
+    <div class="main">
+      <!-- Izquierda: agregar material -->
+      <div class="card">
+        <label for="sel-producto">Material</label>
+        <select id="sel-producto">
+          <option value="">Seleccione…</option>
+          {% for p in productos %}<option value="{{ p.pk }}">{{ p.nombre_completo }}</option>{% endfor %}
+        </select>
+        <div class="msg" id="stock"></div>
+
+        <!-- No serializado -->
+        <div id="pane-cant" class="row hidden">
+          <div><label for="in-cantidad">Cantidad</label>
+            <input type="number" min="1" id="in-cantidad" value="1"></div>
+          <button type="button" class="btn" id="btn-add-cant">Agregar</button>
+        </div>
+
+        <!-- Serializado -->
+        <div id="pane-serial" class="hidden">
+          <div class="row">
+            <div><label for="in-serial">Serial físico (Enter para validar)</label>
+              <input type="text" id="in-serial" autocomplete="off" placeholder="Escriba o escanee el serial"></div>
+            <button type="button" class="btn" id="btn-add-serial">Validar</button>
+          </div>
+        </div>
+        <div class="msg" id="msg"></div>
+      </div>
+
+      <!-- Derecha: lista de materiales -->
+      <div class="card">
+        <label>Materiales de esta entrega</label>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Material</th><th>Detalle</th><th class="n">Cant.</th><th></th></tr></thead>
+            <tbody id="lineas"></tbody>
+          </table>
+          <div id="vacio" style="padding:14px;color:#777;text-align:center">Aún no agrega materiales.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Informe en vivo -->
+    <div class="card informe">
+      <label>Informe de la entrega</label>
+      <div class="scroll"><table id="informe"></table></div>
+    </div>
+
+    <div class="foot">
+      <a href="{% url 'almacen:entregas' %}" class="btn sec" style="text-decoration:none">Cancelar</a>
+      <span><b id="total-gen">0</b> pieza(s) &nbsp;
+        <button class="btn" id="btn-guardar" type="submit" disabled>Registrar entrega</button></span>
+    </div>
+  </form>
+</div>
+
+{{ payload_previo|json_script:"payload-previo" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var urlInfo = "{% url 'almacen:api_unidades' %}";
+  var urlSerial = "{% url 'almacen:api_validar_serial' %}";
+
+  var tsTec = new TomSelect($("id_tecnico"), { placeholder: "Buscar técnico…", maxOptions: 200 });
+  var tsProd = new TomSelect($("sel-producto"), { placeholder: "Buscar material…", maxOptions: 300 });
+
+  var lineas = JSON.parse($("payload-previo").textContent) || [];
+  var info = null;               // {serializado, stock} del material elegido
+  var seleccionado = null;       // {id, nombre}
+
+  function msg(txt, ok) {
+    var m = $("msg"); m.textContent = txt || "";
+    m.className = "msg " + (txt ? (ok ? "ok" : "err") : "");
+  }
+  function enLinea(id) {
+    return lineas.find(function (l) { return String(l.producto) === String(id); });
+  }
+  function cantLinea(l) { return l.serializado ? l.unidades.length : l.cantidad; }
+
+  /* ---------- elegir material ---------- */
+  tsProd.on("change", function (valor) {
+    msg(""); info = null; seleccionado = null;
+    $("pane-cant").classList.add("hidden");
+    $("pane-serial").classList.add("hidden");
+    $("stock").textContent = "";
+    if (!valor) return;
+
+    seleccionado = { id: valor, nombre: tsProd.getItem(valor).textContent.trim() };
+    fetch(urlInfo + "?producto=" + valor)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        info = d;
+        var ya = enLinea(valor) ? cantLinea(enLinea(valor)) : 0;
+        pintarStock(d.stock - ya);
+        if (d.serializado) {
+          $("pane-serial").classList.remove("hidden");
+          $("in-serial").value = ""; $("in-serial").focus();
+        } else {
+          $("pane-cant").classList.remove("hidden");
+          $("in-cantidad").value = 1;
+        }
+      });
+  });
+
+  function pintarStock(disp) {
+    var s = $("stock");
+    s.textContent = "Disponible: " + disp + (info && info.serializado ? " unidad(es)" : " en almacén");
+    s.className = "msg " + (disp > 0 ? "ok" : "err");
+  }
+  function disponible() {
+    var ya = enLinea(seleccionado.id) ? cantLinea(enLinea(seleccionado.id)) : 0;
+    return info.stock - ya;
+  }
+  function asegurarLinea() {
+    var l = enLinea(seleccionado.id);
+    if (!l) {
+      l = { producto: seleccionado.id, nombre: seleccionado.nombre,
+            serializado: !!info.serializado, cantidad: 0, unidades: [] };
+      lineas.push(l);
+    }
+    return l;
+  }
+
+  /* ---------- agregar cantidad (no serializado) ---------- */
+  $("btn-add-cant").addEventListener("click", function () {
+    if (!seleccionado || !info) return;
+    var n = parseInt($("in-cantidad").value, 10);
+    if (!n || n <= 0) return msg("Cantidad inválida.", false);
+    if (n > disponible()) return msg("Solo hay " + disponible() + " disponible(s) y pide " + n + ".", false);
+    var l = asegurarLinea(); l.cantidad += n;
+    msg("Agregado: " + n + " × " + seleccionado.nombre, true);
+    pintarStock(disponible()); $("in-cantidad").value = 1;
+    render();
+  });
+
+  /* ---------- validar y agregar serial ---------- */
+  function validarSerial() {
+    if (!seleccionado || !info) return;
+    var serial = $("in-serial").value.trim();
+    if (!serial) return;
+
+    var l = enLinea(seleccionado.id);
+    if (l && l.unidades.some(function (u) { return u.serial.toLowerCase() === serial.toLowerCase(); })) {
+      return msg("✗ Ese serial ya está en la lista.", false);
+    }
+
+    fetch(urlSerial + "?producto=" + seleccionado.id + "&serial=" + encodeURIComponent(serial))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { msg("✗ " + d.mensaje, false); $("in-serial").select(); return; }
+        var linea = asegurarLinea();
+        if (linea.unidades.some(function (u) { return u.id === d.id; })) {
+          return msg("✗ Ese serial ya está en la lista.", false);
+        }
+        linea.unidades.push({ id: d.id, serial: d.serial });
+        msg("✓ " + d.serial + " — " + d.mensaje, true);
+        pintarStock(disponible());
+        $("in-serial").value = ""; $("in-serial").focus();
+        render();
+      })
+      .catch(function () { msg("No se pudo validar. Intente de nuevo.", false); });
+  }
+  $("btn-add-serial").addEventListener("click", validarSerial);
+  $("in-serial").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); validarSerial(); }
+  });
+
+  /* ---------- pintar ---------- */
+  function celda(tr, txt, cls) {
+    var td = document.createElement("td"); td.textContent = txt;
+    if (cls) td.className = cls; tr.appendChild(td); return td;
+  }
+
+  function render() {
+    var tb = $("lineas"); tb.innerHTML = "";
+    lineas.forEach(function (l, i) {
+      var tr = document.createElement("tr");
+      celda(tr, l.nombre);
+      var det = document.createElement("td");
+      if (l.serializado) {
+        l.unidades.forEach(function (u, j) {
+          var c = document.createElement("span"); c.className = "chip";
+          c.appendChild(document.createTextNode("✓ " + u.serial));
+          var b = document.createElement("button"); b.type = "button"; b.textContent = "×";
+          b.onclick = function () { l.unidades.splice(j, 1); if (!l.unidades.length) lineas.splice(i, 1); refrescarStock(); render(); };
+          c.appendChild(b); det.appendChild(c);
+        });
+      } else { det.textContent = "—"; }
+      tr.appendChild(det);
+      celda(tr, cantLinea(l), "n");
+      var tdx = document.createElement("td"); tdx.className = "n";
+      var x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "🗑";
+      x.onclick = function () { lineas.splice(i, 1); refrescarStock(); render(); };
+      tdx.appendChild(x); tr.appendChild(tdx);
+      tb.appendChild(tr);
+    });
+    $("vacio").style.display = lineas.length ? "none" : "";
+    informe();
+    var total = lineas.reduce(function (a, l) { return a + cantLinea(l); }, 0);
+    $("total-gen").textContent = total;
+    $("btn-guardar").disabled = !lineas.length;
+    $("payload").value = JSON.stringify(lineas);
+  }
+
+  function refrescarStock() { if (seleccionado && info) pintarStock(disponible()); }
+
+  /* Informe: solo columnas de los materiales agregados */
+  function informe() {
+    var t = $("informe"); t.innerHTML = "";
+    if (!lineas.length) return;
+    var tec = tsTec.getValue() ? tsTec.getItem(tsTec.getValue()).textContent.trim() : "—";
+    var thead = document.createElement("tr");
+    ["Técnico", "Fecha"].concat(lineas.map(function (l) { return l.nombre; }), ["Total"])
+      .forEach(function (h) { var th = document.createElement("th"); th.textContent = h; th.className = "n"; thead.appendChild(th); });
+    t.appendChild(thead);
+
+    var r1 = document.createElement("tr");
+    celda(r1, tec); celda(r1, $("id_fecha").value);
+    var total = 0;
+    lineas.forEach(function (l) { var c = cantLinea(l); total += c; celda(r1, c, "n"); });
+    celda(r1, total, "n").style.fontWeight = "700";
+    t.appendChild(r1);
+
+    var seriales = lineas.some(function (l) { return l.serializado; });
+    if (seriales) {
+      var r2 = document.createElement("tr");
+      celda(r2, "Seriales"); celda(r2, "");
+      lineas.forEach(function (l) {
+        celda(r2, l.serializado ? l.unidades.map(function (u) { return u.serial; }).join(", ") : "—");
+      });
+      celda(r2, "");
+      t.appendChild(r2);
+    }
+  }
+
+  tsTec.on("change", informe);
+  $("id_fecha").addEventListener("change", informe);
+
+  $("form-entrega").addEventListener("submit", function (e) {
+    if (!lineas.length) { e.preventDefault(); return; }
+    $("payload").value = JSON.stringify(lineas);
+  });
+
+  render();
+})();
+</script>
+{% endblock %}

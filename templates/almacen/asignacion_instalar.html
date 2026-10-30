@@ -1,251 +1,346 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block titulo %}Registrar operación · {{ tecnico.tecnico_apellido_nombres }}{% endblock %}
-
+{% block titulo %}Registrar operación · {{ tecnico.get_full_name|default:tecnico.username }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/formulario.css' %}">
-<link rel="stylesheet" href="{% static 'css/tecnico_asignaciones.css' %}">
-<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
-
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css" rel="stylesheet">
 <style>
-    #form-instalar .ts-wrapper {
-        width: 100%;
-        font-size: inherit;
-    }
-
-    #form-instalar .ts-wrapper .ts-control {
-        min-height: 42px;
-        padding: 10px 12px;
-        border: 1px solid #ced4da;
-        border-radius: 6px;
-        background: #fff;
-        box-shadow: none;
-        color: #212529;
-    }
-
-    #form-instalar .ts-wrapper.focus .ts-control {
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
-    }
-
-    #form-instalar .ts-dropdown {
-        z-index: 1000;
-        background: #fff;
-        border: 1px solid #ced4da;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    #form-instalar .ts-dropdown .option {
-        padding: 9px 12px;
-        cursor: pointer;
-    }
-
-    #form-instalar .ts-dropdown .active {
-        background: #e9f2ff;
-        color: #212529;
-    }
-
-    #form-instalar .ts-dropdown .no-results {
-        padding: 10px 12px;
-        color: #6c757d;
-    }
+  .ent { --ok:#2d6a4f; --err:#b42318; --line:#d9dee7; --bg:#f6f8fb; --ac:#1f3a5f; font-size:13px; }
+  .ent h2 { margin:0 0 8px; font-size:17px; }
+  .ent .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+  .ent .top { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; }
+  .ent label { display:block; font-weight:600; font-size:12px; margin-bottom:3px; color:#444; }
+  .ent input, .ent select, .ent textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; box-sizing:border-box; }
+  .ent textarea { resize:vertical; }
+  .ent .main { display:grid; grid-template-columns:minmax(300px,380px) 1fr; gap:10px; }
+  .ent .main .card { margin-bottom:0; }
+  .ent .row { display:flex; gap:6px; align-items:flex-end; margin-top:6px; }
+  .ent .row > div { flex:1; }
+  .ent .btn { padding:7px 12px; border:0; border-radius:6px; background:var(--ac); color:#fff; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .ent .btn.sec { background:#fff; color:var(--ac); border:1px solid var(--ac); text-decoration:none; display:inline-block; }
+  .ent .msg { margin-top:6px; font-weight:600; min-height:18px; }
+  .ent .msg.ok { color:var(--ok); } .ent .msg.err { color:var(--err); }
+  .ent .scroll { max-height:200px; overflow:auto; }
+  .ent table { border-collapse:collapse; width:100%; }
+  .ent th, .ent td { border:1px solid var(--line); padding:4px 7px; text-align:left; vertical-align:top; }
+  .ent th { background:var(--ac); color:#fff; font-size:12px; position:sticky; top:0; }
+  .ent td.n, .ent th.n { text-align:center; }
+  .ent .chip { display:inline-flex; gap:4px; align-items:center; background:#e7f4ec; color:var(--ok); border:1px solid #b7dcc6; border-radius:12px; padding:1px 7px; margin:1px 3px 1px 0; font-size:12px; }
+  .ent .chip button, .ent .x { border:0; background:none; cursor:pointer; color:var(--err); font-weight:700; }
+  .ent .informe { margin-top:10px; }
+  .ent .informe .scroll { max-height:150px; }
+  .ent .informe th { font-size:11px; white-space:normal; min-width:80px; }
+  .ent .foot { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .ent .sep { border-top:1px dashed var(--line); margin-top:12px; padding-top:10px; }
+  .ent .pend { font-size:12px; color:#444; }
+  .ent .pend span { display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:1px 8px; margin:2px 3px 0 0; }
+  .ent .pend span.cero { opacity:.45; }
+  @media(max-width:900px){ .ent .main { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
 
-
 {% block contenido %}
+<div class="ent">
+  <h2>Registrar operación · {{ tecnico.get_full_name|default:tecnico.username }}</h2>
 
-<header class="cabecera">
-    <div>
-        <h1>{{ tecnico.tecnico_apellido_nombres }}</h1>
-        <div class="tecnico-datos">
-            <span>CC {{ tecnico.tecnico_cedula }}</span>
-            {% if tecnico.supervisor %}<span>Supervisor: {{ tecnico.supervisor }}</span>{% endif %}
-        </div>
-    </div>
-    <div class="acciones">
-        <a class="btn btn-secundario" href="{% url 'almacen:asignaciones' %}">Volver</a>
-    </div>
-</header>
+  {% if messages %}{% for m in messages %}
+    <div class="card" style="border-color:{% if m.tags == 'error' %}#b42318{% else %}#2d6a4f{% endif %}">{{ m }}</div>
+  {% endfor %}{% endif %}
 
-{{ estados_instalan|json_script:"estados-instalan" }}
+  {{ estados_instalan|json_script:"estados-instalan" }}
+  {{ pend_cantidad|json_script:"pend-cantidad" }}
+  {{ pend_seriales|json_script:"pend-seriales" }}
+  {{ payload_previo|json_script:"payload-previo" }}
 
-<form method="post" id="form-instalar" enctype="multipart/form-data" novalidate>
+  <form method="post" id="form-instalar" enctype="multipart/form-data">
     {% csrf_token %}
+    <input type="hidden" name="payload" id="payload">
 
     {% if form.non_field_errors %}
-        <div class="error">{{ form.non_field_errors }}</div>
+      <div class="card" style="border-color:#b42318;color:#b42318">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <section class="tarjeta">
-        <div class="tarjeta-cab"><h2>Datos de la operación</h2></div>
-        <div class="tarjeta-cuerpo">
-
-            <div class="rejilla-3">
-                {% for campo in form %}
-                    {% if campo.name != "observaciones" %}
-                    <div class="campo {% if campo.errors %}campo-error{% endif %}">
-                        {{ campo.label_tag }}
-                        {{ campo }}
-                        {% if campo.help_text %}<small>{{ campo.help_text }}</small>{% endif %}
-                        {% if campo.errors %}<div class="error">{{ campo.errors }}</div>{% endif %}
-                    </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-
-            <div class="campo {% if form.observaciones.errors %}campo-error{% endif %}" style="margin-bottom: 0;">
-                <label for="{{ form.observaciones.id_for_label }}">Observaciones *</label>
-                {{ form.observaciones }}
-                {% if form.observaciones.errors %}
-                    <div class="error">{{ form.observaciones.errors }}</div>
-                {% endif %}
-            </div>
-
+    <!-- Datos de la operación -->
+    <div class="card top">
+      {% for campo in form %}{% if campo.name != "observaciones" %}
+        <div>
+          {{ campo.label_tag }}{{ campo }}
+          {% if campo.errors %}<div class="msg err">{{ campo.errors }}</div>{% endif %}
         </div>
-    </section>
-
-    <section class="tarjeta" id="bloque-materiales">
-        <div class="tarjeta-cab">
-            <h2>Material en poder del técnico</h2>
-            {% if pendientes %}
-            <button type="button" class="btn btn-secundario btn-chico" id="llenar-todo">
-                Marcar todo como instalado
-            </button>
-            {% endif %}
-        </div>
-
-        {% if pendientes %}
-        <div class="tabla-instalar">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Producto</th>
-                        <th>Entregado</th>
-                        <th class="num">Pendiente</th>
-                        <th class="num">Instalar</th>
-                        {% if puede_ver_almacen %}
-                        <th><span class="sr-only">Devolver</span></th>
-                        {% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for a in pendientes %}
-                    <tr>
-                        <td>
-                            <strong>{{ a.producto.nombre_completo }}</strong>
-                            {% if a.unidad_serializada %}
-                                <div class="codigo">{{ a.unidad_serializada.codigo }}</div>
-                            {% endif %}
-                        </td>
-                        <td>{{ a.fecha_asignacion|date:"d/m/Y" }}</td>
-                        <td class="num">{{ a.cantidad_pendiente }}</td>
-                        <td class="num">
-                            {% if a.unidad_serializada_id %}
-                                <label class="marca-inst">
-                                    <input class="check" type="checkbox"
-                                           name="inst_{{ a.pk }}"
-                                           {% if a.marcado %}checked{% endif %}>
-                                    Instalada
-                                </label>
-                            {% else %}
-                                <input class="input input-cant" type="number"
-                                       name="cant_{{ a.pk }}" min="0"
-                                       max="{{ a.cantidad_pendiente }}"
-                                       data-max="{{ a.cantidad_pendiente }}"
-                                       value="{{ a.valor }}" placeholder="0">
-                            {% endif %}
-                        </td>
-                        {% if puede_ver_almacen %}
-                        <td class="col-acciones">
-                            <button type="submit" form="devolver-{{ a.pk }}"
-                                    class="btn btn-secundario btn-chico"
-                                    onclick="return confirm('¿Devolver {{ a.producto.nombre_completo|escapejs }} al almacén?')">
-                                Devolver
-                            </button>
-                        </td>
-                        {% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="vacio">
-            <strong>Este técnico no tiene material pendiente</strong>
-            Solo podrá registrar órdenes que no instalan material
-            (no ejecutada, cancelada, anulada…).
-        </div>
-        {% endif %}
-    </section>
-
-    <div class="form-acciones">
-        <a class="btn btn-secundario" href="{% url 'almacen:asignaciones' %}">Cancelar</a>
-        <button type="submit" class="btn btn-primario">Registrar operación</button>
+      {% endif %}{% endfor %}
     </div>
-</form>
 
-{% for a in pendientes %}
-<form id="devolver-{{ a.pk }}" method="post"
-      action="{% url 'almacen:asignacion_devolver' a.pk %}">
-    {% csrf_token %}
-    <input type="hidden" name="next" value="{{ request.path }}">
-</form>
-{% endfor %}
+    <div class="card">
+      <label for="{{ form.observaciones.id_for_label }}">Observaciones *</label>
+      {{ form.observaciones }}
+      {% if form.observaciones.errors %}<div class="msg err">{{ form.observaciones.errors }}</div>{% endif %}
+    </div>
 
+    <!-- Materiales -->
+    <div id="bloque-materiales">
+      <div class="main">
+        <div class="card">
+          <!-- Por cantidad -->
+          <label for="sel-producto">Material por cantidad (codos, niples, etc.)</label>
+          <select id="sel-producto">
+            <option value="">Seleccione material…</option>
+            {% for p in pend_cantidad %}
+              <option value="{{ p.id }}">{{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+          <div class="msg" id="stock"></div>
+          <div class="row">
+            <div><input type="number" min="1" id="in-cantidad" value="1"></div>
+            <button type="button" class="btn" id="btn-add-cant">Agregar</button>
+          </div>
+
+          <!-- Por serial -->
+          <div class="sep">
+            <label for="in-serial">Por serial o código (medidores, reguladores…)</label>
+            <div class="row">
+              <div><input type="text" id="in-serial" autocomplete="off" placeholder="Escriba o escanee y Enter"></div>
+              <button type="button" class="btn" id="btn-add-serial">Validar</button>
+            </div>
+          </div>
+
+          <div class="msg" id="msg"></div>
+          <div class="pend sep" id="resumen-pend"></div>
+        </div>
+
+        <div class="card">
+          <label>Materiales de esta operación</label>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>Material</th><th>Detalle / serial</th><th class="n">Cant.</th><th></th></tr></thead>
+              <tbody id="lineas"></tbody>
+            </table>
+            <div id="vacio" style="padding:14px;color:#777;text-align:center">Aún no agrega materiales.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Informe en vivo -->
+    <div class="card informe" id="card-informe">
+      <label>Informe de la operación</label>
+      <div class="scroll"><table id="informe"></table></div>
+    </div>
+
+    <div class="foot">
+      <a href="{% url 'almacen:asignaciones' %}" class="btn sec">Cancelar</a>
+      <span><b id="total-gen">0</b> pieza(s) &nbsp;
+        <button class="btn" id="btn-guardar" type="submit">Registrar operación</button></span>
+    </div>
+  </form>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
 (function () {
-    const selAnomalia = document.getElementById('id_anomalia');
+  var $ = function (id) { return document.getElementById(id); };
 
-    if (selAnomalia && window.TomSelect) {
-        new TomSelect(selAnomalia, {
-            maxOptions: 300,
-            create: false,
-            allowEmptyOption: true,
-            placeholder: 'Buscar o seleccionar una anomalía...',
-            searchField: ['text'],
-            closeAfterSelect: true,
-            render: {
-                no_results: function () {
-                    return '<div class="no-results">No se encontraron anomalías</div>';
-                }
-            }
-        });
-    }
+  // Lo que el técnico tiene en su poder (viene del servidor)
+  var pend = JSON.parse($("pend-cantidad").textContent) || [];
+  var seriales = JSON.parse($("pend-seriales").textContent) || [];
+  var instalan = JSON.parse($("estados-instalan").textContent) || [];
+  var lineas = JSON.parse($("payload-previo").textContent);
+  if (!Array.isArray(lineas)) lineas = [];
 
-    const estado = document.getElementById('id_estado');
-    const bloque = document.getElementById('bloque-materiales');
-    const datosInstalan = document.getElementById('estados-instalan');
+  var mapa = {};
+  pend.forEach(function (p) { mapa[String(p.id)] = p; });
 
-    if (!estado || !bloque || !datosInstalan) return;
+  var tsProd = new TomSelect($("sel-producto"), { placeholder: "Buscar material…", maxOptions: 300 });
 
-    const instalan = JSON.parse(datosInstalan.textContent);
-
-    function actualizar() {
-        const instala = instalan.includes(estado.value);
-        bloque.style.display = instala ? '' : 'none';
-
-        if (!instala) {
-            bloque.querySelectorAll('input[data-max]').forEach(i => i.value = '');
-            bloque.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
-        }
-    }
-
-    estado.addEventListener('change', actualizar);
-    actualizar();
-
-    document.getElementById('llenar-todo')?.addEventListener('click', function () {
-        document.querySelectorAll('input[data-max]').forEach(i => i.value = i.dataset.max);
-        document.querySelectorAll('input[type="checkbox"][name^="inst_"]').forEach(c => c.checked = true);
+  function msg(txt, ok) {
+    var m = $("msg"); m.textContent = txt || "";
+    m.className = "msg " + (txt ? (ok ? "ok" : "err") : "");
+  }
+  function enLinea(pid, ser) {
+    return lineas.find(function (l) {
+      return String(l.producto) === String(pid) && !!l.serializado === !!ser;
     });
+  }
+  function cantLinea(l) { return l.serializado ? l.unidades.length : l.cantidad; }
+  function disponible(pid) {
+    var p = mapa[String(pid)]; if (!p) return 0;
+    var l = enLinea(pid, false);
+    return p.pendiente - (l ? l.cantidad : 0);
+  }
+  function serialUsado(id) {
+    return lineas.some(function (l) {
+      return l.serializado && l.unidades.some(function (u) { return u.id === id; });
+    });
+  }
+
+  /* ---- Estado: solo se piden materiales si el estado instala ---- */
+  var estadoSel = $("id_estado");
+  function evaluarEstado() {
+    if (!estadoSel) return;
+    var instala = instalan.indexOf(estadoSel.value) !== -1;
+    $("bloque-materiales").style.display = instala ? "" : "none";
+    $("card-informe").style.display = instala ? "" : "none";
+    if (!instala && lineas.length) { lineas = []; render(); }
+  }
+  if (estadoSel) estadoSel.addEventListener("change", evaluarEstado);
+
+  /* ---- Elegir material por cantidad ---- */
+  function pintarStock() {
+    var pid = tsProd.getValue(), s = $("stock");
+    if (!pid) { s.textContent = ""; s.className = "msg"; return; }
+    var d = disponible(pid);
+    s.textContent = "Pendiente por instalar: " + d;
+    s.className = "msg " + (d > 0 ? "ok" : "err");
+  }
+  tsProd.on("change", function () { msg(""); pintarStock(); });
+
+  $("in-cantidad").addEventListener("input", function () {
+    var pid = tsProd.getValue(); if (!pid) return;
+    var n = parseInt(this.value, 10), d = disponible(pid);
+    if (!isNaN(n) && n > d) {
+      $("stock").textContent = "Solo tiene " + d + " pendiente(s) y está pidiendo " + n + ".";
+      $("stock").className = "msg err";
+    } else { pintarStock(); }
+  });
+
+  function agregarCantidad() {
+    var pid = tsProd.getValue();
+    if (!pid) return msg("Seleccione un material.", false);
+    var n = parseInt($("in-cantidad").value, 10);
+    if (!n || n <= 0) return msg("Cantidad inválida.", false);
+    var d = disponible(pid);
+    if (n > d) return msg("✗ Solo tiene " + d + " pendiente(s) de este material y pide " + n + ".", false);
+
+    var p = mapa[String(pid)];
+    var l = enLinea(pid, false);
+    if (!l) {
+      l = { producto: p.id, nombre: p.nombre, serializado: false, cantidad: 0, unidades: [] };
+      lineas.push(l);
+    }
+    l.cantidad += n;
+    msg("✓ Agregado: " + n + " × " + p.nombre, true);
+    $("in-cantidad").value = 1;
+    render(); pintarStock();
+  }
+  $("btn-add-cant").addEventListener("click", agregarCantidad);
+  $("in-cantidad").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); agregarCantidad(); }
+  });
+
+  /* ---- Validar serial / código contra lo asignado al técnico ---- */
+  function validarSerial() {
+    var txt = $("in-serial").value.trim().toLowerCase();
+    if (!txt) return msg("Escriba o escanee un serial.", false);
+
+    var u = seriales.find(function (s) {
+      return String(s.serial).toLowerCase() === txt || String(s.codigo).toLowerCase() === txt;
+    });
+    if (!u) {
+      msg("✗ Ese serial NO está asignado a este técnico (o ya fue instalado).", false);
+      $("in-serial").select(); return;
+    }
+    if (serialUsado(u.id)) {
+      msg("✗ Ese serial ya está en la lista.", false);
+      $("in-serial").select(); return;
+    }
+    var l = enLinea(u.producto, true);
+    if (!l) {
+      l = { producto: u.producto, nombre: u.nombre, serializado: true, cantidad: 0, unidades: [] };
+      lineas.push(l);
+    }
+    l.unidades.push({ id: u.id, serial: u.serial });
+    msg("✓ " + u.serial + " · " + u.nombre + " — lo tiene asignado.", true);
+    $("in-serial").value = ""; $("in-serial").focus();
+    render();
+  }
+  $("btn-add-serial").addEventListener("click", validarSerial);
+  $("in-serial").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); validarSerial(); }
+  });
+
+  /* ---- Pintar ---- */
+  function celda(tr, txt, cls) {
+    var td = document.createElement("td"); td.textContent = txt;
+    if (cls) td.className = cls; tr.appendChild(td); return td;
+  }
+
+  function render() {
+    var tb = $("lineas"); tb.innerHTML = "";
+    lineas.forEach(function (l, i) {
+      var tr = document.createElement("tr");
+      celda(tr, l.nombre);
+      var det = document.createElement("td");
+      if (l.serializado) {
+        l.unidades.forEach(function (u, j) {
+          var c = document.createElement("span"); c.className = "chip";
+          c.appendChild(document.createTextNode("✓ " + u.serial));
+          var b = document.createElement("button"); b.type = "button"; b.textContent = "×";
+          b.onclick = function () {
+            l.unidades.splice(j, 1);
+            if (!l.unidades.length) lineas.splice(i, 1);
+            render(); pintarStock();
+          };
+          c.appendChild(b); det.appendChild(c);
+        });
+      } else { det.textContent = "—"; }
+      tr.appendChild(det);
+      celda(tr, cantLinea(l), "n");
+      var tdx = document.createElement("td"); tdx.className = "n";
+      var x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "🗑";
+      x.onclick = function () { lineas.splice(i, 1); render(); pintarStock(); };
+      tdx.appendChild(x); tr.appendChild(tdx);
+      tb.appendChild(tr);
+    });
+    $("vacio").style.display = lineas.length ? "none" : "";
+    informe(); resumen();
+    $("total-gen").textContent = lineas.reduce(function (a, l) { return a + cantLinea(l); }, 0);
+    $("payload").value = JSON.stringify(lineas);
+  }
+
+
+  /* Informe: solo columnas de los materiales cargados */
+  function informe() {
+    var t = $("informe"); t.innerHTML = "";
+    if (!lineas.length) return;
+
+    var head = document.createElement("tr");
+    ["Concepto"].concat(lineas.map(function (l) { return l.nombre; }), ["Total"])
+      .forEach(function (h, k) {
+        var th = document.createElement("th"); th.textContent = h;
+        if (k) th.className = "n"; head.appendChild(th);
+      });
+    t.appendChild(head);
+
+    var r1 = document.createElement("tr"); celda(r1, "Cantidad instalada");
+    var total = 0;
+    lineas.forEach(function (l) { var c = cantLinea(l); total += c; celda(r1, c, "n"); });
+    celda(r1, total, "n").style.fontWeight = "700";
+    t.appendChild(r1);
+
+    if (lineas.some(function (l) { return l.serializado; })) {
+      var r2 = document.createElement("tr"); celda(r2, "Seriales");
+      lineas.forEach(function (l) {
+        celda(r2, l.serializado ? l.unidades.map(function (u) { return u.serial; }).join(", ") : "—");
+      });
+      celda(r2, "");
+      t.appendChild(r2);
+    }
+  }
+
+  $("form-instalar").addEventListener("submit", function (e) {
+    var instala = estadoSel ? instalan.indexOf(estadoSel.value) !== -1 : true;
+    if (instala && !lineas.length) {
+      e.preventDefault();
+      msg("✗ Agregue al menos un material o serial antes de registrar.", false);
+      return;
+    }
+    $("payload").value = JSON.stringify(lineas);
+  });
+
+  evaluarEstado();
+  render();
 })();
 </script>
 {% endblock %}
-

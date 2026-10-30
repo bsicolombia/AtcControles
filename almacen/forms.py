@@ -784,3 +784,21 @@ class CargaSAPForm(forms.Form):
             )
 
         return archivo
+    
+from django import forms
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+
+class EntregaForm(forms.Form):
+    tecnico = forms.ModelChoiceField(
+        queryset=get_user_model().objects.filter(rol="TECNICO").order_by("first_name", "last_name"),
+        label="Técnico",
+    )
+    fecha = forms.DateField(
+        initial=timezone.localdate,
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+    )
+    observaciones = forms.CharField(
+        required=False, label="Observaciones",
+        widget=forms.TextInput(attrs={"placeholder": "Opcional"}),
+    )

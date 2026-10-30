@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block contenido %}
+<h2>Informe de entregas</h2>
+<form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+  <input name="q" value="{{ q }}" placeholder="Código, serial, material, técnico…">
+  <select name="tecnico">
+    <option value="">Todos los técnicos</option>
+    {% for t in tecnicos_lista %}
+      <option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.get_full_name|default:t.username }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="desde" value="{{ desde }}"> <input type="date" name="hasta" value="{{ hasta }}">
+  <button>Filtrar</button>
+  <a href="?{{ request.GET.urlencode }}&export=xlsx">📥 Excel</a>
+  <a href="{% url 'almacen:entrega_nueva' %}">➕ Nueva entrega</a>
+</form>
+
+<div style="overflow:auto">
+<table border="1" cellpadding="5" style="border-collapse:collapse;font-size:13px">
+  <thead>
+    <tr style="background:#1f3a5f;color:#fff">
+      <th>Código</th><th>Fecha</th><th>Técnico</th><th>C.C.</th><th>Entregó</th>
+      {% for p in cols %}<th>{{ p.nombre_completo }}</th>{% endfor %}
+      <th>Total</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in filas %}
+    <tr>
+      <td><a href="{% url 'almacen:entrega_detalle' f.entrega.pk %}">{{ f.entrega.codigo }}</a></td>
+      <td>{{ f.entrega.fecha|date:"d/m/Y" }}</td>
+      <td>{{ f.entrega.tecnico.get_full_name|default:f.entrega.tecnico.username }}</td>
+      <td>{{ f.entrega.tecnico.cedula }}</td>
+      <td>{{ f.entrega.entregado_por.get_full_name|default:f.entrega.entregado_por.username }}</td>
+      {% for c in f.celdas %}<td align="center">{% if c %}{{ c }}{% endif %}</td>{% endfor %}
+      <td align="center"><b>{{ f.total }}</b></td>
+      <td><a href="{% url 'almacen:entrega_pdf' f.entrega.pk %}" target="_blank">PDF</a></td>
+    </tr>
+    {% empty %}<tr><td colspan="8">Sin entregas.</td></tr>{% endfor %}
+  </tbody>
+  {% if filas %}
+  <tfoot><tr style="background:#eef2f7;font-weight:700">
+    <td colspan="5" align="right">TOTALES</td>
+    {% for t in totales %}<td align="center">{{ t }}</td>{% endfor %}
+    <td align="center">{{ total_general }}</td><td></td>
+  </tr></tfoot>
+  {% endif %}
+</table>
+</div>
+{% endblock %}

@@ -22,13 +22,26 @@ class ErrorArchivo(Exception):
     pass
 
 def _quien(previo, nuevo):
-    """¿Quién corrigió? Si cambió la fila de SAP, la clave cambia; si no, se arregló Five."""
+    """Determina si la corrección vino de SAP, Five o ambos."""
+
     sap = previo.clave_unica != nuevo.clave_unica
+
+    anterior = previo.comparacion or {}
+    actual = nuevo.comparacion or {}
+
     five = any(
-        (previo.comparacion or {}).get(k, {}).get("five") != v.get("five")
-        for k, v in (nuevo.comparacion or {}).items()
+        anterior.get(k, {}).get("five")
+        != actual.get(k, {}).get("five")
+        for k in set(anterior) | set(actual)
     )
-    return "AMBOS" if sap and five else "SAP" if sap else "FIVE"
+
+    if sap and five:
+        return "AMBOS"
+
+    if sap:
+        return "SAP"
+
+    return "FIVE"
 def _familia(r):
     """Distingue el tipo de material dentro de una misma orden."""
     if r.numero_serie:
@@ -38,12 +51,23 @@ def _familia(r):
     return f"P:{r.codigo_producto}"
 
 def _actualizar_vigencia(carga, registros):
-    """Cierra o reemplaza los errores abiertos de cargas anteriores que esta carga vuelve a tocar."""
+    """Actualiza únicamente errores anteriores que corresponden
+    al mismo identificador o al mismo producto por cantidad.
+    """
+
     E = RegistroSAP.Estado
+
     series = {r.numero_serie for r in registros if r.numero_serie}
-    ordenes = {r.numero_orden for r in registros if r.numero_orden}
     codigos = {r.codigo_unidad for r in registros if r.codigo_unidad}
     claves = {r.clave_unica for r in registros}
+
+    ordenes_cantidad = {
+        r.numero_orden
+        for r in registros
+        if not r.numero_serie
+        and not r.codigo_unidad
+        and r.codigo_producto
+    }
 
     abiertos = list(
         RegistroSAP.objects
@@ -51,13 +75,84 @@ def _actualizar_vigencia(carga, registros):
         .exclude(carga=carga)
         .filter(
             Q(numero_serie__in=series)
-            | Q(numero_orden__in=ordenes)
             | Q(codigo_unidad__in=codigos)
             | Q(clave_unica__in=claves)
+            | Q(
+                numero_orden__in=ordenes_cantidad,
+            )
+            (
+    Q(numero_serie__isnull=True) |
+    Q(numero_serie="")
+),
+(
+    Q(codigo_unidad__isnull=True) |
+    Q(codigo_unidad="")
+),
         )
     )
+
     if not abiertos:
         return
+
+    def llaves(r):
+        resultado = [("c", r.clave_unica)]
+
+        if r.numero_serie:
+            resultado.append(("s", r.numero_serie))
+
+        elif r.codigo_unidad:
+            resultado.append(("u", r.codigo_unidad))
+
+        elif r.codigo_producto:
+            resultado.append((
+                "p",
+                r.numero_orden,
+                r.codigo_producto,
+            ))
+
+        return resultado
+
+    indice = defaultdict(list)
+
+    for anterior in abiertos:
+        for llave in llaves(anterior):
+            indice[llave].append(anterior)
+
+    tocados = {}
+
+    # Los registros OK tienen prioridad sobre los errores.
+    for nuevo in sorted(
+        registros,
+        key=lambda r: r.estado != E.OK
+    ):
+        if nuevo.estado == E.IGNORADO:
+            continue
+
+        for llave in llaves(nuevo):
+            for anterior in indice.get(llave, []):
+                tocados.setdefault(
+                    anterior.pk,
+                    (anterior, nuevo)
+                )
+
+    for anterior, nuevo in tocados.values():
+
+        anterior.vigente = False
+
+        if nuevo.estado == E.OK:
+            anterior.resuelto = True
+            anterior.resuelto_en = carga
+            anterior.resuelto_por = _quien(anterior, nuevo)
+
+    RegistroSAP.objects.bulk_update(
+        [anterior for anterior, _ in tocados.values()],
+        [
+            "vigente",
+            "resuelto",
+            "resuelto_en",
+            "resuelto_por",
+        ],
+    )
 
     def llaves(r):
         ks = [("c", r.clave_unica), ("oc", r.numero_orden, _familia(r))]
@@ -262,12 +357,12 @@ class _Contexto:
             p.codigo_producto: p
             for p in Producto.objects.filter(codigo_producto__in=codigos_prod)
         }
-        self.ops = {o.numero_orden: o
-                    for o in Operacion.objects.filter(numero_orden__in=ordenes)}
-        
-        self.ops = {o.numero_orden: o
-                    for o in Operacion.objects.select_related("anomalia")
-                    .filter(numero_orden__in=ordenes)}
+        self.ops = {
+            o.numero_orden: o
+            for o in Operacion.objects
+            .select_related("anomalia", "tecnico")
+            .filter(numero_orden__in=ordenes)
+        }
 
         # Se busca cada identificador por serie Y por código, para detectar
         # cuando SAP mandó un identificador en la columna equivocada.
@@ -322,11 +417,34 @@ class _Contexto:
 # ---------------------------------------------------------------- conciliación
 def _item(label, five, sap, ok):
     return {"label": label, "five": five or "", "sap": sap or "", "ok": bool(ok)}
-
-
 def _res(estado, tipo, diag, comp, op=None, uni=None, prod=None):
-    return {"estado": estado, "tipo": tipo, "diag": diag,
-            "comp": comp, "op": op, "uni": uni, "prod": prod}
+    return {
+        "estado": estado,
+        "tipo": tipo,
+        "diag": diag,
+        "comp": comp,
+        "op": op,
+        "uni": uni,
+        "prod": prod,
+    }
+
+def _tipo_final(malos):
+    malos = set(malos)
+
+    if {"orden", "cuenta_contrato"}.issubset(malos):
+        return "ORDEN_Y_CUENTA_DIFIEREN"
+
+    if len(malos) >= 2:
+        return "VARIOS_DIFIEREN"
+
+    equivalencias = {
+        "orden": "ORDEN_DIFIERE",
+        "cuenta_contrato": "CUENTA_DIFIERE",
+        "tipo_operacion": "TIPO_DIFIERE",
+        "cantidad": "CANTIDAD_DIFIERE",
+    }
+
+    return equivalencias.get(next(iter(malos)), "VARIOS_DIFIEREN")
 
 
 def _tipo_final(malos):
@@ -404,7 +522,7 @@ def _conciliar_unidad(f, ctx, tipo):
                                 Operacion.TipoOperacion(tipo).label,
                                 ref is not None and ref.tipo_operacion == tipo),
     }
-            # ---- no existe en Five ----
+    # ---- no existe en Five ----
     if unidad is None:
         if op_sap is None:
             return _res(ERR, "NO_EXISTE_EN_FIVE",
@@ -475,7 +593,7 @@ def _conciliar_cantidad(f, ctx, tipo):
                     f"{prod.nombre} se reporta por código de unidad (ej. {prod.categoria.prefijo}-001), "
                     f"no por código de producto y cantidad.", {}, op, None, prod)
 
-    cant = _cantidad(f["cantidad_raw"]) if f["cantidad_raw"] else None
+    cant = _cantidad(f["cantidad_raw"])
     if cant is None:
         return _res(ERR, "CANTIDAD_INVALIDA",
                     f"La cantidad '{f['cantidad_raw']}' no es un entero positivo.",
