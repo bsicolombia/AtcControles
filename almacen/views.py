@@ -22,6 +22,9 @@ from django.views.generic import (
     UpdateView,
 )
 
+from .models import (Asignacion, Categoria, Inconsistencia, Inventario,
+                     MovimientoInventario, Producto, UnidadSerializada)
+from django.db.models import Count
 from usuarios.roles import DIGITADOR, tiene_rol
 from django.db.models import Prefetch
 from usuarios.mixins import RolRequeridoMixin
@@ -359,6 +362,9 @@ class DashboardView(RolRequeridoMixin, TemplateView):
             MovimientoInventario.objects
             .select_related("producto", "unidad_serializada", "usuario")[:8]
         )
+        
+        ctx["inconsistencias_pendientes"] = Inconsistencia.objects.filter(
+            estado=Inconsistencia.Estado.PENDIENTE).count()
 
         return ctx
 
@@ -1008,7 +1014,6 @@ class UnidadUpdateView(FormPageMixin, RolRequeridoMixin, UpdateView):
         return ctx
 
 
-
 # ============================================================
 # CONSOLIDADO DE ASIGNACIONES, FIVE Y SAP
 # ============================================================
@@ -1367,7 +1372,51 @@ class AsignacionCreateView(FormPageMixin, RolRequeridoMixin, FormView):
         messages.success(self.request, "Asignación registrada.")
         return super().form_valid(form)
 
+# ============================================================
+# ASIGNACIONES · EDITAR
+# ============================================================
 
+class AsignacionUpdateView(
+    FormPageMixin,
+    RolRequeridoMixin,
+    UpdateView
+):
+    roles_permitidos = ROLES_ALMACEN
+
+    model = Asignacion
+    form_class = AsignacionForm
+    template_name = "almacen/asignacion_form.html"
+
+    titulo = "Editar asignación"
+    boton = "Guardar cambios"
+
+    def get_queryset(self):
+        return Asignacion.objects.select_related(
+            "tecnico",
+            "producto",
+            "unidad_serializada",
+        )
+
+    def get_success_url(self):
+        return reverse_lazy("almacen:asignaciones")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        ctx["subtitulo"] = (
+            f"Modificar asignación de {self.object.tecnico}"
+        )
+
+        ctx["cancel_url"] = self.get_success_url()
+
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            "Asignación actualizada correctamente."
+        )
+        return super().form_valid(form)
 # ============================================================
 # INSTALAR / DEVOLVER · PANTALLA DEL TÉCNICO (varios materiales)
 # ============================================================
@@ -1393,8 +1442,9 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
         self.pendientes = [a for a in pendientes if a.cantidad_pendiente > 0]
 
     def _datos_pendientes(self):
-        """Lo que el técnico tiene en su poder: por cantidad y por serial."""
-        cantidad, seriales = OrderedDict(), []
+        """Todos los materiales por cantidad (con lo pendiente) y los seriales asignados."""
+        pend = {}
+        seriales = []
         for a in self.pendientes:
             if a.unidad_serializada_id:
                 u = a.unidad_serializada
@@ -1406,21 +1456,21 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     "nombre": a.producto.nombre_completo,
                 })
             else:
-                d = cantidad.setdefault(a.producto_id, {
-                    "id": a.producto_id,
-                    "nombre": a.producto.nombre_completo,
-                    "pendiente": 0,
-                })
-                d["pendiente"] += a.cantidad_pendiente
-        return list(cantidad.values()), seriales
+                pend[a.producto_id] = pend.get(a.producto_id, 0) + a.cantidad_pendiente
+
+        cantidad = [
+            {"id": p.pk, "nombre": p.nombre_completo, "pendiente": pend.get(p.pk, 0)}
+            for p in Producto.objects.filter(
+                estado=True, tipo_inventario=Producto.TipoInventario.CANTIDAD
+            ).order_by("nombre", "medida")
+        ]
+        return cantidad, seriales
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         self._cargar()
-
         pend_cantidad, pend_seriales = self._datos_pendientes()
 
-        # Conservar lo cargado si hubo errores (debe ser una LISTA, no texto)
         try:
             payload_previo = json.loads(self.request.POST.get("payload", "[]"))
             if not isinstance(payload_previo, list):
@@ -1429,79 +1479,16 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
             payload_previo = []
 
         ctx["tecnico"] = self.tecnico
-        ctx["pendientes"] = self.pendientes
         ctx["pend_cantidad"] = pend_cantidad
         ctx["pend_seriales"] = pend_seriales
+        ctx["productos_serializados"] = Producto.objects.filter(
+            estado=True, tipo_inventario=Producto.TipoInventario.SERIALIZADO
+        ).order_by("nombre", "medida")
+        ctx["tipos_inconsistencia"] = dict(Inconsistencia.Tipo.choices)
         ctx["payload_previo"] = payload_previo
-        ctx["estados_instalan"] = sorted(
-            e.value for e in Operacion.ESTADOS_QUE_INSTALAN
-        )
+        ctx["estados_instalan"] = sorted(e.value for e in Operacion.ESTADOS_QUE_INSTALAN)
         ctx["form"] = kwargs.get("form") or InstalacionMasivaForm()
         return ctx
-
-    def _resolver_items(self, lineas):
-        """Convierte el JSON del navegador en (asignación, cantidad), validando todo."""
-        items, errores = [], []
-
-        por_unidad = {
-            a.unidad_serializada_id: a
-            for a in self.pendientes if a.unidad_serializada_id
-        }
-        por_producto = {}
-        for a in self.pendientes:
-            if not a.unidad_serializada_id:
-                por_producto.setdefault(a.producto_id, []).append(a)
-
-        vistas = set()
-        for l in lineas:
-            if l.get("serializado"):
-                for u in l.get("unidades", []):
-                    try:
-                        uid = int(u.get("id"))
-                    except (TypeError, ValueError):
-                        errores.append("Hay una unidad inválida en la lista.")
-                        continue
-                    if uid in vistas:
-                        continue
-                    a = por_unidad.get(uid)
-                    if not a:
-                        errores.append(
-                            f"El serial {u.get('serial', '')} no está asignado "
-                            "a este técnico o ya fue instalado."
-                        )
-                        continue
-                    vistas.add(uid)
-                    items.append((a, None))
-            else:
-                nombre = l.get("nombre", "Material")
-                try:
-                    pid = int(l.get("producto"))
-                    cant = int(l.get("cantidad", 0))
-                except (TypeError, ValueError):
-                    errores.append(f"{nombre}: datos inválidos.")
-                    continue
-                if cant <= 0:
-                    continue
-
-                asigs = sorted(por_producto.get(pid, []), key=lambda x: x.pk)
-                total = sum(a.cantidad_pendiente for a in asigs)
-                if cant > total:
-                    errores.append(
-                        f"{nombre}: solo tiene {total} pendiente(s) y está "
-                        f"intentando instalar {cant}."
-                    )
-                    continue
-
-                # Reparte la cantidad entre las asignaciones del mismo material
-                resto = cant
-                for a in asigs:
-                    if resto <= 0:
-                        break
-                    tomar = min(resto, a.cantidad_pendiente)
-                    items.append((a, tomar))
-                    resto -= tomar
-
-        return items, errores
 
     def post(self, request, *args, **kwargs):
         self._cargar()
@@ -1514,19 +1501,14 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
         except ValueError:
             lineas = []
 
-        errores, items = [], []
+        errores, instala = [], False
         form_ok = form.is_valid()
-
         if form_ok:
             instala = form.cleaned_data["estado"] in Operacion.ESTADOS_QUE_INSTALAN
-            if instala:
-                items, errores = self._resolver_items(lineas)
-                if not items and not errores:
-                    errores.append("Indique al menos un material o unidad para instalar.")
-            elif lineas:
-                errores.append(
-                    "Con este estado no se instala material: deje la lista vacía."
-                )
+            if instala and not lineas:
+                errores.append("Agregue al menos un material o serial para instalar.")
+            elif not instala and lineas:
+                errores.append("Con este estado no se instala material: deje la lista vacía.")
 
         if errores or not form_ok:
             for e in errores:
@@ -1534,6 +1516,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
             return self.render_to_response(self.get_context_data(form=form))
 
         d = form.cleaned_data
+        novedades, piezas = [], 0
         try:
             with transaction.atomic():
                 op = services.obtener_o_crear_operacion(
@@ -1548,30 +1531,60 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     observaciones=d["observaciones"],
                     archivo=d.get("archivo_soporte"),
                 )
-                for asignacion, cantidad in items:
-                    services.instalar(
-                        asignacion=asignacion,
-                        usuario=request.user,
-                        cantidad=cantidad,
-                        fecha_instalacion=d["fecha_instalacion"],
-                        operacion=op,
-                        observaciones=d["observaciones"],
-                    )
+
+                if instala:
+                    vistos = set()
+                    for l in lineas:
+                        if l.get("serializado"):
+                            for u in l.get("unidades", []):
+                                serial = str(u.get("serial", "")).strip()
+                                if not serial or serial.lower() in vistos:
+                                    continue
+                                vistos.add(serial.lower())
+                                piezas += 1
+                                n = services.instalar_serial(
+                                    serial=serial, producto_id=l.get("producto"),
+                                    tecnico=self.tecnico, usuario=request.user,
+                                    operacion=op, fecha=d["fecha_instalacion"],
+                                    observaciones=d["observaciones"],
+                                )
+                                if n:
+                                    novedades.append(n)
+                        else:
+                            try:
+                                pid, cant = int(l.get("producto")), int(l.get("cantidad", 0))
+                            except (TypeError, ValueError):
+                                raise services.ErrorInventario("Hay un material inválido en la lista.")
+                            producto = Producto.objects.filter(pk=pid, estado=True).first()
+                            if not producto or producto.es_serializado:
+                                raise services.ErrorInventario("Hay un material inválido en la lista.")
+                            if cant <= 0:
+                                continue
+                            piezas += cant
+                            novedades += services.instalar_cantidad(
+                                producto=producto, cantidad=cant, tecnico=self.tecnico,
+                                usuario=request.user, operacion=op,
+                                fecha=d["fecha_instalacion"],
+                                observaciones=d["observaciones"],
+                            )
         except services.ErrorInventario as e:
             messages.error(request, str(e))
             return self.render_to_response(self.get_context_data(form=form))
 
-        if items:
+        if instala:
             messages.success(
                 request,
-                f"Instalación registrada en la orden {op.numero_orden} "
-                f"({len(items)} registro(s)).",
+                f"Orden {op.numero_orden} registrada ({piezas} pieza(s) reportadas).",
             )
         else:
             messages.success(
                 request,
-                f"Orden {op.numero_orden} registrada como "
-                f"{op.get_estado_display().lower()}.",
+                f"Orden {op.numero_orden} registrada como {op.get_estado_display().lower()}.",
+            )
+        if novedades:
+            messages.warning(
+                request,
+                f"⚠ Se registraron {len(novedades)} inconsistencia(s) para revisar.",
             )
         return redirect("almacen:tecnico_asignaciones", pk=self.tecnico.pk)
 # ============================================================
@@ -1668,34 +1681,166 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
 
         return super().form_valid(form)
 
+import json
 
+from django.shortcuts import get_object_or_404, render, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+
+from operaciones.models import Operacion
+from almacen.models import Asignacion
+
+
+@login_required
+def editar_instalacion(request, pk):
+
+    operacion = get_object_or_404(
+        Operacion,
+        pk=pk,
+        tipo_operacion=Operacion.TipoOperacion.INSTALACION,
+    )
+
+    asignaciones = (
+        Asignacion.objects
+        .filter(operacion=operacion)
+        .select_related("producto", "unidad_serializada")
+    )
+
+    payload_previo = []
+
+    for a in asignaciones:
+
+        if a.unidad_serializada_id:
+            unidad = a.unidad_serializada
+
+            payload_previo.append({
+                "producto": a.producto_id,
+                "nombre": a.producto.nombre_completo,
+                "serializado": True,
+                "cantidad": 0,
+                "unidades": [{
+                    "id": unidad.id,
+                    "serial": unidad.numero_serie or unidad.codigo,
+                }],
+            })
+
+        else:
+            payload_previo.append({
+                "producto": a.producto_id,
+                "nombre": a.producto.nombre_completo,
+                "serializado": False,
+                "cantidad": a.cantidad_instalada,
+                "unidades": [],
+            })
+
+    # Aquí debes reutilizar la lógica que ya tienes
+    # para construir pend_cantidad, pend_seriales,
+    # estados_instalan y tipos_inconsistencia.
+
+    if request.method == "POST":
+
+        # Aquí se debe procesar el payload y actualizar
+        # las asignaciones y movimientos existentes.
+        pass
+
+    context = {
+        "operacion": operacion,
+        "tecnico": operacion.tecnico,
+        "payload_previo": payload_previo,
+        "modo_edicion": True,
+    }
+
+    return render(
+        request,
+        "operaciones/registrar_operacion.html",
+        context,
+    )
 # ============================================================
 # DEVOLVER ASIGNACIÓN
 # ============================================================
 
-class AsignacionDevolverView(RolRequeridoMixin, View):
+class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_ALMACEN
+    template_name = "almacen/tecnico_devolver.html"
 
-    def post(self, request, pk):
-        asignacion = get_object_or_404(Asignacion, pk=pk)
+    def _cargar(self):
+        self.tecnico = get_object_or_404(User, pk=self.kwargs["pk"], rol="TECNICO")
+        pend = (
+            Asignacion.objects
+            .filter(tecnico=self.tecnico, estado=Asignacion.Estado.ASIGNADA)
+            .select_related("producto", "unidad_serializada")
+            .order_by("producto__nombre", "producto__medida", "id")
+        )
+        self.grupos = OrderedDict()   # por cantidad
+        self.seriales = []            # por serial
+        for a in pend:
+            if a.cantidad_pendiente <= 0:
+                continue
+            if a.unidad_serializada_id:
+                self.seriales.append(a)
+            else:
+                g = self.grupos.setdefault(
+                    a.producto_id, {"producto": a.producto, "pendiente": 0})
+                g["pendiente"] += a.cantidad
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        self._cargar()
+        ctx.update(tecnico=self.tecnico, grupos=list(self.grupos.values()),
+                   seriales=self.seriales)
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self._cargar()
+        obs = request.POST.get("observacion", "").strip()
+        errores, por_serial, por_cantidad = [], [], []
+
+        for a in self.seriales:
+            if request.POST.get(f"ser_{a.pk}"):
+                por_serial.append(a)
+
+        for pid, g in self.grupos.items():
+            raw = request.POST.get(f"cant_{pid}", "").strip()
+            if not raw:
+                continue
+            try:
+                n = int(raw)
+            except ValueError:
+                errores.append(f"{g['producto'].nombre_completo}: cantidad inválida.")
+                continue
+            if n <= 0:
+                continue
+            if n > g["pendiente"]:
+                errores.append(
+                    f"{g['producto'].nombre_completo}: solo tiene {g['pendiente']}.")
+                continue
+            por_cantidad.append((g["producto"], n))
+
+        if not errores and not por_serial and not por_cantidad:
+            errores.append("Seleccione al menos un material para devolver.")
+
+        if errores:
+            for e in errores:
+                messages.error(request, e)
+            return self.render_to_response(self.get_context_data())
 
         try:
-            services.devolver(asignacion=asignacion, usuario=request.user)
-            messages.success(
-                request,
-                "Devolución registrada: el material volvió al almacén.",
-            )
+            with transaction.atomic():
+                for a in por_serial:
+                    services.devolver(asignacion=a, usuario=request.user, observacion=obs)
+                for producto, n in por_cantidad:
+                    services.devolver_cantidad(
+                        tecnico=self.tecnico, producto=producto, cantidad=n,
+                        usuario=request.user, observacion=obs)
         except services.ErrorInventario as e:
             messages.error(request, str(e))
+            return self.render_to_response(self.get_context_data())
 
-        siguiente = request.POST.get("next", "")
-        if siguiente and url_has_allowed_host_and_scheme(
-            siguiente, allowed_hosts={request.get_host()}
-        ):
-            return redirect(siguiente)
-
+        messages.success(
+            request,
+            f"Devolución registrada: {len(por_serial) + sum(n for _, n in por_cantidad)} "
+            "pieza(s) volvieron al almacén.")
         return redirect("almacen:asignaciones")
-
 
 # ============================================================
 # UNIDADES DISPONIBLES · JSON
@@ -2157,3 +2302,83 @@ class EntregaListView(RolRequeridoMixin, TemplateView):
                             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         resp["Content-Disposition"] = 'attachment; filename="informe_entregas.xlsx"'
         return resp
+    
+class ValidarSerialInstalacionJson(RolRequeridoMixin, View):
+    """Dice si un serial lo tiene el técnico o qué inconsistencia sería."""
+    roles_permitidos = ROLES_DIGITADOR
+
+    def get(self, request):
+        tecnico = get_object_or_404(User, pk=request.GET.get("tecnico"), rol="TECNICO")
+        serial = request.GET.get("serial", "").strip()
+        if not serial:
+            return JsonResponse({"tipo": "VACIO", "mensaje": "Escriba el serial."})
+
+        tipo, unidad, _a, detalle = services.clasificar_serial(serial=serial, tecnico=tecnico)
+        return JsonResponse({
+            "tipo": tipo or "OK",
+            "mensaje": detalle or "Lo tiene asignado.",
+            "instala": tipo not in services.TIPOS_SOLO_REPORTE,
+            "id": unidad.pk if unidad else None,
+            "serial": (unidad.numero_serie or unidad.codigo) if unidad else serial,
+            "producto": unidad.producto_id if unidad else None,
+            "nombre": unidad.producto.nombre_completo if unidad else "",
+        })
+
+
+class InconsistenciaListView(RolRequeridoMixin, TemplateView):
+    roles_permitidos = ROLES_ALMACEN
+    template_name = "almacen/inconsistencia_list.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+        tipo, estado = g.get("tipo", "").strip(), g.get("estado", "").strip()
+        tecnico, q = g.get("tecnico", "").strip(), g.get("q", "").strip()
+
+        qs = Inconsistencia.objects.select_related(
+            "tecnico", "producto", "unidad_serializada", "operacion"
+        )
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+        if estado:
+            qs = qs.filter(estado=estado)
+        if tecnico.isdigit():
+            qs = qs.filter(tecnico_id=int(tecnico))
+        if q:
+            qs = qs.filter(
+                Q(serial_reportado__icontains=q)
+                | Q(producto__nombre__icontains=q)
+                | Q(operacion__numero_orden__icontains=q)
+                | Q(tecnico__first_name__icontains=q)
+                | Q(tecnico__last_name__icontains=q)
+            )
+
+        conteo = dict(
+            Inconsistencia.objects.filter(estado=Inconsistencia.Estado.PENDIENTE)
+            .values_list("tipo").annotate(n=Count("id"))
+        )
+        ctx.update(
+            items=qs[:300],
+            resumen=[(v, l, conteo.get(v, 0)) for v, l in Inconsistencia.Tipo.choices],
+            total_pendientes=sum(conteo.values()),
+            tipos=Inconsistencia.Tipo.choices,
+            estados=Inconsistencia.Estado.choices,
+            tipo_sel=tipo, estado_sel=estado, tecnico_sel=tecnico, q=q,
+            tecnicos_lista=tecnicos_queryset(),
+        )
+        return ctx
+
+
+class InconsistenciaResolverView(RolRequeridoMixin, View):
+    roles_permitidos = ROLES_ALMACEN
+
+    def post(self, request, pk):
+        i = get_object_or_404(Inconsistencia, pk=pk)
+        if i.estado == Inconsistencia.Estado.PENDIENTE:
+            i.estado = Inconsistencia.Estado.RESUELTA
+            i.resuelto_por = request.user
+            i.fecha_resolucion = timezone.now()
+            i.nota_resolucion = request.POST.get("nota", "").strip()
+            i.save()
+            messages.success(request, "Inconsistencia marcada como resuelta.")
+        return redirect(request.POST.get("next") or "almacen:inconsistencias")

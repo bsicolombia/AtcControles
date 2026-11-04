@@ -1,5 +1,18 @@
 import logging
-
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
+from usuarios.roles import ADMINISTRADOR
+from almacen.models import (
+    Asignacion,
+    Producto,
+    Inconsistencia,
+)
 from django.contrib.auth import get_user_model
 User = get_user_model() 
 from collections import defaultdict
@@ -26,7 +39,7 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.views import View
 from operaciones.models import Anomalia, Operacion, RegistroSAP, CargaSAP
-
+from .forms import OperacionEditarForm
 
 E = RegistroSAP.Estado
 
@@ -621,3 +634,186 @@ class ErroresActualesView(QuerystringMixin, RolRequeridoMixin, TemplateView):
             page_obj=Paginator(qs, 50).get_page(g.get("page")),
         )
         return ctx
+    
+
+class OperacionUpdateView(
+    FormPageMixin,
+    RolRequeridoMixin,
+    UpdateView
+):
+    roles_permitidos = (ADMINISTRADOR, COORDINADOR)
+
+    model = Operacion
+    form_class = OperacionEditarForm
+    template_name = "almacen/asignacion_instalar.html"
+
+    titulo = "Editar operación"
+    boton = "Guardar cambios"
+
+    def get_queryset(self):
+        return (
+            Operacion.objects
+            .select_related("tecnico", "anomalia")
+            .prefetch_related(
+                "materiales__producto",
+                "materiales__unidad_serializada",
+                "materiales__tecnico",
+            )
+        )
+
+    def _datos_pendientes(self):
+        """
+        Reutiliza la lógica de TecnicoAsignacionesView.
+        Solo toma asignaciones que siguen pendientes.
+        """
+        tecnico = self.object.tecnico
+
+        pendientes = (
+            Asignacion.objects
+            .filter(
+                tecnico=tecnico,
+                estado=Asignacion.Estado.ASIGNADA,
+            )
+            .select_related(
+                "producto",
+                "unidad_serializada",
+                "operacion",
+            )
+            .order_by(
+                "producto__nombre",
+                "producto__medida",
+                "id",
+            )
+        )
+
+        cantidades = {}
+        seriales = []
+
+        for a in pendientes:
+            if a.cantidad_pendiente <= 0:
+                continue
+
+            if a.unidad_serializada_id:
+                u = a.unidad_serializada
+
+                seriales.append({
+                    "id": u.pk,
+                    "serial": u.numero_serie or u.codigo,
+                    "codigo": u.codigo,
+                    "producto": a.producto_id,
+                    "nombre": a.producto.nombre_completo,
+                })
+
+            else:
+                cantidades[a.producto_id] = (
+                    cantidades.get(a.producto_id, 0)
+                    + a.cantidad_pendiente
+                )
+
+        pend_cantidad = [
+            {
+                "id": p.pk,
+                "nombre": p.nombre_completo,
+                "pendiente": cantidades.get(p.pk, 0),
+            }
+            for p in Producto.objects.filter(
+                estado=True,
+                tipo_inventario=Producto.TipoInventario.CANTIDAD,
+            ).order_by("nombre", "medida")
+        ]
+
+        return pend_cantidad, seriales
+
+    def _payload_existente(self):
+        """
+        Recupera los materiales que ya pertenecen a la operación.
+        Agrupa los materiales por producto.
+        """
+        materiales = (
+            self.object.materiales
+            .select_related(
+                "producto",
+                "unidad_serializada",
+                "tecnico",
+            )
+            .order_by("producto__nombre", "pk")
+        )
+
+        agrupados = {}
+
+        for m in materiales:
+            pid = m.producto_id
+
+            if pid not in agrupados:
+                agrupados[pid] = {
+                    "producto": pid,
+                    "nombre": m.producto.nombre_completo,
+                    "serializado": bool(m.unidad_serializada_id),
+                    "cantidad": 0,
+                    "unidades": [],
+                }
+
+            if m.unidad_serializada_id:
+                u = m.unidad_serializada
+
+                agrupados[pid]["serializado"] = True
+
+                agrupados[pid]["unidades"].append({
+                    "id": u.pk,
+                    "serial": u.numero_serie or u.codigo,
+                })
+            else:
+                agrupados[pid]["cantidad"] += m.cantidad
+
+        return list(agrupados.values())
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        op = self.object
+        tecnico = op.tecnico
+
+        pend_cantidad, pend_seriales = self._datos_pendientes()
+
+        ctx.update({
+            "operacion": op,
+            "tecnico": tecnico,
+
+            # Materiales que ya estaban instalados
+            "payload_previo": self._payload_existente(),
+
+            # Materiales que todavía tiene el técnico
+            "pend_cantidad": pend_cantidad,
+            "pend_seriales": pend_seriales,
+
+            # Productos serializados
+            "productos_serializados": Producto.objects.filter(
+                estado=True,
+                tipo_inventario=Producto.TipoInventario.SERIALIZADO,
+            ).order_by("nombre", "medida"),
+
+            # Estados y tipos de inconsistencias
+            "estados_instalan": sorted(
+                e.value for e in Operacion.ESTADOS_QUE_INSTALAN
+            ),
+            "tipos_inconsistencia": dict(
+                Inconsistencia.Tipo.choices
+            ),
+
+            "instalaciones": op.materiales.select_related(
+                "producto",
+                "unidad_serializada",
+                "tecnico",
+            ),
+
+            "cancel_url": reverse_lazy(
+                "operaciones:consulta_orden"
+            ),
+
+            "modo_edicion": True,
+        })
+
+        return ctx
+
+    def get_success_url(self):
+        return reverse_lazy("operaciones:consulta_orden")

@@ -109,6 +109,7 @@
                     <th>Técnico</th>
                     <th>Fecha</th>
                     <th>Soporte</th>
+                    <th>Editar</th>
                 </tr>
             </thead>
 
@@ -156,6 +157,19 @@
                                 <span class="text-muted">Sin soporte</span>
                             {% endif %}
                         </td>
+
+                        <td>
+                        <td>
+                            <a href="{% url 'operaciones:editar_instalacion' o.pk %}"
+                            class="btn btn-sm btn-warning">
+                                <i class="bi bi-pencil-square"></i>
+                                Editar
+                            </a>
+                        </td>
+                        </td>
+                        
+                        </td>
+
                         
                     </tr>
                 {% empty %}

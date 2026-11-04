@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block titulo %}Inconsistencias{% endblock %}
+{% block contenido %}
+<h2>Inconsistencias de inventario
+  {% if total_pendientes %}<span style="color:#b54708">· {{ total_pendientes }} pendiente(s)</span>{% endif %}
+</h2>
+
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+  {% for valor, etiqueta, n in resumen %}
+    <a href="?tipo={{ valor }}&estado=PENDIENTE"
+       style="padding:3px 10px;border-radius:12px;text-decoration:none;font-size:12px;
+              background:{% if n %}#fff4e5;color:#b54708;border:1px solid #f5c98a{% else %}#f6f8fb;color:#777;border:1px solid #d9dee7{% endif %}">
+      {{ etiqueta }}: <b>{{ n }}</b></a>
+  {% endfor %}
+</div>
+
+<form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+  <input name="q" value="{{ q }}" placeholder="Serial, material, orden, técnico…">
+  <select name="tipo"><option value="">Todos los tipos</option>
+    {% for v, l in tipos %}<option value="{{ v }}" {% if tipo_sel == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <select name="estado"><option value="">Todos los estados</option>
+    {% for v, l in estados %}<option value="{{ v }}" {% if estado_sel == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <select name="tecnico"><option value="">Todos los técnicos</option>
+    {% for t in tecnicos_lista %}<option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.get_full_name|default:t.username }}</option>{% endfor %}</select>
+  <button>Filtrar</button>
+</form>
+
+<div style="overflow:auto">
+<table border="1" cellpadding="5" style="border-collapse:collapse;font-size:13px;width:100%">
+  <thead>
+  <tr style="background-color:#1f3a5f !important;">
+    <th style="color:#ffffff !important;">Fecha</th>
+    <th style="color:#ffffff !important;">Tipo</th>
+    <th style="color:#ffffff !important;">Técnico</th>
+    <th style="color:#ffffff !important;">Material</th>
+    <th style="color:#ffffff !important;">Serial</th>
+    <th style="color:#ffffff !important;">Cant.</th>
+    <th style="color:#ffffff !important;">Orden</th>
+    <th style="color:#ffffff !important;">¿Se instaló?</th>
+    <th style="color:#ffffff !important;">Detalle</th>
+    <th style="color:#ffffff !important;">Estado</th>
+  </tr>
+</thead>
+  <tbody>
+  {% for i in items %}
+    <tr style="{% if i.estado == 'PENDIENTE' %}background:#fffaf0{% endif %}">
+      <td>{{ i.fecha|date:"d/m/Y H:i" }}</td>
+      <td><b>{{ i.get_tipo_display }}</b></td>
+      <td>{{ i.tecnico.get_full_name|default:i.tecnico.username }}</td>
+      <td>{{ i.producto.nombre_completo|default:"—" }}</td>
+      <td>{{ i.serial_reportado|default:"—" }}</td>
+      <td align="center">{{ i.cantidad }}</td>
+      <td>{{ i.operacion.numero_orden|default:"—" }}</td>
+      <td>{% if i.instalado %}Sí (regularizado){% else %}No, solo reportado{% endif %}</td>
+      <td style="max-width:320px">{{ i.detalle }}</td>
+      <td>
+        {% if i.estado == 'PENDIENTE' %}
+          <form method="post" action="{% url 'almacen:inconsistencia_resolver' i.pk %}" style="display:flex;gap:4px">
+            {% csrf_token %}
+            <input name="nota" placeholder="Nota (qué se hizo)" style="width:150px">
+            <button>Resolver</button>
+          </form>
+        {% else %}
+          Resuelta {{ i.fecha_resolucion|date:"d/m/Y" }} · {{ i.resuelto_por }}<br><small>{{ i.nota_resolucion }}</small>
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}<tr><td colspan="10">Sin inconsistencias.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

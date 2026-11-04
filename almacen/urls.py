@@ -28,12 +28,18 @@ urlpatterns = [
     path("asignaciones/", views.AsignacionListView.as_view(), name="asignaciones"),
     path("asignaciones/nueva/", views.EntregaCreateView.as_view(), name="asignacion_crear"),
     path("asignaciones/<int:pk>/instalar/", views.AsignacionInstalarView.as_view(), name="asignacion_instalar"),
-    path("asignaciones/<int:pk>/devolver/", views.AsignacionDevolverView.as_view(), name="asignacion_devolver"),
+    path("tecnicos/<int:pk>/devolver/", views.TecnicoDevolverView.as_view(), name="tecnico_devolver"),
     path("tecnicos/<int:pk>/asignaciones/", views.TecnicoAsignacionesView.as_view(), name="tecnico_asignaciones"),
     path("api/unidades-disponibles/", views.UnidadesDisponiblesJson.as_view(), name="api_unidades"),
-
     path("movimientos/", views.MovimientoListView.as_view(), name="movimientos"),
-    
+    path(
+    "operaciones/<int:pk>/editar/",
+    views.editar_instalacion,
+    name="editar_instalacion",
+),
+
+path("tecnicos/<int:pk>/asignaciones/", views.TecnicoAsignacionesView.as_view(), name="tecnico_asignaciones"),
+path("tecnicos/<int:pk>/devolver/", views.TecnicoDevolverView.as_view(), name="tecnico_devolver"),
     path("inventario/", views.InventarioListView.as_view(), name="inventario"), 
     path("entregas/", views.EntregaListView.as_view(), name="entregas"),
     path("entregas/nueva/", views.EntregaCreateView.as_view(), name="entrega_nueva"),
@@ -41,6 +47,8 @@ urlpatterns = [
     path("entregas/<int:pk>/pdf/", views.EntregaPdfView.as_view(), name="entrega_pdf"),
     path("entregas/<int:pk>/excel/", views.EntregaExcelView.as_view(), name="entrega_excel"),
     path("api/validar-serial/", views.ValidarSerialJson.as_view(), name="api_validar_serial"),
-        
+    path("api/validar-serial-instalacion/", views.ValidarSerialInstalacionJson.as_view(), name="api_validar_serial_instalacion"),
+    path("inconsistencias/", views.InconsistenciaListView.as_view(), name="inconsistencias"),
+    path("inconsistencias/<int:pk>/resolver/", views.InconsistenciaResolverView.as_view(), name="inconsistencia_resolver"),
 
 ]

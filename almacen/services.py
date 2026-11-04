@@ -9,6 +9,12 @@ from .models import (
     UnidadSerializada,
 )
 from .models import RemisionIngreso
+from django.db.models import Q
+from .models import (
+    Asignacion, Inconsistencia, Inventario,
+    MovimientoInventario, Producto, UnidadSerializada,
+)
+T = Inconsistencia.Tipo
 Mov = MovimientoInventario.TipoMovimiento
 EstadoU = UnidadSerializada.Estado
 EstadoA = Asignacion.Estado
@@ -851,3 +857,207 @@ def devolver(
     )
 
     return asignacion
+@transaction.atomic
+def devolver_cantidad(*, tecnico, producto, cantidad, usuario, observacion=""):
+    """Devuelve parte (o todo) de un material por cantidad que tiene el técnico."""
+    asigs = list(
+        Asignacion.objects.select_for_update()
+        .filter(
+            tecnico=tecnico,
+            producto=producto,
+            estado=EstadoA.ASIGNADA,
+            unidad_serializada__isnull=True,
+        )
+        .order_by("pk")
+    )
+
+    total = sum(a.cantidad for a in asigs)
+    if cantidad < 1 or cantidad > total:
+        raise ErrorInventario(
+            f"{producto.nombre_completo}: el técnico solo tiene {total} para devolver."
+        )
+
+    resto = cantidad
+    for a in asigs:
+        if resto <= 0:
+            break
+
+        tomar = min(resto, a.cantidad)
+
+        if tomar < a.cantidad:
+            # Devolución parcial: se divide la asignación
+            a.cantidad -= tomar
+            a.save(update_fields=["cantidad", "fecha_modificacion"])
+
+            a = Asignacion.objects.create(
+                tecnico=a.tecnico,
+                producto=a.producto,
+                cantidad=tomar,
+                estado=EstadoA.ASIGNADA,
+                fecha_asignacion=a.fecha_asignacion,
+                observaciones=a.observaciones,
+                usuario=a.usuario,
+            )
+
+        devolver(asignacion=a, usuario=usuario, observacion=observacion)
+        resto -= tomar
+# ============================================================
+# INSTALACIÓN CON INCONSISTENCIAS
+# ============================================================
+
+# Estos tipos solo se reportan: no se instala ni se mueve inventario.
+TIPOS_SOLO_REPORTE = {T.NO_REGISTRADO, T.YA_INSTALADO, T.NO_UTILIZABLE, T.SIN_STOCK}
+
+
+def _novedad(*, tipo, tecnico, usuario, operacion, detalle, producto=None,
+             unidad=None, serial="", cantidad=1, instalado=False):
+    return Inconsistencia.objects.create(
+        tipo=tipo, tecnico=tecnico, usuario=usuario, operacion=operacion,
+        detalle=detalle, producto=producto, unidad_serializada=unidad,
+        serial_reportado=serial, cantidad=cantidad, instalado=instalado,
+    )
+
+
+def clasificar_serial(*, serial, tecnico):
+    """
+    Devuelve (tipo, unidad, asignacion, detalle).
+    tipo = None significa que está todo bien: lo tiene asignado ese técnico.
+    """
+    serial = (serial or "").strip()
+    unidad = (
+        UnidadSerializada.objects.select_related("producto")
+        .filter(Q(numero_serie__iexact=serial) | Q(codigo__iexact=serial))
+        .first()
+    )
+    if not unidad:
+        return (T.NO_REGISTRADO, None, None,
+                "El serial no existe en el sistema: BSI no lo registró en un ingreso.")
+
+    if unidad.estado == EstadoU.ASIGNADO:
+        a = (
+            Asignacion.objects.select_related("tecnico")
+            .filter(unidad_serializada=unidad, estado=EstadoA.ASIGNADA)
+            .first()
+        )
+        if a and a.tecnico_id == tecnico.id:
+            return None, unidad, a, ""
+        quien = a.tecnico if a else "otro técnico"
+        return T.OTRO_TECNICO, unidad, a, f"Figura asignado a {quien}."
+
+    if unidad.estado == EstadoU.DISPONIBLE:
+        return (T.NO_ASIGNADO, unidad, None,
+                "Figura disponible en almacén; nunca se asignó al técnico.")
+
+    if unidad.estado == EstadoU.INSTALADO:
+        prev = (
+            Asignacion.objects.select_related("tecnico", "operacion")
+            .filter(unidad_serializada=unidad, estado=EstadoA.INSTALADA)
+            .order_by("-pk").first()
+        )
+        txt = "Ya figura instalado"
+        if prev:
+            txt += f" por {prev.tecnico}"
+            if prev.operacion:
+                txt += f" en la orden {prev.operacion.numero_orden}"
+        return T.YA_INSTALADO, unidad, prev, txt + "."
+
+    return (T.NO_UTILIZABLE, unidad, None,
+            f"Figura en estado «{unidad.get_estado_display()}».")
+
+
+@transaction.atomic
+def instalar_serial(*, serial, producto_id, tecnico, usuario, operacion,
+                    fecha, observaciones=""):
+    """Instala una unidad por serial. Devuelve la Inconsistencia creada o None."""
+    tipo, unidad, asig, detalle = clasificar_serial(serial=serial, tecnico=tecnico)
+
+    if tipo is None:
+        instalar(asignacion=asig, usuario=usuario, fecha_instalacion=fecha,
+                 operacion=operacion, observaciones=observaciones)
+        return None
+
+    if tipo in TIPOS_SOLO_REPORTE:
+        producto = unidad.producto if unidad else Producto.objects.filter(pk=producto_id).first()
+        return _novedad(tipo=tipo, tecnico=tecnico, usuario=usuario, operacion=operacion,
+                        detalle=detalle, producto=producto, unidad=unidad,
+                        serial=serial, instalado=False)
+
+    # NO_ASIGNADO u OTRO_TECNICO: se regulariza el inventario y se instala
+    if tipo == T.OTRO_TECNICO:
+        if not asig:
+            raise ErrorInventario(
+                f"La unidad {unidad.codigo} figura asignada pero no se encontró "
+                "la asignación. Revísela en Unidades."
+            )
+        devolver(asignacion=asig, usuario=usuario,
+                 observacion=f"Regularización: la instaló {tecnico}.")
+        detalle += f" Se trasladó a {tecnico}, que fue quien la instaló."
+
+    nueva = asignar(
+        producto=unidad.producto, tecnico=tecnico, usuario=usuario, cantidad=1,
+        unidad=unidad, fecha=fecha,
+        observaciones="Regularización automática: instalada sin asignación previa.",
+    )
+    instalar(asignacion=nueva, usuario=usuario, fecha_instalacion=fecha,
+             operacion=operacion, observaciones=observaciones)
+    return _novedad(tipo=tipo, tecnico=tecnico, usuario=usuario, operacion=operacion,
+                    detalle=detalle, producto=unidad.producto, unidad=unidad,
+                    serial=unidad.numero_serie or unidad.codigo, instalado=True)
+
+
+@transaction.atomic
+def instalar_cantidad(*, producto, cantidad, tecnico, usuario, operacion,
+                      fecha, observaciones=""):
+    """Instala material por cantidad. Devuelve la lista de inconsistencias creadas."""
+    novedades = []
+    asigs = list(
+        Asignacion.objects.select_for_update()
+        .filter(tecnico=tecnico, producto=producto, estado=EstadoA.ASIGNADA,
+                unidad_serializada__isnull=True)
+        .order_by("pk")
+    )
+
+    resto = cantidad
+    for a in asigs:
+        if resto <= 0:
+            break
+        pend = a.cantidad_pendiente
+        if pend <= 0:
+            continue
+        tomar = min(resto, pend)
+        instalar(asignacion=a, usuario=usuario, fecha_instalacion=fecha,
+                 operacion=operacion, observaciones=observaciones, cantidad=tomar)
+        resto -= tomar
+
+    if resto <= 0:
+        return novedades
+
+    tipo = T.EXCEDE_CANTIDAD if resto < cantidad else T.NO_ASIGNADO
+    inv = _inventario(producto)
+    cubrir = min(resto, inv.cantidad_actual)
+
+    if cubrir > 0:
+        nueva = asignar(
+            producto=producto, tecnico=tecnico, usuario=usuario, cantidad=cubrir,
+            fecha=fecha,
+            observaciones="Regularización automática: instalado sin asignación previa.",
+        )
+        instalar(asignacion=nueva, usuario=usuario, fecha_instalacion=fecha,
+                 operacion=operacion, observaciones=observaciones, cantidad=cubrir)
+        novedades.append(_novedad(
+            tipo=tipo, tecnico=tecnico, usuario=usuario, operacion=operacion,
+            producto=producto, cantidad=cubrir, instalado=True,
+            detalle=f"{cubrir} unidad(es) no estaban asignadas al técnico; "
+                    "se tomaron del stock del almacén.",
+        ))
+
+    faltan = resto - cubrir
+    if faltan > 0:
+        novedades.append(_novedad(
+            tipo=T.SIN_STOCK, tecnico=tecnico, usuario=usuario, operacion=operacion,
+            producto=producto, cantidad=faltan, instalado=False,
+            detalle=f"Reportó {faltan} unidad(es) que no están asignadas y no hay "
+                    f"existencias en el sistema (stock: {inv.cantidad_actual}). "
+                    "Probable material que BSI no ingresó.",
+        ))
+    return novedades

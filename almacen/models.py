@@ -598,3 +598,57 @@ class EntregaItem(models.Model):
                                on_delete=models.PROTECT)
     serial = models.CharField(max_length=100, blank=True)   # copia del serial/código al entregar
     cantidad = models.PositiveIntegerField(default=1)
+    
+class Inconsistencia(models.Model):
+
+    class Tipo(models.TextChoices):
+        NO_ASIGNADO = "NO_ASIGNADO", "No estaba asignado (figura disponible en almacén)"
+        OTRO_TECNICO = "OTRO_TECNICO", "Estaba asignado a otro técnico"
+        NO_REGISTRADO = "NO_REGISTRADO", "Serial inexistente (BSI no lo ingresó al sistema)"
+        YA_INSTALADO = "YA_INSTALADO", "Ya figuraba instalado"
+        NO_UTILIZABLE = "NO_UTILIZABLE", "Figura dañado o dado de baja"
+        EXCEDE_CANTIDAD = "EXCEDE_CANTIDAD", "Instaló más de lo asignado"
+        SIN_STOCK = "SIN_STOCK", "No asignado y sin existencias en el sistema"
+
+    class Estado(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente de revisar"
+        RESUELTA = "RESUELTA", "Resuelta"
+
+    tipo = models.CharField(max_length=20, choices=Tipo.choices, db_index=True)
+    estado = models.CharField(max_length=10, choices=Estado.choices,
+                              default=Estado.PENDIENTE, db_index=True)
+
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                related_name="inconsistencias")
+    producto = models.ForeignKey(Producto, null=True, blank=True,
+                                 on_delete=models.PROTECT, related_name="inconsistencias")
+    unidad_serializada = models.ForeignKey(UnidadSerializada, null=True, blank=True,
+                                           on_delete=models.PROTECT,
+                                           related_name="inconsistencias")
+    serial_reportado = models.CharField(max_length=100, blank=True)
+    cantidad = models.PositiveIntegerField(default=1)
+
+    # True = el sistema corrigió el inventario y sí instaló.
+    # False = solo se reportó, el inventario no se tocó.
+    instalado = models.BooleanField(default=False)
+
+    detalle = models.TextField(blank=True)
+    operacion = models.ForeignKey("operaciones.Operacion", null=True, blank=True,
+                                  on_delete=models.PROTECT, related_name="inconsistencias")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                related_name="inconsistencias_registradas")
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    resuelto_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                     on_delete=models.PROTECT,
+                                     related_name="inconsistencias_resueltas")
+    fecha_resolucion = models.DateTimeField(null=True, blank=True)
+    nota_resolucion = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Inconsistencia"
+        verbose_name_plural = "Inconsistencias"
+        ordering = ["-fecha", "-id"]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} · {self.serial_reportado or self.producto}"

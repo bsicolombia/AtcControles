@@ -12,6 +12,6 @@ urlpatterns = [
     path("conciliacion-sap/",views.ConciliacionSAPView.as_view(),name="conciliacion_sap",),
     path("consulta-orden/",views.ConsultaOrdenView.as_view(),name="consulta_orden",),
     path("errores/", views.ErroresActualesView.as_view(), name="errores_actuales"),
-    path("soporte/<int:pk>/", views.SoporteOperacionView.as_view(), name="soporte")
-    
+    path("soporte/<int:pk>/", views.SoporteOperacionView.as_view(), name="soporte"),
+    path("operacion/<int:pk>/editar/",views.OperacionUpdateView.as_view(),name="editar_instalacion",),
 ]

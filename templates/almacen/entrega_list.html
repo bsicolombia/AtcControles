@@ -18,10 +18,31 @@
 <div style="overflow:auto">
 <table border="1" cellpadding="5" style="border-collapse:collapse;font-size:13px">
   <thead>
-    <tr style="background:#1f3a5f;color:#fff">
-      <th>Código</th><th>Fecha</th><th>Técnico</th><th>C.C.</th><th>Entregó</th>
-      {% for p in cols %}<th>{{ p.nombre_completo }}</th>{% endfor %}
-      <th>Total</th><th></th>
+    <tr style="background-color:#1f3a5f !important;">
+      <th style="color:#ffffff !important;">Código</th>
+      <th style="color:#ffffff !important;">Fecha</th>
+      <th style="color:#ffffff !important;">Técnico</th>
+      <th style="color:#ffffff !important;">C.C.</th>
+      <th style="color:#ffffff !important;">Entregó</th>
+
+      {% for p in cols %}
+      <th style="
+          color:#ffffff !important;
+          background-color:#1f3a5f;
+          width:100px;
+          max-width:100px;
+          white-space:normal;
+          overflow-wrap:break-word;
+          text-align:center;
+          vertical-align:middle;
+          padding:8px 5px;
+      ">
+        {{ p.nombre_completo }}
+      </th>
+    {% endfor %}
+
+      <th style="color:#ffffff !important;">Total</th>
+      <th style="color:#ffffff !important;">Acciones</th>
     </tr>
   </thead>
   <tbody>
