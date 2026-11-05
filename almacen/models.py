@@ -321,6 +321,11 @@ class Inventario(models.Model):
     cantidad_minima = models.PositiveIntegerField(default=0)
 
     fecha_actualizacion = models.DateTimeField(auto_now=True)
+    
+    cantidad_danada = models.PositiveIntegerField(
+        "Cantidad dañada en almacén",
+        default=0
+    )
 
     class Meta:
         verbose_name = "Inventario"
@@ -563,42 +568,140 @@ class MovimientoInventario(models.Model):
 from django.conf import settings
 from django.db import models
 
-
 class EntregaMaterial(models.Model):
-    codigo = models.CharField(max_length=30, unique=True, null=True, blank=True, editable=False)
-    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-                                related_name="entregas_recibidas")
-    entregado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-                                      related_name="entregas_realizadas")
+
+    class Tipo(models.TextChoices):
+        ENTREGA = "ENTREGA", "Entrega"
+        DEVOLUCION = "DEVOLUCION", "Devolución"
+
+    codigo = models.CharField(
+        max_length=30,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+
+    tipo = models.CharField(
+        "Tipo de documento",
+        max_length=15,
+        choices=Tipo.choices,
+        default=Tipo.ENTREGA,
+        db_index=True,
+    )
+
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="entregas_recibidas",
+    )
+
+    # Responsable de almacén:
+    # entrega el material o recibe la devolución.
+    entregado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="entregas_realizadas",
+        verbose_name="Responsable de almacén",
+    )
+
     fecha = models.DateField()
+
     observaciones = models.TextField(blank=True)
+
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-fecha", "-id"]
+        verbose_name = "Entrega o devolución"
+        verbose_name_plural = "Entregas y devoluciones"
 
     def save(self, *args, **kwargs):
+        es_nuevo = self.pk is None
+
         super().save(*args, **kwargs)
+
         if not self.codigo:
-            self.codigo = f"ENT-{self.fecha:%Y%m}-{self.pk:05d}"
+            prefijo = (
+                "DEV"
+                if self.tipo == self.Tipo.DEVOLUCION
+                else "ENT"
+            )
+
+            self.codigo = (
+                f"{prefijo}-{self.fecha:%Y%m}-{self.pk:05d}"
+            )
+
             super().save(update_fields=["codigo"])
 
     def __str__(self):
-        return self.codigo or f"Entrega {self.pk}"
+        return self.codigo or f"Documento {self.pk}"
 
     @property
     def total_cantidad(self):
-        return sum(i.cantidad for i in self.items.all())
+        return sum(
+            item.cantidad
+            for item in self.items.all()
+        )
 
 
 class EntregaItem(models.Model):
-    entrega = models.ForeignKey(EntregaMaterial, on_delete=models.CASCADE, related_name="items")
-    producto = models.ForeignKey("almacen.Producto", on_delete=models.PROTECT)
-    unidad = models.ForeignKey("almacen.UnidadSerializada", null=True, blank=True,
-                               on_delete=models.PROTECT)
-    serial = models.CharField(max_length=100, blank=True)   # copia del serial/código al entregar
+
+    class EstadoRetorno(models.TextChoices):
+        DISPONIBLE = "DISPONIBLE", "Disponible"
+        DANADO = "DANADO", "Dañado"
+
+    entrega = models.ForeignKey(
+        EntregaMaterial,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+
+    producto = models.ForeignKey(
+        "almacen.Producto",
+        on_delete=models.PROTECT,
+    )
+
+    unidad = models.ForeignKey(
+        "almacen.UnidadSerializada",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+    )
+
+    # Asignación concreta que originó la devolución.
+    # En entregas puede quedar vacío.
+    asignacion = models.ForeignKey(
+        "almacen.Asignacion",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="items_devolucion",
+    )
+
+    serial = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
     cantidad = models.PositiveIntegerField(default=1)
-    
+
+    estado_retorno = models.CharField(
+        max_length=15,
+        choices=EstadoRetorno.choices,
+        null=True,
+        blank=True,
+    )
+
+    observacion = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Material de entrega o devolución"
+        verbose_name_plural = "Materiales de entrega o devolución"
+
+    def __str__(self):
+        return f"{self.producto} - {self.cantidad}"
+
 class Inconsistencia(models.Model):
 
     class Tipo(models.TextChoices):
@@ -644,6 +747,35 @@ class Inconsistencia(models.Model):
                                      related_name="inconsistencias_resueltas")
     fecha_resolucion = models.DateTimeField(null=True, blank=True)
     nota_resolucion = models.TextField(blank=True)
+    
+    asignacion_anterior = models.ForeignKey(
+        "almacen.Asignacion",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inconsistencias_origen",
+    )
+
+    estado_anterior = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+    )
+
+    tecnico_anterior = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inconsistencias_asignacion_anterior",
+    )
+    asignacion_regularizada = models.ForeignKey(
+        "almacen.Asignacion",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inconsistencias_regularizacion",
+    )
 
     class Meta:
         verbose_name = "Inconsistencia"

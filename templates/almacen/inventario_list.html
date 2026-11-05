@@ -63,7 +63,11 @@
 .tabla-general {
     font-size: 11px;
 }
-
+.tabla-general .dato-danado {
+    color: #dc2626;
+    font-size: 12px;
+    font-weight: 800;
+}
 .tabla-general td.codigo {
     min-width: 90px;
     color: #475569;
@@ -573,6 +577,45 @@
     border-radius: 7px;
 }
 
+.resumen-contadores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 9px;
+    margin-bottom: 12px;
+}
+
+.contador-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+}
+
+.contador-card span {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.contador-card strong {
+    color: #166534;
+    font-size: 21px;
+    font-weight: 800;
+}
+
+.contador-card.alerta strong {
+    color: #dc2626;
+}
+
+@media(max-width: 480px) {
+    .resumen-contadores {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 /* =========================================================
    RESPONSIVE
 ========================================================= */
@@ -731,7 +774,7 @@
                 type="checkbox"
                 name="bajo"
                 value="1"
-                {% if request.GET.bajo %}checked{% endif %}
+                {% if request.GET.bajo == "1" %}checked{% endif %}
             >
             Solo stock bajo
         </label>
@@ -741,7 +784,7 @@
         Buscar
     </button>
 
-    {% if request.GET.q or tecnico_sel or request.GET.bajo %}
+    {% if request.GET.q or tecnico_sel or request.GET.bajo or comparacion_sel %}
         <a
             class="btn btn-secundario"
             href="{% url 'dashboard' %}"
@@ -751,6 +794,39 @@
     {% endif %}
 
 </form>
+
+{% if not tecnico_sel %}
+
+<div class="resumen-contadores">
+
+    <div class="contador-card">
+        <span>Materiales encontrados</span>
+        <strong>{{ total_productos }}</strong>
+    </div>
+
+    <div class="contador-card">
+        <span>Total recibido</span>
+        <strong>{{ total_recibido }}</strong>
+    </div>
+
+    <div class="contador-card">
+        <span>Disponible en almacén</span>
+        <strong>{{ total_existencias }}</strong>
+    </div>
+
+    <div class="contador-card alerta">
+        <span>Material dañado</span>
+        <strong>{{ total_danado }}</strong>
+    </div>
+
+    <div class="contador-card">
+        <span>Asignado a técnicos</span>
+        <strong>{{ total_asignado }}</strong>
+    </div>
+
+</div>
+
+{% endif %}
 
 
 <!-- ======================================================
@@ -989,6 +1065,7 @@
                             <th>Tipo material</th>
                             <th class="num">Total<br>recibido</th>
                             <th class="num">Disponible<br>almacén</th>
+                            <th class="num">Dañado<br>almacén</th>
                             <th class="num">Asignado<br>técnico</th>
                             <th class="num">En poder<br>técnicos</th>
                             <th class="num">Instalado<br>FIVE</th>
@@ -1036,6 +1113,16 @@
                                     <strong class="dato-principal">
                                         {{ i.cantidad_actual|default:0 }}
                                     </strong>
+                                </td>
+
+                                <td class="num">
+                                    {% if i.cantidad_danada > 0 %}
+                                        <strong class="dato-danado">
+                                            {{ i.cantidad_danada }}
+                                        </strong>
+                                    {% else %}
+                                        <span class="cero">0</span>
+                                    {% endif %}
                                 </td>
 
                                 <td class="num">

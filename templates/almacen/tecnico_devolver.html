@@ -1,80 +1,532 @@
+
 {% extends "base.html" %}
-{% block titulo %}Devolver material · {{ tecnico.get_full_name|default:tecnico.username }}{% endblock %}
+
+{% block titulo %}
+Devolver material · {{ tecnico.get_full_name|default:tecnico.username }}
+{% endblock %}
 
 {% block extra_css %}
 <style>
-  .dev { font-size:13px; max-width:900px; }
-  .dev .card { background:#fff; border:1px solid #d9dee7; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
-  .dev h3 { margin:0 0 8px; font-size:13px; text-transform:uppercase; }
-  .dev table { border-collapse:collapse; width:100%; }
-  .dev th, .dev td { border:1px solid #d9dee7; padding:5px 8px; text-align:left; }
-  .dev th { background:#1f3a5f; color:#fff; font-size:12px; }
-  .dev input[type=number] { width:80px; padding:4px 6px; }
-  .dev textarea { width:100%; box-sizing:border-box; padding:6px; }
-  .dev .btn { padding:7px 14px; border:0; border-radius:6px; background:#1f3a5f; color:#fff; font-weight:600; cursor:pointer; }
-  .dev .btn.sec { background:#fff; color:#1f3a5f; border:1px solid #1f3a5f; text-decoration:none; display:inline-block; }
-  .dev .msg { padding:8px 12px; border-radius:8px; margin-bottom:8px; }
-  .dev .msg.error { background:#fdecea; color:#b42318; }
-  .dev .msg.success { background:#e7f4ec; color:#2d6a4f; }
+
+  /* Errores de devolución */
+
+.dev .campo-error {
+    border: 2px solid #dc2626 !important;
+    background: #fef2f2 !important;
+    color: #991b1b;
+}
+
+.dev .error-celda {
+    display: block;
+    color: #b91c1c;
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+.dev .fila-error {
+    background: #fff1f2;
+}
+
+.dev input[type="number"]:focus,
+.dev select:focus,
+.dev textarea:focus {
+    outline: 2px solid #93c5fd;
+    outline-offset: 1px;
+}
+
+.dev .alerta-error {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+}
+.dev {
+    font-size: 13px;
+    max-width: 1050px;
+}
+
+.dev .card {
+    background: #fff;
+    border: 1px solid #d9dee7;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+.dev h2 {
+    font-size: 21px;
+    margin-bottom: 16px;
+}
+
+.dev h3 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: #1f3a5f;
+}
+
+.dev table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.dev th,
+.dev td {
+    border: 1px solid #d9dee7;
+    padding: 9px;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.dev th {
+    background: #1f3a5f;
+    color: white;
+    font-size: 12px;
+}
+
+.dev input[type=number] {
+    width: 90px;
+    padding: 7px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+.dev input[type=checkbox] {
+    width: 17px;
+    height: 17px;
+    cursor: pointer;
+}
+
+.dev select {
+    padding: 7px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: white;
+    min-width: 125px;
+}
+
+.dev textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    resize: vertical;
+}
+
+.dev .btn {
+    padding: 9px 16px;
+    border: 0;
+    border-radius: 7px;
+    background: #1f3a5f;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.dev .btn.sec {
+    background: white;
+    color: #1f3a5f;
+    border: 1px solid #1f3a5f;
+}
+
+.dev .msg {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.dev .msg.error {
+    background: #fdecea;
+    color: #b42318;
+}
+
+.dev .msg.success {
+    background: #e7f4ec;
+    color: #2d6a4f;
+}
+
+/* ALERTAS GENERALES */
+
+.dev .alertas-container {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-bottom: 16px;
+}
+
+.dev .alerta {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 13px 15px;
+    border: 1px solid;
+    border-radius: 8px;
+}
+
+.dev .alerta-error {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+
+.dev .alerta-success {
+    background: #f0fdf4;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.dev .alerta-icono {
+    font-size: 19px;
+    font-weight: 800;
+}
+
+.dev .alerta-contenido strong {
+    display: block;
+    margin-bottom: 3px;
+}
+
+.dev .alerta-contenido p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* CAMPOS CON ERROR */
+
+.dev .campo-error {
+    border: 2px solid #dc2626 !important;
+    background: #fef2f2 !important;
+    outline: none;
+}
+
+.dev .error-celda {
+    display: block;
+    margin-top: 5px;
+    color: #b91c1c;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.dev .fila-error {
+    background: #fff7f7;
+}
+
+.dev .observacion-error {
+    border: 2px solid #dc2626 !important;
+    background: #fef2f2 !important;
+}
+
+.dev .estado-disponible {
+    color: #16804a;
+    font-weight: 700;
+}
+
+.dev .estado-danado {
+    color: #c0392b;
+    font-weight: 700;
+}
+
+.dev .ayuda {
+    color: #64748b;
+    font-size: 12px;
+    margin: 0 0 12px;
+}
+
+.dev .acciones {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.dev .observacion-obligatoria {
+    color: #c0392b;
+}
+
+@media(max-width: 650px) {
+    .dev {
+        font-size: 12px;
+    }
+
+    .dev .card {
+        overflow-x: auto;
+    }
+
+    .dev table {
+        min-width: 600px;
+    }
+}
 </style>
 {% endblock %}
 
 {% block contenido %}
+
 <div class="dev">
-  <h2>Devolver material · {{ tecnico.get_full_name|default:tecnico.username }}</h2>
 
-  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+    <h2>
+        Devolver material ·
+        {{ tecnico.get_full_name|default:tecnico.username }}
+    </h2>
+    {% if messages %}
+    <div class="alertas-container">
+        {% for message in messages %}
+            <div class="alerta alerta-{{ message.tags|default:'info' }}">
+                <span class="alerta-icono">
+                    {% if message.tags == "error" %}
+                        ⚠
+                    {% elif message.tags == "success" %}
+                        ✓
+                    {% else %}
+                        ℹ
+                    {% endif %}
+                </span>
 
-  {% if not grupos and not seriales %}
-    <div class="card">Este técnico no tiene material asignado pendiente.</div>
-    <a class="btn sec" href="{% url 'almacen:asignaciones' %}">Volver</a>
-  {% else %}
-  <form method="post">
-    {% csrf_token %}
+                <div class="alerta-contenido">
+                    <strong>
+                        {% if message.tags == "error" %}
+                            Error en la devolución
+                        {% elif message.tags == "success" %}
+                            Operación exitosa
+                        {% else %}
+                            Información
+                        {% endif %}
+                    </strong>
 
-    {% if grupos %}
-    <div class="card" style="border-left:5px solid #1f3a5f">
-      <h3>📦 Material por cantidad</h3>
-      <table>
-        <tr><th>Material</th><th>Tiene</th><th>Devolver</th></tr>
-        {% for g in grupos %}
-        <tr>
-          <td>{{ g.producto.nombre_completo }}</td>
-          <td>{{ g.pendiente }}</td>
-          <td><input type="number" min="0" max="{{ g.pendiente }}" name="cant_{{ g.producto.pk }}" placeholder="0"></td>
-        </tr>
+                    <p>{{ message }}</p>
+                </div>
+            </div>
         {% endfor %}
-      </table>
     </div>
-    {% endif %}
+{% endif %}
 
-    {% if seriales %}
-    <div class="card" style="border-left:5px solid #7a3db8">
-      <h3>🔢 Material por serial</h3>
-      <table>
-        <tr><th></th><th>Material</th><th>Serial</th><th>Código</th><th>Asignado</th></tr>
-        {% for a in seriales %}
-        <tr>
-          <td><input type="checkbox" name="ser_{{ a.pk }}"></td>
-          <td>{{ a.producto.nombre_completo }}</td>
-          <td>{{ a.unidad_serializada.numero_serie|default:"—" }}</td>
-          <td>{{ a.unidad_serializada.codigo }}</td>
-          <td>{{ a.fecha_asignacion|date:"d/m/Y" }}</td>
-        </tr>
-        {% endfor %}
-      </table>
-    </div>
-    {% endif %}
+    <form method="post">
+        {% csrf_token %}
 
-    <div class="card">
-      <label for="obs"><b>Observación (opcional)</b></label>
-      <textarea id="obs" name="observacion" rows="2" placeholder="Motivo de la devolución"></textarea>
-    </div>
+        {% if grupos %}
 
-    <a class="btn sec" href="{% url 'almacen:asignaciones' %}">Cancelar</a>
-    <button class="btn" type="submit"
-            onclick="return confirm('¿Devolver al almacén lo seleccionado?')">Devolver seleccionado</button>
-  </form>
-  {% endif %}
+        <div class="card" style="border-left:5px solid #1f3a5f">
+
+            <h3>📦 Material por cantidad</h3>
+
+            <p class="ayuda">
+                Indique cuántas unidades regresan disponibles
+                y cuántas regresan dañadas.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Pendiente</th>
+                        <th>Disponible</th>
+                        <th>Dañado</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for g in grupos %}
+
+                    <tr>
+                        <td>
+                            <strong>{{ g.producto.nombre_completo }}</strong>
+                            <br>
+                            <small>{{ g.producto.codigo_producto }}</small>
+                        </td>
+
+                        <td>{{ g.pendiente }}</td>
+
+                        <td class="{% if g.error_disponible %}fila-error{% endif %}">
+                          <input
+                                type="number"
+                                min="0"
+                                max="{{ g.pendiente }}"
+                                step="1"
+                                required
+                                name="disp_{{ g.producto.pk }}"
+                                value="{{ g.valor_disponible }}"
+                                class="{% if g.error_disponible %}campo-error{% endif %}"
+                            >
+
+                          {% for error in g.error_disponible %}
+                              <small class="error-celda">{{ error }}</small>
+                          {% endfor %}
+                      </td>
+
+                        <td class="{% if g.error_danado %}fila-error{% endif %}">
+                          <input
+                                  type="number"
+                                  min="0"
+                                  max="{{ g.pendiente }}"
+                                  step="1"
+                                  required
+                                  name="dan_{{ g.producto.pk }}"
+                                  value="{{ g.valor_danado }}"
+                                  class="{% if g.error_danado %}campo-error{% endif %}"
+                              >
+
+                        {% for error in g.error_danado %}
+                            <small class="error-celda">{{ error }}</small>
+                        {% endfor %}
+                      </td>
+                    </tr>
+
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        </div>
+
+        {% endif %}
+
+
+        {% if seriales %}
+
+        <div class="card" style="border-left:5px solid #7a3db8">
+
+            <h3>🔢 Material con código individual</h3>
+
+            <p class="ayuda">
+                Seleccione cada unidad que devuelve el técnico
+                e indique si regresa disponible o dañada.
+                Aplica tanto a unidades con serial físico
+                como a unidades con código interno.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Devolver</th>
+                        <th>Material</th>
+                        <th>Número de serie</th>
+                        <th>Código interno</th>
+                        <th>Asignado</th>
+                        <th>Estado al regresar</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for a in seriales %}
+
+                    <tr>
+                        <td>
+                            <input
+                                type="checkbox"
+                                name="ser_{{ a.pk }}"
+                                value="1"
+                                {% if a.seleccionado %}checked{% endif %}
+                            >
+                        </td>
+
+                        <td>{{ a.producto.nombre_completo }}</td>
+
+                        <td>
+                            {{ a.unidad_serializada.numero_serie|default:"—" }}
+                        </td>
+
+                        <td>
+                            <strong>{{ a.unidad_serializada.codigo }}</strong>
+                        </td>
+
+                        <td>
+                            {{ a.fecha_asignacion|date:"d/m/Y" }}
+                        </td>
+
+                        <td class="{% if a.error_estado %}fila-error{% endif %}">
+
+                          <select
+                              name="estado_ser_{{ a.pk }}"
+                              class="{% if a.error_estado %}campo-error{% endif %}"
+                          >
+                              <option
+                                  value="DISPONIBLE"
+                                  {% if a.valor_estado == "DISPONIBLE" %}selected{% endif %}
+                              >
+                                  Disponible
+                              </option>
+
+                              <option
+                                  value="DANADO"
+                                  {% if a.valor_estado == "DANADO" %}selected{% endif %}
+                              >
+                                  Dañado
+                              </option>
+                          </select>
+
+                          {% for error in a.error_estado %}
+                              <small class="error-celda">{{ error }}</small>
+                          {% endfor %}
+
+                      </td>
+                    </tr>
+
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        </div>
+
+        {% endif %}
+
+
+        <div class="card">
+
+            <label for="obs">
+                <strong>
+                    Observación
+                    <span class="observacion-obligatoria">*</span>
+                </strong>
+            </label>
+
+            <p class="ayuda">
+                Explique el motivo de la devolución y las condiciones
+                en que se recibe el material.
+            </p>
+
+            <textarea
+                id="obs"
+                name="observacion"
+                rows="3"
+                placeholder="Explique el motivo de la devolución..."
+                required
+                class="{% if error_observacion %}observacion-error{% endif %}"
+            >{{ valor_observacion }}</textarea>
+
+            {% for error in error_observacion %}
+                <small class="error-celda">{{ error }}</small>
+            {% endfor %}
+
+        </div>
+
+
+        <div class="acciones">
+
+            <a
+                class="btn sec"
+                href="{% url 'almacen:asignaciones' %}"
+            >
+                Cancelar
+            </a>
+
+            <button
+                class="btn"
+                type="submit"
+                onclick="return confirm(
+                    '¿Confirma las cantidades, estados y unidades seleccionadas para devolución?'
+                )"
+            >
+                Registrar devolución
+            </button>
+
+        </div>
+
+    </form>
+
+    
+
 </div>
+
 {% endblock %}

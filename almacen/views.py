@@ -543,7 +543,9 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
                 | Q(tiene_remision_unidad=True)
             ).distinct()
 
-        if self.request.GET.get("bajo"):
+        bajo = self.request.GET.get("bajo") == "1"
+
+        if bajo:
             qs = qs.filter(
                 cantidad_minima__gt=0,
                 cantidad_actual__lte=F("cantidad_minima"),
@@ -595,6 +597,7 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
             ctx.update(
                 _obtener_contexto_asignaciones(self.request)
             )
+
         else:
             five = _five_total_por_producto()
             sap = _sap_total_por_producto()
@@ -605,9 +608,53 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
 
                 inventario.five = five.get(producto_id, 0)
                 inventario.sap = sap.get(producto_id, 0)
+
                 inventario.asignado_estado = asignado.get(
                     producto_id, 0
                 )
+
+        # ==================================================
+        # CONTADORES DEL INVENTARIO CON FILTROS ACTIVOS
+        # ==================================================
+
+        qs = self.get_queryset()
+
+        # Si get_queryset devuelve una lista por comparación,
+        # también podemos contar sus elementos.
+        ctx["total_productos"] = len(qs)
+
+        ctx["total_existencias"] = sum(
+            i.cantidad_actual or 0 for i in qs
+        )
+        ctx["total_danado"] = sum(
+            i.cantidad_danada or 0 for i in qs
+        )
+
+        ctx["total_recibido"] = sum(
+            i.total or 0 for i in qs
+        )
+
+        ctx["total_minimo"] = sum(
+            i.cantidad_minima or 0 for i in qs
+        )
+
+        ctx["total_stock_bajo"] = sum(
+            1 for i in qs
+            if i.cantidad_minima > 0
+            and i.cantidad_actual <= i.cantidad_minima
+        )
+
+        ctx["total_five"] = sum(
+            five.get(i.producto_id, 0) for i in qs
+        ) if not tecnico_sel.isdigit() else 0
+
+        ctx["total_sap"] = sum(
+            sap.get(i.producto_id, 0) for i in qs
+        ) if not tecnico_sel.isdigit() else 0
+
+        ctx["total_asignado"] = sum(
+            asignado.get(i.producto_id, 0) for i in qs
+        ) if not tecnico_sel.isdigit() else 0
 
         return ctx
 
@@ -649,11 +696,26 @@ class MinimoUpdateView(FormPageMixin, RolRequeridoMixin, UpdateView):
         ctx["subtitulo"] = self.object.producto.nombre_completo
         return ctx
 
+class RemisionInfoJson(RolRequeridoMixin, View):
+    """Dice si un número de remisión ya está registrado."""
+    roles_permitidos = ROLES_ALMACEN
 
-# ============================================================
-# INGRESOS
-# ============================================================
+    def get(self, request):
+        numero = request.GET.get("numero", "").strip().upper()
+        if not numero:
+            return JsonResponse({"vacio": True})
 
+        r = RemisionIngreso.objects.filter(numero_remision=numero).first()
+        if not r:
+            return JsonResponse({"vacio": False, "existe": False})
+
+        return JsonResponse({
+            "vacio": False,
+            "existe": True,
+            "fecha": r.fecha_recibo_bsi.strftime("%d/%m/%Y") if r.fecha_recibo_bsi else "",
+            "recogido_por": r.recogido_por,
+            "recibido_almacen_por": r.recibido_almacen_por,
+        })
 # ============================================================
 # INGRESOS
 # ============================================================
@@ -748,7 +810,6 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
 
         # Producto: usar campos reales del modelo
         "producto__nombre",
-        "producto__codigo_producto",
         "producto__marca",
         "producto__referencia",
         "producto__medida",
@@ -1469,12 +1530,36 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         self._cargar()
+        
         pend_cantidad, pend_seriales = self._datos_pendientes()
 
+        payload_previo = []
         try:
-            payload_previo = json.loads(self.request.POST.get("payload", "[]"))
-            if not isinstance(payload_previo, list):
-                payload_previo = []
+            crudo = json.loads(self.request.POST.get("payload", "[]"))
+            nombres = {
+                p.pk: p.nombre_completo
+                for p in Producto.objects.filter(
+                    pk__in=[
+                        int(l.get("producto_id"))
+                        for l in crudo
+                        if str(l.get("producto_id", "")).isdigit()
+                    ]
+                )
+            }
+            for l in crudo if isinstance(crudo, list) else []:
+                pid = int(l.get("producto_id"))
+                seriales = l.get("seriales") or []
+                payload_previo.append({
+                    "producto": pid,
+                    "nombre": nombres.get(pid, "Material"),
+                    "serializado": bool(seriales),
+                    "cantidad": 0 if seriales else int(l.get("cantidad") or 0),
+                    "unidades": [
+                        {"id": None, "serial": s} for s in seriales
+                    ],
+                })
+        except (ValueError, TypeError):
+            payload_previo = []
         except ValueError:
             payload_previo = []
 
@@ -1492,6 +1577,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         self._cargar()
+        
         form = InstalacionMasivaForm(request.POST, request.FILES)
 
         try:
@@ -1533,40 +1619,14 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                 )
 
                 if instala:
-                    vistos = set()
-                    for l in lineas:
-                        if l.get("serializado"):
-                            for u in l.get("unidades", []):
-                                serial = str(u.get("serial", "")).strip()
-                                if not serial or serial.lower() in vistos:
-                                    continue
-                                vistos.add(serial.lower())
-                                piezas += 1
-                                n = services.instalar_serial(
-                                    serial=serial, producto_id=l.get("producto"),
-                                    tecnico=self.tecnico, usuario=request.user,
-                                    operacion=op, fecha=d["fecha_instalacion"],
-                                    observaciones=d["observaciones"],
-                                )
-                                if n:
-                                    novedades.append(n)
-                        else:
-                            try:
-                                pid, cant = int(l.get("producto")), int(l.get("cantidad", 0))
-                            except (TypeError, ValueError):
-                                raise services.ErrorInventario("Hay un material inválido en la lista.")
-                            producto = Producto.objects.filter(pk=pid, estado=True).first()
-                            if not producto or producto.es_serializado:
-                                raise services.ErrorInventario("Hay un material inválido en la lista.")
-                            if cant <= 0:
-                                continue
-                            piezas += cant
-                            novedades += services.instalar_cantidad(
-                                producto=producto, cantidad=cant, tecnico=self.tecnico,
-                                usuario=request.user, operacion=op,
-                                fecha=d["fecha_instalacion"],
-                                observaciones=d["observaciones"],
-                            )
+                    novedades = services.sincronizar_materiales_operacion(
+                        operacion=op,
+                        payload=lineas,
+                        usuario=request.user,
+                    )
+                    piezas = sum(
+                        int(l.get("cantidad") or 0) for l in lineas
+                    )
         except services.ErrorInventario as e:
             messages.error(request, str(e))
             return self.render_to_response(self.get_context_data(form=form))
@@ -1760,87 +1820,583 @@ def editar_instalacion(request, pk):
 # ============================================================
 
 class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
+
     roles_permitidos = ROLES_ALMACEN
     template_name = "almacen/tecnico_devolver.html"
 
+    # ==========================================================
+    # CARGAR ASIGNACIONES PENDIENTES DEL TÉCNICO
+    # ==========================================================
+
     def _cargar(self):
-        self.tecnico = get_object_or_404(User, pk=self.kwargs["pk"], rol="TECNICO")
+
+        self.tecnico = get_object_or_404(
+            User,
+            pk=self.kwargs["pk"],
+            rol="TECNICO"
+        )
+
         pend = (
             Asignacion.objects
-            .filter(tecnico=self.tecnico, estado=Asignacion.Estado.ASIGNADA)
+            .filter(
+                tecnico=self.tecnico,
+                estado=Asignacion.Estado.ASIGNADA
+            )
             .select_related("producto", "unidad_serializada")
             .order_by("producto__nombre", "producto__medida", "id")
         )
-        self.grupos = OrderedDict()   # por cantidad
-        self.seriales = []            # por serial
+
+        self.grupos = OrderedDict()
+        self.seriales = []
+
         for a in pend:
+
             if a.cantidad_pendiente <= 0:
                 continue
+
             if a.unidad_serializada_id:
+
+                # Incluye serial físico y códigos internos.
                 self.seriales.append(a)
+
             else:
+
                 g = self.grupos.setdefault(
-                    a.producto_id, {"producto": a.producto, "pendiente": 0})
-                g["pendiente"] += a.cantidad
+                    a.producto_id,
+                    {
+                        "producto": a.producto,
+                        "pendiente": 0,
+                    }
+                )
+
+                g["pendiente"] += a.cantidad_pendiente
+
+    # ==========================================================
+    # CONSTRUIR CONTEXTO
+    # ==========================================================
 
     def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        self._cargar()
-        ctx.update(tecnico=self.tecnico, grupos=list(self.grupos.values()),
-                   seriales=self.seriales)
-        return ctx
 
-    def post(self, request, *args, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        errores_celdas = kwargs.get("errores_celdas", {})
+        valores_post = kwargs.get("valores_post", {})
+
         self._cargar()
-        obs = request.POST.get("observacion", "").strip()
-        errores, por_serial, por_cantidad = [], [], []
+
+        grupos = list(self.grupos.values())
+
+        # ------------------------------------------------------
+        # MATERIALES POR CANTIDAD
+        # ------------------------------------------------------
+
+        for g in grupos:
+
+            pid = g["producto"].pk
+
+            g["error_disponible"] = errores_celdas.get(
+                f"disp_{pid}", []
+            )
+
+            g["error_danado"] = errores_celdas.get(
+                f"dan_{pid}", []
+            )
+
+            g["valor_disponible"] = valores_post.get(
+                f"disp_{pid}", "0"
+            )
+
+            g["valor_danado"] = valores_post.get(
+                f"dan_{pid}", "0"
+            )
+
+        # ------------------------------------------------------
+        # UNIDADES SERIALIZADAS
+        # ------------------------------------------------------
 
         for a in self.seriales:
-            if request.POST.get(f"ser_{a.pk}"):
-                por_serial.append(a)
 
-        for pid, g in self.grupos.items():
-            raw = request.POST.get(f"cant_{pid}", "").strip()
-            if not raw:
+            a.error_estado = errores_celdas.get(
+                f"estado_ser_{a.pk}", []
+            )
+
+            a.valor_estado = valores_post.get(
+                f"estado_ser_{a.pk}", "DISPONIBLE"
+            )
+
+            a.seleccionado = (
+                valores_post.get(f"ser_{a.pk}") == "1"
+            )
+
+        # ------------------------------------------------------
+        # CONTEXTO GENERAL
+        # ------------------------------------------------------
+
+        ctx.update(
+            tecnico=self.tecnico,
+            grupos=grupos,
+            seriales=self.seriales,
+
+            error_observacion=errores_celdas.get(
+                "observacion", []
+            ),
+
+            valor_observacion=valores_post.get(
+                "observacion", ""
+            ),
+
+            valores_post=valores_post,
+        )
+
+        return ctx
+
+    # ==========================================================
+    # PROCESAR DEVOLUCIÓN
+    # ==========================================================
+
+    def post(self, request, *args, **kwargs):
+
+        self._cargar()
+
+        # IMPORTANTE:
+        # Los grupos deben definirse dentro de POST.
+        grupos = list(self.grupos.values())
+
+        obs = request.POST.get(
+            "observacion", ""
+        ).strip()
+
+        errores = []
+        errores_celdas = {}
+
+        por_serial = []
+        por_cantidad = []
+
+        valores_post = request.POST.dict()
+
+        # ------------------------------------------------------
+        # FUNCIÓN PARA REGISTRAR ERRORES POR CAMPO
+        # ------------------------------------------------------
+
+        def error_celda(campo, mensaje):
+
+            errores_celdas.setdefault(
+                campo, []
+            ).append(mensaje)
+
+        # ======================================================
+        # 1. VALIDAR OBSERVACIÓN
+        # ======================================================
+
+        if not obs:
+
+            error_celda(
+                "observacion",
+                "La observación es obligatoria."
+            )
+
+        elif len(obs) < 5:
+
+            error_celda(
+                "observacion",
+                "La observación debe contener al menos 5 caracteres."
+            )
+
+        # ======================================================
+        # 2. VALIDAR UNIDADES CON CÓDIGO INDIVIDUAL
+        # ======================================================
+
+        for a in self.seriales:
+
+            if request.POST.get(f"ser_{a.pk}") != "1":
                 continue
+
+            campo_estado = f"estado_ser_{a.pk}"
+
+            estado = request.POST.get(
+                campo_estado, ""
+            )
+
+            if estado not in (
+                UnidadSerializada.Estado.DISPONIBLE,
+                UnidadSerializada.Estado.DAÑADO,
+            ):
+
+                codigo = (
+                    a.unidad_serializada.codigo
+                    if a.unidad_serializada
+                    else f"Asignación {a.pk}"
+                )
+
+                error_celda(
+                    campo_estado,
+                    f"Selecciona un estado válido para {codigo}."
+                )
+
+                continue
+
+            por_serial.append((a, estado))
+
+        # ======================================================
+        # 3. VALIDAR MATERIALES POR CANTIDAD
+        # ======================================================
+
+        materiales_sin_cantidad = []
+
+        for g in grupos:
+
+            producto = g["producto"]
+            pendiente = int(g["pendiente"] or 0)
+
+            nombre = getattr(
+                producto,
+                "nombre_completo",
+                str(producto)
+            )
+
+            campo_disponible = f"disp_{producto.pk}"
+            campo_danado = f"dan_{producto.pk}"
+
+            # --------------------------------------------------
+            # LEER VALORES DEL FORMULARIO
+            # --------------------------------------------------
+
+            raw_disponible = request.POST.get(
+                campo_disponible, "0"
+            ).strip()
+
+            raw_danado = request.POST.get(
+                campo_danado, "0"
+            ).strip()
+
+            # --------------------------------------------------
+            # VALIDAR DISPONIBLE
+            # --------------------------------------------------
+
             try:
-                n = int(raw)
-            except ValueError:
-                errores.append(f"{g['producto'].nombre_completo}: cantidad inválida.")
+
+                disponible = int(raw_disponible or 0)
+
+            except (TypeError, ValueError):
+
+                error_celda(
+                    campo_disponible,
+                    f'{nombre}: "{raw_disponible}" no es una cantidad válida. '
+                    "Ingresa un número entero, por ejemplo: 0, 1, 2 o 3."
+                )
+
                 continue
-            if n <= 0:
+
+            # --------------------------------------------------
+            # VALIDAR DAÑADO
+            # --------------------------------------------------
+
+            try:
+
+                danado = int(raw_danado or 0)
+
+            except (TypeError, ValueError):
+
+                error_celda(
+                    campo_danado,
+                    f'{nombre}: "{raw_danado}" no es una cantidad válida. '
+                    "Ingresa un número entero, por ejemplo: 0, 1, 2 o 3."
+                )
+
                 continue
-            if n > g["pendiente"]:
+
+            # --------------------------------------------------
+            # VALIDAR NÚMEROS NEGATIVOS
+            # --------------------------------------------------
+
+            cantidad_negativa = False
+
+            if disponible < 0:
+
+                error_celda(
+                    campo_disponible,
+                    f"{nombre}: la cantidad disponible no puede ser negativa."
+                )
+
+                cantidad_negativa = True
+
+            if danado < 0:
+
+                error_celda(
+                    campo_danado,
+                    f"{nombre}: la cantidad dañada no puede ser negativa."
+                )
+
+                cantidad_negativa = True
+
+            if cantidad_negativa:
+                continue
+
+            # --------------------------------------------------
+            # VALIDAR CANTIDAD MÁXIMA PENDIENTE
+            # --------------------------------------------------
+
+            total_producto = disponible + danado
+
+            if total_producto > pendiente:
+
+                mensaje = (
+                    f"{nombre}: ingresaste {total_producto} unidades "
+                    f"({disponible} disponibles y {danado} dañadas), "
+                    f"pero solamente tienes {pendiente} pendientes. "
+                    f"Debes ingresar una cantidad igual o inferior a "
+                    f"{pendiente}."
+                )
+
+                # Mostrar el error en los campos que tienen cantidad.
+                if disponible > 0:
+                    error_celda(
+                        campo_disponible,
+                        mensaje
+                    )
+
+                if danado > 0:
+                    error_celda(
+                        campo_danado,
+                        mensaje
+                    )
+
+                continue
+
+            # --------------------------------------------------
+            # IDENTIFICAR MATERIALES SIN CANTIDAD
+            # --------------------------------------------------
+
+            if total_producto == 0:
+
+                materiales_sin_cantidad.append(
+                    f"{nombre} (pendiente: {pendiente})"
+                )
+
+                continue
+
+            # --------------------------------------------------
+            # AGREGAR CANTIDADES VÁLIDAS
+            # --------------------------------------------------
+
+            if disponible > 0:
+
+                por_cantidad.append((
+                    producto,
+                    disponible,
+                    UnidadSerializada.Estado.DISPONIBLE,
+                ))
+
+            if danado > 0:
+
+                por_cantidad.append((
+                    producto,
+                    danado,
+                    UnidadSerializada.Estado.DAÑADO,
+                ))
+
+        # ======================================================
+        # 4. CALCULAR TOTAL SOLICITADO
+        # ======================================================
+
+        total_solicitado = (
+            len(por_serial)
+            + sum(
+                cantidad
+                for producto, cantidad, estado in por_cantidad
+            )
+        )
+
+        # ======================================================
+        # 5. VALIDAR QUE SE HAYA SELECCIONADO ALGÚN MATERIAL
+        # ======================================================
+
+        if total_solicitado == 0 and not errores_celdas:
+
+            if materiales_sin_cantidad:
+
+                detalle = "; ".join(
+                    materiales_sin_cantidad
+                )
+
+                mensaje = (
+                    "No has indicado cantidades para devolver. "
+                    f"Los materiales pendientes son: {detalle}. "
+                    "Ingresa una cantidad mayor que cero en Disponible "
+                    "o Dañado, o selecciona una unidad con código individual."
+                )
+
+                errores.append(mensaje)
+
+                # También señalar los campos que debe completar.
+                for g in grupos:
+
+                    pid = g["producto"].pk
+
+                    error_celda(
+                        f"disp_{pid}",
+                        "Ingresa una cantidad mayor que cero en Disponible "
+                        "o Dañado para devolver este material."
+                    )
+
+            else:
+
                 errores.append(
-                    f"{g['producto'].nombre_completo}: solo tiene {g['pendiente']}.")
-                continue
-            por_cantidad.append((g["producto"], n))
+                    "No has seleccionado ninguna unidad para devolver. "
+                    "Selecciona una unidad con código individual "
+                    "o ingresa una cantidad mayor que cero."
+                )
 
-        if not errores and not por_serial and not por_cantidad:
-            errores.append("Seleccione al menos un material para devolver.")
+        # ======================================================
+        # 6. IMPEDIR DEVOLUCIONES SI EXISTEN ERRORES
+        # ======================================================
 
-        if errores:
-            for e in errores:
-                messages.error(request, e)
-            return self.render_to_response(self.get_context_data())
+        if errores_celdas or errores:
+
+            for mensaje in errores:
+                messages.error(request, mensaje)
+
+            if errores_celdas:
+
+                messages.error(
+                    request,
+                    "No se registró ninguna devolución. "
+                    "Revisa los campos señalados y corrige los errores."
+                )
+
+            return self.render_to_response(
+                self.get_context_data(
+                    errores_celdas=errores_celdas,
+                    valores_post=valores_post,
+                )
+            )
+
+        
+        # ======================================================
+        # 7. REGISTRAR DEVOLUCIÓN Y GENERAR COMPROBANTE
+        # ======================================================
 
         try:
             with transaction.atomic():
-                for a in por_serial:
-                    services.devolver(asignacion=a, usuario=request.user, observacion=obs)
-                for producto, n in por_cantidad:
+
+                # Crear el documento de devolución.
+                documento = EntregaMaterial.objects.create(
+                    tipo=EntregaMaterial.Tipo.DEVOLUCION,
+                    tecnico=self.tecnico,
+                    entregado_por=request.user,
+                    fecha=timezone.localdate(),
+                    observaciones=obs,
+                )
+
+                # ----------------------------------------------
+                # UNIDADES CON CÓDIGO INDIVIDUAL
+                # ----------------------------------------------
+
+                for a, estado in por_serial:
+
+                    devuelta = services.devolver(
+                        asignacion=a,
+                        usuario=request.user,
+                        observacion=obs,
+                        estado_retorno=estado,
+                    )
+
+                    unidad = devuelta.unidad_serializada
+
+                    EntregaItem.objects.create(
+                        entrega=documento,
+                        producto=devuelta.producto,
+                        unidad=unidad,
+                        asignacion=devuelta,
+                        serial=(
+                            getattr(unidad, "numero_serie", "") or unidad.codigo
+                        ),
+                        cantidad=1,
+                        estado_retorno=estado,
+                        observacion=obs,
+                    )
+
+                # ----------------------------------------------
+                # MATERIALES POR CANTIDAD
+                # ----------------------------------------------
+
+                for producto, cantidad, estado in por_cantidad:
+
+                    detalles = []
+
                     services.devolver_cantidad(
-                        tecnico=self.tecnico, producto=producto, cantidad=n,
-                        usuario=request.user, observacion=obs)
+                        tecnico=self.tecnico,
+                        producto=producto,
+                        cantidad=cantidad,
+                        usuario=request.user,
+                        observacion=obs,
+                        estado_retorno=estado,
+                        detalle_devoluciones=detalles,
+                    )
+
+                    # Cada bloque devuelto queda registrado
+                    # con su asignación correspondiente.
+                    for detalle in detalles:
+
+                        EntregaItem.objects.create(
+                            entrega=documento,
+                            producto=detalle["producto"],
+                            asignacion=detalle["asignacion"],
+                            cantidad=detalle["cantidad"],
+                            estado_retorno=estado,
+                            observacion=obs,
+                        )
+
         except services.ErrorInventario as e:
-            messages.error(request, str(e))
-            return self.render_to_response(self.get_context_data())
+
+            messages.error(
+                request,
+                f"No se pudo registrar la devolución: {e}"
+            )
+
+            return self.render_to_response(
+                self.get_context_data(
+                    errores_celdas=errores_celdas,
+                    valores_post=valores_post,
+                )
+            )
+
+
+        # ======================================================
+        # 8. CONFIRMACIÓN
+        # ======================================================
+
+        total_devuelto = total_solicitado
 
         messages.success(
             request,
-            f"Devolución registrada: {len(por_serial) + sum(n for _, n in por_cantidad)} "
-            "pieza(s) volvieron al almacén.")
-        return redirect("almacen:asignaciones")
+            f"Devolución registrada correctamente: "
+            f"{total_devuelto} pieza(s)."
+        )
+
+        return redirect("almacen:entrega_detalle", documento.pk)
+
+   
+class ValidarSerialInstalacionJson(RolRequeridoMixin, View):
+    """Dice si un serial lo tiene el técnico o qué inconsistencia sería."""
+    roles_permitidos = ROLES_DIGITADOR
+
+    def get(self, request):
+        tecnico = get_object_or_404(User, pk=request.GET.get("tecnico"), rol="TECNICO")
+        serial = request.GET.get("serial", "").strip()
+        if not serial:
+            return JsonResponse({"tipo": "VACIO", "mensaje": "Escriba el serial."})
+
+        tipo, unidad, _a, detalle = services.clasificar_serial(serial=serial, tecnico=tecnico)
+        return JsonResponse({
+            "tipo": tipo or "OK",
+            "mensaje": detalle or "Lo tiene asignado.",
+            "instala": tipo not in services.TIPOS_SOLO_REPORTE,
+            "id": unidad.pk if unidad else None,
+            "serial": (unidad.numero_serie or unidad.codigo) if unidad else serial,
+            "producto": unidad.producto_id if unidad else None,
+            "nombre": unidad.producto.nombre_completo if unidad else "",
+        })
 
 # ============================================================
 # UNIDADES DISPONIBLES · JSON
@@ -1876,11 +2432,11 @@ class UnidadesDisponiblesJson(RolRequeridoMixin, View):
 # ============================================================
 # MOVIMIENTOS / KARDEX
 # ============================================================
-
 class MovimientoListView(RolRequeridoMixin, BuscarMixin, ListView):
     roles_permitidos = ROLES_ALMACEN
     model = MovimientoInventario
     template_name = "almacen/movimiento_list.html"
+
     campos_busqueda = (
         "producto__nombre",
         "producto__codigo_producto",
@@ -1891,19 +2447,43 @@ class MovimientoListView(RolRequeridoMixin, BuscarMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset().select_related(
-            "producto", "unidad_serializada", "usuario"
+            "producto",
+            "unidad_serializada",
+            "usuario",
         )
 
-        tipo = self.request.GET.get("tipo")
+        tipo = self.request.GET.get("tipo", "").strip()
+        fecha = self.request.GET.get("fecha", "").strip()
+        responsable = self.request.GET.get("responsable", "").strip()
+
         if tipo:
             qs = qs.filter(tipo_movimiento=tipo)
 
-        return qs
+        if fecha:
+            qs = qs.filter(fecha__date=fecha)
+
+        if responsable.isdigit():
+            qs = qs.filter(usuario_id=int(responsable))
+
+        return qs.order_by("-fecha", "-pk")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+
         ctx["tipos"] = MovimientoInventario.TipoMovimiento.choices
         ctx["tipo_sel"] = self.request.GET.get("tipo", "")
+        ctx["fecha_sel"] = self.request.GET.get("fecha", "")
+
+        ctx["responsables"] = (
+            User.objects.filter(
+                movimientos__isnull=False
+            )
+            .distinct()
+            .order_by("first_name", "username")
+        )
+
+        ctx["responsable_sel"] = self.request.GET.get("responsable", "")
+
         return ctx
 
 # ---------- helpers ----------
@@ -2020,8 +2600,11 @@ class EntregaCreateView(RolRequeridoMixin, TemplateView):
         try:
             with transaction.atomic():
                 entrega = EntregaMaterial.objects.create(
-                    tecnico=d["tecnico"], entregado_por=request.user,
-                    fecha=d["fecha"], observaciones=d["observaciones"],
+                    tipo=EntregaMaterial.Tipo.ENTREGA,
+                    tecnico=d["tecnico"],
+                    entregado_por=request.user,
+                    fecha=d["fecha"],
+                    observaciones=d["observaciones"],
                 )
                 for producto, cantidad, unidades in resueltos:
                     if producto.es_serializado:
@@ -2058,203 +2641,562 @@ class EntregaDetailView(RolRequeridoMixin, DetailView):
     template_name = "almacen/entrega_detail.html"
 
     def get_queryset(self):
-        return (super().get_queryset()
-                .select_related("tecnico", "entregado_por")
-                .prefetch_related("items__producto"))
+        return (
+            super().get_queryset()
+            .select_related("tecnico", "entregado_por")
+            .prefetch_related(
+                "items__producto",
+                "items__unidad",
+                "items__asignacion",
+            )
+        )
 
 
-# ---------- PDF de una entrega ----------
 class EntregaPdfView(RolRequeridoMixin, View):
     roles_permitidos = ROLES_ALMACEN
 
     def get(self, request, pk):
+        from xml.sax.saxutils import escape
+
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
-        from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate,
-                                        Spacer, Table, TableStyle)
+        from reportlab.platypus import (
+            Image, Paragraph, SimpleDocTemplate,
+            Spacer, Table, TableStyle,
+        )
 
         e = get_object_or_404(
-            EntregaMaterial.objects.select_related("tecnico", "entregado_por")
-            .prefetch_related("items__producto"), pk=pk)
+            EntregaMaterial.objects
+            .select_related("tecnico", "entregado_por")
+            .prefetch_related("items__producto", "items__unidad"),
+            pk=pk,
+        )
+
+        es_devolucion = e.tipo == EntregaMaterial.Tipo.DEVOLUCION
+
+        titulo_texto = (
+            "ACTA DE DEVOLUCIÓN DE MATERIAL"
+            if es_devolucion
+            else "ACTA DE ENTREGA DE MATERIAL"
+        )
+
+        nombre_tecnico = escape(str(_nombre(e.tecnico)))
+        cedula_tecnico = escape(str(_cedula(e.tecnico)))
+        nombre_almacen = escape(str(_nombre(e.entregado_por)))
+        cedula_almacen = escape(str(_cedula(e.entregado_por)))
 
         buf = BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4, title=e.codigo,
-                                leftMargin=1.6*cm, rightMargin=1.6*cm,
-                                topMargin=1.4*cm, bottomMargin=1.4*cm)
-        ss = getSampleStyleSheet()
-        normal = ParagraphStyle("n", parent=ss["Normal"], fontSize=9, leading=11)
-        small = ParagraphStyle("s", parent=normal, fontSize=8, textColor=colors.grey)
-        titulo = ParagraphStyle("t", parent=ss["Title"], fontSize=15, leading=18)
-        AZUL = colors.HexColor("#1f3a5f")
 
-        # Encabezado: logo | título | código
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            title=f"{titulo_texto} - {e.codigo}",
+            leftMargin=1.3 * cm,
+            rightMargin=1.3 * cm,
+            topMargin=1.3 * cm,
+            bottomMargin=1.3 * cm,
+        )
+
+        ss = getSampleStyleSheet()
+
+        normal = ParagraphStyle(
+            "NormalDocumento",
+            parent=ss["Normal"],
+            fontSize=8,
+            leading=10,
+        )
+
+        small = ParagraphStyle(
+            "SmallDocumento",
+            parent=normal,
+            fontSize=7,
+            textColor=colors.grey,
+        )
+
+        titulo = ParagraphStyle(
+            "TituloDocumento",
+            parent=ss["Title"],
+            fontSize=13,
+            leading=16,
+            alignment=1,
+        )
+
+        azul = colors.HexColor("#1f3a5f")
+
+        # Encabezado.
         ruta_logo = finders.find("almacen/img/logo.png")
-        logo = Image(ruta_logo, width=3.2*cm, height=1.6*cm, kind="proportional") if ruta_logo else ""
-        cab = Table(
-            [[logo,
-              Paragraph("ACTA DE ENTREGA DE MATERIAL", titulo),
-              Paragraph(f"<b>N.º</b><br/>{e.codigo}<br/><b>Fecha</b><br/>{e.fecha:%d/%m/%Y}", normal)]],
-            colWidths=[3.8*cm, 9.2*cm, 4.4*cm])
-        cab.setStyle(TableStyle([
+        logo = (
+            Image(
+                ruta_logo,
+                width=3.0 * cm,
+                height=1.5 * cm,
+                kind="proportional",
+            )
+            if ruta_logo
+            else ""
+        )
+
+        cabecera = Table(
+            [[
+                logo,
+                Paragraph(titulo_texto, titulo),
+                Paragraph(
+                    f"<b>N.º</b><br/>{escape(str(e.codigo))}"
+                    f"<br/><b>Fecha</b><br/>{e.fecha:%d/%m/%Y}",
+                    normal,
+                ),
+            ]],
+            colWidths=[3.2 * cm, 9.5 * cm, 4.5 * cm],
+        )
+
+        cabecera.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BOX", (2, 0), (2, 0), 0.8, AZUL),
-            ("LINEBELOW", (0, 0), (-1, 0), 1.2, AZUL),
+            ("BOX", (2, 0), (2, 0), 0.8, azul),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.2, azul),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ]))
 
-        # Partes
-        partes = Table([
-            [Paragraph("<b>Técnico (recibe)</b>", normal), Paragraph("<b>Entrega</b>", normal)],
-            [Paragraph(f"{_nombre(e.tecnico)}<br/>C.C. {_cedula(e.tecnico)}", normal),
-             Paragraph(f"{_nombre(e.entregado_por)}<br/>C.C. {_cedula(e.entregado_por)}", normal)],
-        ], colWidths=[8.7*cm, 8.7*cm])
+        # Responsables.
+        if es_devolucion:
+            encabezado_izq = "Técnico (devuelve)"
+            encabezado_der = "Recibió en almacén"
+            firma_izq = "Devuelve (Técnico)"
+            firma_der = "Recibe (Almacén)"
+
+            parte_izq = (
+                f"{nombre_tecnico}<br/>C.C. {cedula_tecnico}"
+            )
+            parte_der = (
+                f"{nombre_almacen}<br/>C.C. {cedula_almacen}"
+            )
+        else:
+            encabezado_izq = "Técnico (recibe)"
+            encabezado_der = "Entrega (Almacén)"
+            firma_izq = "Entrega (Almacén)"
+            firma_der = "Recibe (Técnico)"
+
+            parte_izq = (
+                f"{nombre_tecnico}<br/>C.C. {cedula_tecnico}"
+            )
+            parte_der = (
+                f"{nombre_almacen}<br/>C.C. {cedula_almacen}"
+            )
+
+        partes = Table(
+            [
+                [
+                    Paragraph(f"<b>{encabezado_izq}</b>", normal),
+                    Paragraph(f"<b>{encabezado_der}</b>", normal),
+                ],
+                [
+                    Paragraph(parte_izq, normal),
+                    Paragraph(parte_der, normal),
+                ],
+            ],
+            colWidths=[8.6 * cm, 8.6 * cm],
+        )
+
         partes.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef6")),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
 
-        # Materiales
-        filas = [["#", "Código", "Material", "Serial / código unidad", "Cant."]]
+        # Materiales.
+        if es_devolucion:
+            filas = [[
+                "#", "Código", "Material", "Serial / unidad",
+                "Cant.", "Estado",
+            ]]
+        else:
+            filas = [[
+                "#", "Código", "Material", "Serial / unidad", "Cant.",
+            ]]
+
         for i, it in enumerate(e.items.all(), 1):
-            filas.append([i, it.producto.codigo_producto or "", Paragraph(it.producto.nombre_completo, normal),
-                          it.serial or "—", it.cantidad])
-        filas.append(["", "", "", "TOTAL", e.total_cantidad])
-        tabla = Table(filas, colWidths=[1*cm, 2.8*cm, 7.2*cm, 4.4*cm, 2*cm], repeatRows=1)
+            fila = [
+                str(i),
+                escape(str(it.producto.codigo_producto or "")),
+                Paragraph(
+                    escape(str(it.producto.nombre_completo)),
+                    normal,
+                ),
+                escape(str(it.serial or "—")),
+                str(it.cantidad),
+            ]
+
+            if es_devolucion:
+                fila.append(
+                    escape(str(it.get_estado_retorno_display() or "—"))
+                )
+
+            filas.append(fila)
+
+        if es_devolucion:
+            filas.append(["", "", "", "TOTAL", str(e.total_cantidad), ""])
+            anchos = [
+                0.7 * cm, 2.2 * cm, 5.0 * cm,
+                3.8 * cm, 1.2 * cm, 3.0 * cm,
+            ]
+        else:
+            filas.append(["", "", "", "TOTAL", str(e.total_cantidad)])
+            anchos = [
+                0.8 * cm, 2.7 * cm, 6.0 * cm,
+                4.5 * cm, 1.8 * cm,
+            ]
+
+        tabla = Table(filas, colWidths=anchos, repeatRows=1)
+
         tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), AZUL), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("BACKGROUND", (0, 0), (-1, 0), azul),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
             ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
-            ("ALIGN", (-1, 0), (-1, -1), "CENTER"), ("ALIGN", (0, 0), (0, -1), "CENTER"),
-            ("FONTNAME", (-2, -1), (-1, -1), "Helvetica-Bold"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#f5f7fa")]),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("ALIGN", (-1, 0), (-1, -1), "CENTER"),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            (
+                "ROWBACKGROUNDS",
+                (0, 1), (-1, -2),
+                [colors.white, colors.HexColor("#f5f7fa")],
+            ),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
 
-        # Firmas
-        firmas = Table([
-            ["", "", ""],
-            [Paragraph(f"<b>{_nombre(e.entregado_por)}</b><br/>C.C. {_cedula(e.entregado_por)}<br/>Entrega (Almacén)", normal),
-             "",
-             Paragraph(f"<b>{_nombre(e.tecnico)}</b><br/>C.C. {_cedula(e.tecnico)}<br/>Recibe (Técnico)", normal)],
-        ], colWidths=[7.4*cm, 2.6*cm, 7.4*cm], rowHeights=[2.2*cm, None])
+        # Firmas.
+        if es_devolucion:
+            firma_1 = Paragraph(
+                f"<b>{nombre_tecnico}</b><br/>"
+                f"C.C. {cedula_tecnico}<br/>{firma_izq}",
+                normal,
+            )
+            firma_2 = Paragraph(
+                f"<b>{nombre_almacen}</b><br/>"
+                f"C.C. {cedula_almacen}<br/>{firma_der}",
+                normal,
+            )
+        else:
+            firma_1 = Paragraph(
+                f"<b>{nombre_almacen}</b><br/>"
+                f"C.C. {cedula_almacen}<br/>{firma_izq}",
+                normal,
+            )
+            firma_2 = Paragraph(
+                f"<b>{nombre_tecnico}</b><br/>"
+                f"C.C. {cedula_tecnico}<br/>{firma_der}",
+                normal,
+            )
+
+        firmas = Table(
+            [["", ""], [firma_1, firma_2]],
+            colWidths=[8.6 * cm, 8.6 * cm],
+            rowHeights=[1.8 * cm, None],
+        )
+
         firmas.setStyle(TableStyle([
             ("LINEABOVE", (0, 1), (0, 1), 0.8, colors.black),
-            ("LINEABOVE", (2, 1), (2, 1), 0.8, colors.black),
+            ("LINEABOVE", (1, 1), (1, 1), 0.8, colors.black),
             ("VALIGN", (0, 1), (-1, 1), "TOP"),
         ]))
 
-        story = [cab, Spacer(1, 10), partes, Spacer(1, 10), tabla]
+        story = [
+            cabecera,
+            Spacer(1, 10),
+            partes,
+            Spacer(1, 10),
+            tabla,
+        ]
+
         if e.observaciones:
-            story += [Spacer(1, 8), Paragraph(f"<b>Observaciones:</b> {e.observaciones}", normal)]
-        story += [Spacer(1, 10),
-                  Paragraph("El técnico declara recibir los materiales relacionados y se hace "
-                            "responsable de su custodia y uso.", small),
-                  Spacer(1, 20), firmas, Spacer(1, 16),
-                  Paragraph(f"Documento generado el {timezone.localtime():%d/%m/%Y %H:%M} · {e.codigo}", small)]
+            story.extend([
+                Spacer(1, 8),
+                Paragraph(
+                    f"<b>Observaciones:</b> "
+                    f"{escape(str(e.observaciones))}",
+                    normal,
+                ),
+            ])
+
+        if es_devolucion:
+            texto_declaracion = (
+                "El almacén deja constancia de la recepción de los "
+                "materiales relacionados, según el estado indicado."
+            )
+        else:
+            texto_declaracion = (
+                "El técnico declara recibir los materiales relacionados "
+                "y se hace responsable de su custodia y uso."
+            )
+
+        story.extend([
+            Spacer(1, 12),
+            Paragraph(texto_declaracion, small),
+            Spacer(1, 25),
+            firmas,
+            Spacer(1, 15),
+            Paragraph(
+                f"Documento generado el "
+                f"{timezone.localtime():%d/%m/%Y %H:%M} · {e.codigo}",
+                small,
+            ),
+        ])
+
         doc.build(story)
 
-        resp = HttpResponse(buf.getvalue(), content_type="application/pdf")
-        resp["Content-Disposition"] = f'inline; filename="{e.codigo}.pdf"'
-        return resp
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type="application/pdf",
+        )
+        response["Content-Disposition"] = (
+            f'inline; filename="{e.codigo}.pdf"'
+        )
+        return response
 
 
-# ---------- Excel de una entrega ----------
+
 class EntregaExcelView(RolRequeridoMixin, View):
     roles_permitidos = ROLES_ALMACEN
 
     def get(self, request, pk):
         e = get_object_or_404(
-            EntregaMaterial.objects.select_related("tecnico", "entregado_por")
-            .prefetch_related("items__producto"), pk=pk)
+            EntregaMaterial.objects
+            .select_related("tecnico", "entregado_por")
+            .prefetch_related("items__producto"),
+            pk=pk,
+        )
+
+        es_devolucion = e.tipo == EntregaMaterial.Tipo.DEVOLUCION
+
+        titulo = (
+            "ACTA DE DEVOLUCIÓN DE MATERIAL"
+            if es_devolucion
+            else "ACTA DE ENTREGA DE MATERIAL"
+        )
 
         wb = Workbook()
         ws = wb.active
-        ws.title = "Entrega"
-        negrita = Font(bold=True)
-        head = PatternFill("solid", fgColor="1F3A5F")
+        ws.title = "Devolucion" if es_devolucion else "Entrega"
 
-        ws["A1"] = "ACTA DE ENTREGA DE MATERIAL"; ws["A1"].font = Font(bold=True, size=14)
+        negrita = Font(bold=True)
+        encabezado = PatternFill("solid", fgColor="1F3A5F")
+
+        ws["A1"] = titulo
+        ws["A1"].font = Font(bold=True, size=14)
+
+        responsable = (
+            "Recibido por almacén"
+            if es_devolucion
+            else "Entregado por"
+        )
+
         datos = [
-            ("N.º", e.codigo), ("Fecha", e.fecha.strftime("%d/%m/%Y")),
-            ("Técnico", _nombre(e.tecnico)), ("C.C. técnico", _cedula(e.tecnico)),
-            ("Entregado por", _nombre(e.entregado_por)), ("C.C. entrega", _cedula(e.entregado_por)),
-            ("Observaciones", e.observaciones),
+            ("Documento", e.codigo),
+            ("Fecha", e.fecha.strftime("%d/%m/%Y")),
+            ("Técnico", _nombre(e.tecnico)),
+            ("C.C. técnico", _cedula(e.tecnico)),
+            (responsable, _nombre(e.entregado_por)),
+            ("C.C. responsable", _cedula(e.entregado_por)),
+            ("Observaciones", e.observaciones or ""),
         ]
-        for i, (k, v) in enumerate(datos, start=3):
-            ws.cell(i, 1, k).font = negrita
-            ws.cell(i, 2, v)
+
+        for i, (clave, valor) in enumerate(datos, start=3):
+            ws.cell(i, 1, clave).font = negrita
+            ws.cell(i, 2, valor)
 
         fila = len(datos) + 4
-        for c, t in enumerate(["#", "Código", "Material", "Serial / código unidad", "Cantidad"], 1):
-            cel = ws.cell(fila, c, t)
-            cel.font = Font(bold=True, color="FFFFFF"); cel.fill = head
-            cel.alignment = Alignment(horizontal="center")
+
+        columnas = [
+            "#",
+            "Código",
+            "Material",
+            "Serial / código unidad",
+            "Cantidad",
+        ]
+
+        if es_devolucion:
+            columnas.extend(["Estado de recepción", "Observación"])
+
+        for c, texto in enumerate(columnas, 1):
+            celda = ws.cell(fila, c, texto)
+            celda.font = Font(bold=True, color="FFFFFF")
+            celda.fill = encabezado
+            celda.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True,
+            )
+
         for i, it in enumerate(e.items.all(), 1):
             fila += 1
-            for c, v in enumerate([i, it.producto.codigo_producto or "", it.producto.nombre_completo,
-                                   it.serial or "", it.cantidad], 1):
-                ws.cell(fila, c, v)
+
+            valores = [
+                i,
+                it.producto.codigo_producto or "",
+                it.producto.nombre_completo,
+                it.serial or "",
+                it.cantidad,
+            ]
+
+            if es_devolucion:
+                valores.extend([
+                    it.get_estado_retorno_display() or "",
+                    it.observacion or "",
+                ])
+
+            for c, valor in enumerate(valores, 1):
+                ws.cell(fila, c, valor)
+
         fila += 1
         ws.cell(fila, 4, "TOTAL").font = negrita
         ws.cell(fila, 5, e.total_cantidad).font = negrita
 
         fila += 3
-        ws.cell(fila, 1, "Firma entrega: ____________________"); ws.cell(fila, 4, "Firma técnico: ____________________")
-        for col, w in zip("ABCDE", (8, 16, 38, 26, 12)):
-            ws.column_dimensions[col].width = w
 
-        buf = BytesIO(); wb.save(buf)
-        resp = HttpResponse(buf.getvalue(),
-                            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        resp["Content-Disposition"] = f'attachment; filename="{e.codigo}.xlsx"'
-        return resp
+        if es_devolucion:
+            ws.cell(
+                fila, 1,
+                "Firma técnico que devuelve: __________________________",
+            )
+            ws.cell(
+                fila, 5,
+                "Firma almacén que recibe: __________________________",
+            )
+        else:
+            ws.cell(
+                fila, 1,
+                "Firma almacén que entrega: __________________________",
+            )
+            ws.cell(
+                fila, 5,
+                "Firma técnico que recibe: __________________________",
+            )
+
+        anchos = {
+            "A": 8,
+            "B": 16,
+            "C": 38,
+            "D": 26,
+            "E": 12,
+            "F": 22,
+            "G": 35,
+        }
+
+        for columna, ancho in anchos.items():
+            ws.column_dimensions[columna].width = ancho
+
+        ws.freeze_panes = "A" + str(len(datos) + 5)
+        ws.sheet_view.showGridLines = False
+
+        buf = BytesIO()
+        wb.save(buf)
+
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+        response["Content-Disposition"] = (
+            f'attachment; filename="{e.codigo}.xlsx"'
+        )
+
+        return response
 
 
-# ---------- Informe general (matriz como tu Excel) ----------
+
 def _matriz_entregas(request):
-    qs = (EntregaMaterial.objects
-          .select_related("tecnico", "entregado_por")
-          .prefetch_related("items__producto"))
+    qs = (
+        EntregaMaterial.objects
+        .select_related("tecnico", "entregado_por")
+        .prefetch_related("items__producto")
+    )
 
     tecnico = request.GET.get("tecnico", "").strip()
     desde = request.GET.get("desde", "").strip()
     hasta = request.GET.get("hasta", "").strip()
     q = request.GET.get("q", "").strip()
+    tipo = request.GET.get("tipo", "").strip()
+
+    if tipo in (
+        EntregaMaterial.Tipo.ENTREGA,
+        EntregaMaterial.Tipo.DEVOLUCION,
+    ):
+        qs = qs.filter(tipo=tipo)
 
     if tecnico.isdigit():
         qs = qs.filter(tecnico_id=int(tecnico))
+
     if desde:
         qs = qs.filter(fecha__gte=desde)
+
     if hasta:
         qs = qs.filter(fecha__lte=hasta)
+
     if q:
         qs = qs.filter(
-            Q(codigo__icontains=q) | Q(items__serial__icontains=q)
+            Q(codigo__icontains=q)
+            | Q(items__serial__icontains=q)
             | Q(items__producto__nombre__icontains=q)
-            | Q(tecnico__first_name__icontains=q) | Q(tecnico__last_name__icontains=q)
+            | Q(items__producto__codigo_producto__icontains=q)
+            | Q(tecnico__first_name__icontains=q)
+            | Q(tecnico__last_name__icontains=q)
+            | Q(tecnico__username__icontains=q)
             | Q(tecnico__cedula__icontains=q)
         ).distinct()
 
-    columnas, filas = {}, []
-    for e in qs.order_by("-fecha", "-id"):
-        cants = {}
-        for it in e.items.all():
-            columnas.setdefault(it.producto_id, it.producto)
-            cants[it.producto_id] = cants.get(it.producto_id, 0) + it.cantidad
-        filas.append({"entrega": e, "cants": cants, "total": sum(cants.values())})
+    columnas = {}
+    filas = []
 
-    # Solo columnas de materiales que realmente se entregaron
-    cols = sorted(columnas.values(), key=lambda p: (p.nombre, p.medida or ""))
-    for f in filas:
-        f["celdas"] = [f["cants"].get(p.pk, 0) for p in cols]
-    totales = [sum(f["cants"].get(p.pk, 0) for f in filas) for p in cols]
+    for documento in qs.order_by("-fecha", "-id"):
+        cantidades = {}
+
+        for item in documento.items.all():
+            columnas.setdefault(item.producto_id, item.producto)
+
+            cantidades[item.producto_id] = (
+                cantidades.get(item.producto_id, 0) + item.cantidad
+            )
+
+        filas.append({
+            "entrega": documento,
+            "cants": cantidades,
+            "total": sum(cantidades.values()),
+        })
+
+    cols = sorted(
+        columnas.values(),
+        key=lambda p: (p.nombre, p.medida or ""),
+    )
+
+    for fila in filas:
+        fila["celdas"] = [
+            fila["cants"].get(producto.pk, 0)
+            for producto in cols
+        ]
+
+    totales = [
+        sum(fila["cants"].get(producto.pk, 0) for fila in filas)
+        for producto in cols
+    ]
 
     return {
-        "filas": filas, "cols": cols, "totales": totales,
+        "filas": filas,
+        "cols": cols,
+        "totales": totales,
         "total_general": sum(totales),
-        "tecnico_sel": tecnico, "desde": desde, "hasta": hasta, "q": q,
+        "tecnico_sel": tecnico,
+        "desde": desde,
+        "hasta": hasta,
+        "q": q,
+        "tipo_sel": tipo,
     }
 
 
@@ -2265,6 +3207,7 @@ class EntregaListView(RolRequeridoMixin, TemplateView):
     def get(self, request, *args, **kwargs):
         if request.GET.get("export") == "xlsx":
             return self._excel(request)
+
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -2275,54 +3218,88 @@ class EntregaListView(RolRequeridoMixin, TemplateView):
 
     def _excel(self, request):
         m = _matriz_entregas(request)
-        wb = Workbook(); ws = wb.active; ws.title = "Informe entregas"
-        head = PatternFill("solid", fgColor="1F3A5F")
-        enc = ["Código", "Fecha", "Técnico", "C.C.", "Entregado por"] + \
-              [p.nombre_completo for p in m["cols"]] + ["Total"]
-        for c, t in enumerate(enc, 1):
-            cel = ws.cell(1, c, t)
-            cel.font = Font(bold=True, color="FFFFFF"); cel.fill = head
-            cel.alignment = Alignment(horizontal="center", wrap_text=True)
-        for r, f in enumerate(m["filas"], 2):
-            e = f["entrega"]
-            vals = [e.codigo, e.fecha.strftime("%d/%m/%Y"), _nombre(e.tecnico),
-                    _cedula(e.tecnico), _nombre(e.entregado_por)] + \
-                   [v or None for v in f["celdas"]] + [f["total"]]
-            for c, v in enumerate(vals, 1):
-                ws.cell(r, c, v)
-        r = len(m["filas"]) + 2
-        ws.cell(r, 5, "TOTALES").font = Font(bold=True)
-        for c, v in enumerate(m["totales"] + [m["total_general"]], 6):
-            ws.cell(r, c, v).font = Font(bold=True)
-        ws.freeze_panes = "F2"
-        for c in range(1, len(enc) + 1):
-            ws.column_dimensions[get_column_letter(c)].width = 14 if c > 5 else 22
-        buf = BytesIO(); wb.save(buf)
-        resp = HttpResponse(buf.getvalue(),
-                            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        resp["Content-Disposition"] = 'attachment; filename="informe_entregas.xlsx"'
-        return resp
-    
-class ValidarSerialInstalacionJson(RolRequeridoMixin, View):
-    """Dice si un serial lo tiene el técnico o qué inconsistencia sería."""
-    roles_permitidos = ROLES_DIGITADOR
 
-    def get(self, request):
-        tecnico = get_object_or_404(User, pk=request.GET.get("tecnico"), rol="TECNICO")
-        serial = request.GET.get("serial", "").strip()
-        if not serial:
-            return JsonResponse({"tipo": "VACIO", "mensaje": "Escriba el serial."})
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Entregas y devoluciones"
 
-        tipo, unidad, _a, detalle = services.clasificar_serial(serial=serial, tecnico=tecnico)
-        return JsonResponse({
-            "tipo": tipo or "OK",
-            "mensaje": detalle or "Lo tiene asignado.",
-            "instala": tipo not in services.TIPOS_SOLO_REPORTE,
-            "id": unidad.pk if unidad else None,
-            "serial": (unidad.numero_serie or unidad.codigo) if unidad else serial,
-            "producto": unidad.producto_id if unidad else None,
-            "nombre": unidad.producto.nombre_completo if unidad else "",
-        })
+        encabezado = PatternFill("solid", fgColor="1F3A5F")
+        negrita = Font(bold=True)
+
+        columnas = (
+            ["Código", "Tipo", "Fecha", "Técnico", "C.C.", "Responsable almacén"]
+            + [p.nombre_completo for p in m["cols"]]
+            + ["Total"]
+        )
+
+        for c, texto in enumerate(columnas, 1):
+            celda = ws.cell(1, c, texto)
+            celda.font = Font(bold=True, color="FFFFFF")
+            celda.fill = encabezado
+            celda.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True,
+            )
+
+        for r, fila in enumerate(m["filas"], 2):
+            e = fila["entrega"]
+
+            tipo_texto = (
+                "Devolución"
+                if e.tipo == EntregaMaterial.Tipo.DEVOLUCION
+                else "Entrega"
+            )
+
+            valores = [
+                e.codigo,
+                tipo_texto,
+                e.fecha.strftime("%d/%m/%Y"),
+                _nombre(e.tecnico),
+                _cedula(e.tecnico),
+                _nombre(e.entregado_por),
+            ]
+
+            valores += [v or None for v in fila["celdas"]]
+            valores.append(fila["total"])
+
+            for c, valor in enumerate(valores, 1):
+                ws.cell(r, c, valor)
+
+        fila_total = len(m["filas"]) + 2
+
+        ws.cell(fila_total, 6, "TOTALES").font = negrita
+
+        for c, valor in enumerate(
+            m["totales"] + [m["total_general"]],
+            7,
+        ):
+            ws.cell(fila_total, c, valor).font = negrita
+
+        ws.freeze_panes = "G2"
+        ws.sheet_view.showGridLines = False
+
+        for c in range(1, len(columnas) + 1):
+            ws.column_dimensions[get_column_letter(c)].width = (
+                14 if c > 6 else 22
+            )
+
+        buf = BytesIO()
+        wb.save(buf)
+
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+
+        response["Content-Disposition"] = (
+            'attachment; filename="informe_entregas_devoluciones.xlsx"'
+        )
+
+        return response
 
 
 class InconsistenciaListView(RolRequeridoMixin, TemplateView):

@@ -32,14 +32,7 @@ urlpatterns = [
     path("tecnicos/<int:pk>/asignaciones/", views.TecnicoAsignacionesView.as_view(), name="tecnico_asignaciones"),
     path("api/unidades-disponibles/", views.UnidadesDisponiblesJson.as_view(), name="api_unidades"),
     path("movimientos/", views.MovimientoListView.as_view(), name="movimientos"),
-    path(
-    "operaciones/<int:pk>/editar/",
-    views.editar_instalacion,
-    name="editar_instalacion",
-),
-
-path("tecnicos/<int:pk>/asignaciones/", views.TecnicoAsignacionesView.as_view(), name="tecnico_asignaciones"),
-path("tecnicos/<int:pk>/devolver/", views.TecnicoDevolverView.as_view(), name="tecnico_devolver"),
+    path("api/remision/", views.RemisionInfoJson.as_view(), name="api_remision"),
     path("inventario/", views.InventarioListView.as_view(), name="inventario"), 
     path("entregas/", views.EntregaListView.as_view(), name="entregas"),
     path("entregas/nueva/", views.EntregaCreateView.as_view(), name="entrega_nueva"),

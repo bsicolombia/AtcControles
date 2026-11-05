@@ -7,6 +7,15 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
+from django.shortcuts import get_object_or_404, redirect
+from almacen import services as services_inventario
+from django.db import transaction
+from django.core.exceptions import ValidationError
+import json
+import json
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.contrib import messages
 from usuarios.roles import ADMINISTRADOR
 from almacen.models import (
     Asignacion,
@@ -481,7 +490,19 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
                 m.tipo_identificador = "Código de producto"
                 m.sap = por_producto.get(self._n(m.producto.codigo_producto))
 
-        ctx.update(operacion=operacion, materiales=materiales, registros=registros)
+        inconsistencias = (
+            Inconsistencia.objects
+            .filter(operacion=operacion)
+            .select_related("producto", "unidad_serializada", "tecnico")
+            .order_by("estado", "-fecha")
+        )
+
+        ctx.update(
+            operacion=operacion,
+            materiales=materiales,
+            registros=registros,
+            inconsistencias=inconsistencias,
+        )
 
     # ---------- consulta por serie o código de unidad ----------
     def _bloques(self, q):
@@ -558,7 +579,17 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
                 return ctx
 
         # Listado
-        qs = Operacion.objects.select_related("tecnico").order_by("-fecha_operacion", "-pk")
+        qs = (
+            Operacion.objects.select_related("tecnico")
+            .annotate(
+                n_inc=Count(
+                    "inconsistencias",
+                    filter=Q(inconsistencias__estado="PENDIENTE"),
+                    distinct=True,
+                )
+            )
+            .order_by("-fecha_operacion", "-pk")
+        )
         if q:
             qs = qs.filter(Q(numero_orden__icontains=q) | Q(numero_cuenta_contrato__icontains=q))
         if estado:
@@ -636,10 +667,12 @@ class ErroresActualesView(QuerystringMixin, RolRequeridoMixin, TemplateView):
         return ctx
     
 
+
+
 class OperacionUpdateView(
     FormPageMixin,
     RolRequeridoMixin,
-    UpdateView
+    UpdateView,
 ):
     roles_permitidos = (ADMINISTRADOR, COORDINADOR)
 
@@ -649,11 +682,16 @@ class OperacionUpdateView(
 
     titulo = "Editar operación"
     boton = "Guardar cambios"
+    
+
 
     def get_queryset(self):
         return (
             Operacion.objects
-            .select_related("tecnico", "anomalia")
+            .select_related(
+                "tecnico",
+                "anomalia",
+            )
             .prefetch_related(
                 "materiales__producto",
                 "materiales__unidad_serializada",
@@ -661,11 +699,117 @@ class OperacionUpdateView(
             )
         )
 
+    def form_valid(self, form):
+
+        try:
+            # ------------------------------------------------
+            # VALIDAR PAYLOAD
+            # ------------------------------------------------
+
+            payload_raw = self.request.POST.get(
+                "payload",
+                "[]",
+            )
+
+            try:
+                payload = json.loads(payload_raw)
+            except json.JSONDecodeError:
+                raise ValidationError(
+                    "Los materiales enviados no tienen "
+                    "un formato JSON válido."
+                )
+
+            if not isinstance(payload, list):
+                raise ValidationError(
+                    "El formato de materiales no es válido."
+                )
+
+            if not all(
+                isinstance(item, dict)
+                for item in payload
+            ):
+                raise ValidationError(
+                    "Cada material debe tener un formato válido."
+                )
+
+            # ------------------------------------------------
+            # TRANSACCIÓN COMPLETA
+            # ------------------------------------------------
+
+            with transaction.atomic():
+
+                # Bloquear operación.
+                operacion = (
+                    Operacion.objects
+                    .select_for_update()
+                    .get(pk=self.get_object().pk)
+                )
+
+                # Guardar datos anteriores antes de actualizar.
+                self.object = operacion
+
+                # Guardar los datos generales.
+                self.object = form.save()
+                
+                logging.warning(
+                    "EDITANDO OPERACION %s | PAYLOAD: %s",
+                    self.object.pk,
+                    json.dumps(payload, ensure_ascii=False)
+                )
+
+                # Sincronizar materiales.
+                services_inventario.sincronizar_materiales_operacion(
+                    operacion=self.object,
+                    payload=payload,
+                    usuario=self.request.user,
+                )
+
+            # ------------------------------------------------
+            # CONFIRMACIÓN
+            # ------------------------------------------------
+
+            messages.success(
+                self.request,
+                "La operación y sus materiales "
+                "fueron actualizados correctamente."
+            )
+
+            return HttpResponseRedirect(
+                self.get_success_url()
+            )
+
+        except (
+            ValidationError,
+            ValueError,
+            TypeError,
+            services_inventario.ErrorInventario,
+        ) as exc:
+
+            logging.exception(
+                "ERROR VALIDANDO MATERIALES DE OPERACION %s",
+                getattr(self.object, "pk", None)
+            )
+
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+
+        except Exception as exc:
+            logging.getLogger(__name__).exception(
+                "Error actualizando operación y materiales."
+            )
+            form.add_error(
+                None,
+                f"No fue posible actualizar la operación ({type(exc).__name__}: {exc}). "
+                "No se confirmaron los cambios de inventario."
+            )
+            return self.form_invalid(form)
+
+    # --------------------------------------------------------
+    # MATERIALES PENDIENTES DEL TÉCNICO
+    # --------------------------------------------------------
+
     def _datos_pendientes(self):
-        """
-        Reutiliza la lógica de TecnicoAsignacionesView.
-        Solo toma asignaciones que siguen pendientes.
-        """
+
         tecnico = self.object.tecnico
 
         pendientes = (
@@ -689,121 +833,171 @@ class OperacionUpdateView(
         cantidades = {}
         seriales = []
 
-        for a in pendientes:
-            if a.cantidad_pendiente <= 0:
+        for asignacion in pendientes:
+
+            if asignacion.cantidad_pendiente <= 0:
                 continue
 
-            if a.unidad_serializada_id:
-                u = a.unidad_serializada
+            if asignacion.unidad_serializada_id:
+
+                unidad = asignacion.unidad_serializada
 
                 seriales.append({
-                    "id": u.pk,
-                    "serial": u.numero_serie or u.codigo,
-                    "codigo": u.codigo,
-                    "producto": a.producto_id,
-                    "nombre": a.producto.nombre_completo,
+                    "id": unidad.pk,
+                    "serial": (
+                        unidad.numero_serie
+                        or unidad.codigo
+                    ),
+                    "codigo": unidad.codigo,
+                    "producto": asignacion.producto_id,
+                    "nombre": asignacion.producto.nombre_completo,
                 })
 
             else:
-                cantidades[a.producto_id] = (
-                    cantidades.get(a.producto_id, 0)
-                    + a.cantidad_pendiente
+
+                cantidades[asignacion.producto_id] = (
+                    cantidades.get(
+                        asignacion.producto_id,
+                        0,
+                    )
+                    + asignacion.cantidad_pendiente
                 )
 
         pend_cantidad = [
             {
-                "id": p.pk,
-                "nombre": p.nombre_completo,
-                "pendiente": cantidades.get(p.pk, 0),
+                "id": producto.pk,
+                "nombre": producto.nombre_completo,
+                "pendiente": cantidades.get(
+                    producto.pk,
+                    0,
+                ),
             }
-            for p in Producto.objects.filter(
+            for producto in Producto.objects.filter(
                 estado=True,
                 tipo_inventario=Producto.TipoInventario.CANTIDAD,
-            ).order_by("nombre", "medida")
+            ).order_by(
+                "nombre",
+                "medida",
+            )
         ]
 
         return pend_cantidad, seriales
 
-    def _payload_existente(self):
-        """
-        Recupera los materiales que ya pertenecen a la operación.
-        Agrupa los materiales por producto.
-        """
-        materiales = (
-            self.object.materiales
-            .select_related(
-                "producto",
-                "unidad_serializada",
-                "tecnico",
-            )
-            .order_by("producto__nombre", "pk")
-        )
+    # --------------------------------------------------------
+    # MATERIALES EXISTENTES
+    # --------------------------------------------------------
 
+    def _payload_existente(self):
         agrupados = {}
 
-        for m in materiales:
-            pid = m.producto_id
-
-            if pid not in agrupados:
-                agrupados[pid] = {
-                    "producto": pid,
-                    "nombre": m.producto.nombre_completo,
-                    "serializado": bool(m.unidad_serializada_id),
+        def grupo(producto, serializado):
+            return agrupados.setdefault(
+                (producto.pk, serializado),
+                {
+                    "producto": producto.pk,
+                    "nombre": producto.nombre_completo,
+                    "serializado": serializado,
                     "cantidad": 0,
                     "unidades": [],
-                }
+                },
+            )
 
+        # Lo que realmente quedó instalado en la orden
+        instalados = (
+            self.object.materiales
+            .filter(estado=Asignacion.Estado.INSTALADA)
+            .select_related("producto", "unidad_serializada")
+            .order_by("producto__nombre", "pk")
+        )
+        for m in instalados:
             if m.unidad_serializada_id:
                 u = m.unidad_serializada
-
-                agrupados[pid]["serializado"] = True
-
-                agrupados[pid]["unidades"].append({
+                grupo(m.producto, True)["unidades"].append({
                     "id": u.pk,
                     "serial": u.numero_serie or u.codigo,
                 })
             else:
-                agrupados[pid]["cantidad"] += m.cantidad
+                grupo(m.producto, False)["cantidad"] += m.cantidad
+
+        # Lo que se reportó pero no se instaló (inconsistencias abiertas)
+        reportadas = (
+            Inconsistencia.objects
+            .filter(
+                operacion=self.object,
+                estado=Inconsistencia.Estado.PENDIENTE,
+                instalado=False,
+                producto__isnull=False,
+            )
+            .select_related("producto", "unidad_serializada")
+        )
+        for i in reportadas:
+            if i.unidad_serializada_id or i.serial_reportado:
+                serial = i.serial_reportado or i.unidad_serializada.codigo
+                grupo(i.producto, True)["unidades"].append({
+                    "id": i.unidad_serializada_id,
+                    "serial": serial,
+                    "tipo": i.tipo,
+                    "instala": False,
+                    "aviso": i.detalle,
+                })
+            else:
+                grupo(i.producto, False)["cantidad"] += i.cantidad
 
         return list(agrupados.values())
 
+    # --------------------------------------------------------
+    # CONTEXTO
+    # --------------------------------------------------------
+
     def get_context_data(self, **kwargs):
+
         ctx = super().get_context_data(**kwargs)
 
-        op = self.object
-        tecnico = op.tecnico
+        operacion = self.object
 
-        pend_cantidad, pend_seriales = self._datos_pendientes()
+        pend_cantidad, pend_seriales = (
+            self._datos_pendientes()
+        )
 
         ctx.update({
-            "operacion": op,
-            "tecnico": tecnico,
 
-            # Materiales que ya estaban instalados
+            "operacion": operacion,
+
+            "tecnico": operacion.tecnico,
+
             "payload_previo": self._payload_existente(),
 
-            # Materiales que todavía tiene el técnico
             "pend_cantidad": pend_cantidad,
+
             "pend_seriales": pend_seriales,
 
-            # Productos serializados
-            "productos_serializados": Producto.objects.filter(
-                estado=True,
-                tipo_inventario=Producto.TipoInventario.SERIALIZADO,
-            ).order_by("nombre", "medida"),
-
-            # Estados y tipos de inconsistencias
-            "estados_instalan": sorted(
-                e.value for e in Operacion.ESTADOS_QUE_INSTALAN
+            "productos_serializados": (
+                Producto.objects.filter(
+                    estado=True,
+                    tipo_inventario=(
+                        Producto.TipoInventario.SERIALIZADO
+                    ),
+                ).order_by(
+                    "nombre",
+                    "medida",
+                )
             ),
+
+            "estados_instalan": sorted(
+                estado.value
+                for estado in Operacion.ESTADOS_QUE_INSTALAN
+            ),
+
             "tipos_inconsistencia": dict(
                 Inconsistencia.Tipo.choices
             ),
 
-            "instalaciones": op.materiales.select_related(
-                "producto",
-                "unidad_serializada",
-                "tecnico",
+            "instalaciones": (
+                operacion.materiales.select_related(
+                    "producto",
+                    "unidad_serializada",
+                    "tecnico",
+                )
             ),
 
             "cancel_url": reverse_lazy(
@@ -816,4 +1010,25 @@ class OperacionUpdateView(
         return ctx
 
     def get_success_url(self):
-        return reverse_lazy("operaciones:consulta_orden")
+
+        return reverse_lazy(
+            "operaciones:consulta_orden"
+        )
+
+class OperacionReabrirView(RolRequeridoMixin, View):
+    roles_permitidos = (ADMINISTRADOR, COORDINADOR)
+
+    def post(self, request, pk):
+        operacion = get_object_or_404(Operacion, pk=pk)
+        try:
+            numero = services_inventario.reabrir_operacion(
+                operacion=operacion, usuario=request.user
+            )
+            messages.success(
+                request,
+                f"Orden {numero} reabierta: los materiales volvieron a su estado "
+                "anterior y ya puede registrarla de nuevo.",
+            )
+        except services_inventario.ErrorInventario as exc:
+            messages.error(request, str(exc))
+        return redirect("operaciones:consulta_orden")

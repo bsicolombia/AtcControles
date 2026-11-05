@@ -187,8 +187,7 @@
     <!-- IMPORTANTE: enctype="multipart/form-data" añadido para que la foto viaje correctamente -->
     <form method="post"
           enctype="multipart/form-data"
-          class="tarjeta form-caja ingreso-card"
-          novalidate>
+          class="tarjeta form-caja ingreso-card">
 
         {% csrf_token %}
 
@@ -573,6 +572,84 @@ document.addEventListener("DOMContentLoaded", function () {
 
         actualizarContador();
     }
+
+        // ==========================================
+    // REMISIÓN: mostrar/ocultar datos de recepción
+    // ==========================================
+    const urlRemision = "{% url 'almacen:api_remision' %}";
+    const inputRemision = document.getElementById("{{ form.numero_orden.id_for_label }}");
+    const bloqueNueva = document.getElementById("datos-remision-nueva");
+    const avisoExiste = document.getElementById("aviso-remision-existe");
+    const resumenRemision = document.getElementById("resumen-remision");
+
+    const camposRemision = [
+        document.getElementById("{{ form.comprobante_imagen.id_for_label }}"),
+        document.getElementById("{{ form.fecha_recibo_bsi.id_for_label }}"),
+        document.getElementById("{{ form.recogido_por.id_for_label }}"),
+        document.getElementById("{{ form.recibido_almacen_por.id_for_label }}"),
+    ].filter(Boolean);
+
+    let temporizador = null;
+    let ultimaConsulta = 0;
+
+    function estadoRemision(modo, datos) {
+        // modo: "vacio" | "nueva" | "existe"
+        const nueva = modo === "nueva";
+
+        bloqueNueva.style.display = nueva ? "" : "none";
+        avisoExiste.classList.toggle("visible", modo === "existe");
+
+        camposRemision.forEach(function (c) {
+            c.required = nueva;           // obligatorios solo si es nueva
+            c.disabled = !nueva;          // lo deshabilitado no se envía
+            if (!nueva && c.type !== "file") {
+                c.value = "";
+            } else if (!nueva) {
+                c.value = "";
+            }
+        });
+
+        if (modo === "existe" && datos) {
+            const partes = [];
+            if (datos.fecha) partes.push("Recibida por BSI el " + datos.fecha);
+            if (datos.recogido_por) partes.push("recogida por " + datos.recogido_por);
+            if (datos.recibido_almacen_por) partes.push("recibida en almacén por " + datos.recibido_almacen_por);
+            resumenRemision.textContent = partes.length ? partes.join(", ") + "." : "";
+        }
+    }
+
+    function consultarRemision() {
+        const numero = inputRemision.value.trim();
+        if (!numero) {
+            estadoRemision("vacio");
+            return;
+        }
+
+        const id = ++ultimaConsulta;
+
+        fetch(urlRemision + "?numero=" + encodeURIComponent(numero))
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (id !== ultimaConsulta) return;   // llegó una respuesta vieja
+                if (d.vacio) estadoRemision("vacio");
+                else if (d.existe) estadoRemision("existe", d);
+                else estadoRemision("nueva");
+            })
+            .catch(function () {
+                // Si falla la consulta, se piden los datos: el servidor igual valida
+                if (id === ultimaConsulta) estadoRemision("nueva");
+            });
+    }
+
+    inputRemision.addEventListener("input", function () {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(consultarRemision, 350);
+    });
+    inputRemision.addEventListener("change", consultarRemision);
+
+    // Estado inicial (también cuando el formulario vuelve con errores)
+    estadoRemision("vacio");
+    if (inputRemision.value.trim()) consultarRemision();
 
     // 3) Activamos el select con búsqueda
     const selectorProducto = new TomSelect(producto, {

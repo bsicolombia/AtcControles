@@ -1,11 +1,301 @@
 {% extends "base.html" %}
+
 {% block titulo %}Movimientos{% endblock %}
+
 {% block contenido %}
-<div class="cabecera"><div><h1>Movimientos</h1><p>Historial completo de entradas, asignaciones, instalaciones y devoluciones.</p></div></div>
-<form class="filtros" method="get">
-  <input class="input buscar" type="search" name="q" value="{{ request.GET.q }}" placeholder="Buscar por producto, código, usuario u observación">
-  <select class="input" name="tipo" onchange="this.form.submit()"><option value="">Todos los tipos</option>{% for v,l in tipos %}<option value="{{ v }}" {% if v == tipo_sel %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-  <button class="btn" type="submit">Buscar</button>
+
+<div class="cabecera">
+    <div>
+        <h1>Movimientos</h1>
+        <p>Historial completo de entradas, asignaciones, instalaciones y devoluciones.</p>
+    </div>
+</div>
+
+<form class="filtros filtros-inventario" method="get">
+
+    <input
+        class="input buscar"
+        type="search"
+        name="q"
+        value="{{ request.GET.q }}"
+        placeholder="Buscar producto, código u observación"
+    >
+
+    <input
+        class="input"
+        type="date"
+        name="fecha"
+        value="{{ fecha_sel }}"
+    >
+
+    <select class="input" name="responsable">
+        <option value="">Todos los responsables</option>
+
+        {% for usuario in responsables %}
+            <option value="{{ usuario.pk }}"
+                {% if responsable_sel == usuario.pk|stringformat:"s" %}selected{% endif %}>
+                {{ usuario.get_full_name|default:usuario.username|upper }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <select class="input" name="tipo">
+        <option value="">Todos los movimientos</option>
+
+        {% for v, l in tipos %}
+            <option value="{{ v }}"
+                {% if v == tipo_sel %}selected{% endif %}>
+                {{ l }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <button class="btn btn-primario" type="submit">
+        Filtrar
+    </button>
+
+    {% if request.GET.q or fecha_sel or responsable_sel or tipo_sel %}
+        <a class="btn btn-secundario"
+           href="{% url 'almacen:movimientos' %}">
+            Limpiar
+        </a>
+    {% endif %}
+
 </form>
-<div class="tarjeta">{% include "almacen/_tabla_movimientos.html" with movimientos=object_list %}{% include "_paginacion.html" %}</div>
+<div class="tarjeta">
+
+    <div class="tabla-movimientos-scroll">
+
+        {% include "almacen/_tabla_movimientos.html" with movimientos=object_list %}
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+
+<style>
+
+/* =========================================================
+   FILTROS COMPACTOS - MISMA ESTRUCTURA DE EXISTENCIAS
+========================================================= */
+
+.filtros-inventario {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 10px;
+}
+
+.filtros-inventario .buscar-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 220px;
+    min-width: 160px;
+}
+
+.filtros-inventario .buscar-wrap svg {
+    position: absolute;
+    left: 9px;
+    width: 14px;
+    height: 14px;
+    color: #64748b;
+    pointer-events: none;
+}
+
+.filtros-inventario .buscar-wrap input {
+    width: 100%;
+    padding-left: 30px;
+}
+
+.filtros-inventario input,
+.filtros-inventario select {
+    height: 32px;
+    min-height: 32px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-size: 11px;
+}
+
+.filtros-inventario select {
+    flex: 0 1 210px;
+    min-width: 160px;
+    max-width: 260px;
+}
+
+.filtros-inventario .btn {
+    padding: 6px 10px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 768px) {
+
+    .filtros-inventario .buscar-wrap,
+    .filtros-inventario select {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+}
+
+/* CABECERA */
+
+.cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.cabecera h1 {
+    font-size: 21px;
+    margin-bottom: 4px;
+}
+
+.cabecera p {
+    font-size: 11px;
+    margin: 0;
+}
+
+/* FILTROS */
+
+.filtros-movimientos {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 10px;
+}
+
+.filtros-movimientos .buscar {
+    flex: 1 1 250px;
+    min-width: 180px;
+}
+
+.filtros-movimientos .input,
+.filtros-movimientos .btn {
+    height: 32px;
+    min-height: 32px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-size: 11px;
+}
+
+.filtros-movimientos select {
+    flex: 0 1 200px;
+}
+
+/* CONTENEDOR CON SCROLL */
+
+.tabla-movimientos-scroll {
+    position: relative;
+    width: 100%;
+    max-height: 68vh;
+    overflow: auto;
+    background: #fff;
+    border-radius: 6px;
+    scrollbar-gutter: stable;
+}
+
+/* TABLA */
+
+.tabla-movimientos-scroll table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 11px;
+}
+
+/* CELDAS */
+
+.tabla-movimientos-scroll th,
+.tabla-movimientos-scroll td {
+    padding: 6px 9px;
+    border-right: 1px solid #e2e8e5;
+    border-bottom: 1px solid #e2e8e5;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* ENCABEZADO FIJO VERTICALMENTE */
+
+.tabla-movimientos-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #f1f5f3 !important;
+    color: #334155;
+    font-size: 10px;
+    font-weight: 800;
+    text-align: left;
+    box-shadow: 0 1px 0 #cbd5d1;
+}
+
+/* FILAS */
+
+.tabla-movimientos-scroll tbody td {
+    font-size: 10px;
+}
+
+.tabla-movimientos-scroll tbody tr:nth-child(even) td {
+    background-color: #fafcfb;
+}
+
+.tabla-movimientos-scroll tbody tr:hover td {
+    background-color: #f0f6f2;
+}
+
+/* TEXTO */
+
+.tabla-movimientos-scroll .suave {
+    color: #64748b;
+    font-size: 9px;
+}
+
+/* TARJETA */
+
+.tarjeta {
+    min-width: 0;
+    padding: 10px;
+}
+
+/* RESPONSIVE */
+
+@media(max-width: 768px) {
+
+    .tabla-movimientos-scroll {
+        max-height: 65vh;
+    }
+
+    .filtros-movimientos .buscar,
+    .filtros-movimientos select {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+}
+
+@media(max-width: 480px) {
+
+    .cabecera h1 {
+        font-size: 18px;
+    }
+
+    .cabecera p {
+        font-size: 10px;
+    }
+
+}
+
+</style>
+
 {% endblock %}

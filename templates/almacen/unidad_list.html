@@ -1,379 +1,112 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block titulo %}Unidades con código{% endblock %}
 
-{% block contenido %}
-
-<div class="cabecera">
-  <div>
-    <h1>Unidades con código</h1>
-    <p>
-      Cada medidor, regulador y válvula tiene su código y su historia:
-      asignación, instalación y ubicación.
-    </p>
-  </div>
-
-  <div class="acciones">
-    <a class="btn btn-primario"
-       href="{% url 'almacen:ingreso_crear' %}">
-      Registrar ingreso
-    </a>
-    <!-- CONTADOR DE MATERIALES -->
-<div class="contador-materiales">
-    <strong>{{ total_unidades_filtradas }}</strong>
-    <span>materiales</span>
-</div>
-  </div>
-  
-</div>
-
-<!-- FILTROS -->
-<form class="filtros" method="get">
-
-  <!-- Búsqueda general -->
-  <input
-    class="input buscar"
-    type="search"
-    name="q"
-    value="{{ request.GET.q }}"
-    placeholder="Buscar código, serial, producto, marca, medida, técnico, cédula o remisión..."
-    autocomplete="off"
-  >
-
-  <!-- Técnico -->
-  <select
-    class="input"
-    name="tecnico"
-    onchange="this.form.submit()"
-  >
-    <option value="">Todos los técnicos</option>
-
-    
-    {% for tecnico in tecnicos_lista %}
-        <option
-            value="{{ tecnico.pk }}"
-            {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
-                selected
-            {% endif %}
-        >
-            {{ tecnico.get_full_name|default:tecnico.username|upper }}
-        </option>
-    {% endfor %}
-
-  </select>
-
-  <!-- Producto -->
-  <select
-    class="input"
-    name="producto"
-    onchange="this.form.submit()"
-  >
-    <option value="">Todos los productos</option>
-
-    {% for p in productos %}
-      <option
-        value="{{ p.pk }}"
-        {% if p.pk|stringformat:"s" == producto_sel %}selected{% endif %}
-      >
-        {{ p.nombre_completo }}
-      </option>
-    {% endfor %}
-  </select>
-
-  <!-- Estado -->
-  <select
-    class="input"
-    name="estado"
-    onchange="this.form.submit()"
-  >
-    <option value="">Todos los estados</option>
-
-    {% for v, l in estados %}
-      <option
-        value="{{ v }}"
-        {% if v == estado_sel %}selected{% endif %}
-      >
-        {{ l }}
-      </option>
-    {% endfor %}
-  </select>
-
-  <!-- Comparación FIVE / SAP -->
-<select
-  class="input"
-  name="comparacion"
-  onchange="this.form.submit()"
->
-  <option value="">Todos (FIVE / SAP)</option>
-
-  <option
-    value="coinciden"
-    {% if comparacion_sel == "coinciden" %}selected{% endif %}
-  >
-    FIVE y SAP coinciden
-  </option>
-
-
-    <option value="pendientes" {% if comparacion_sel == "pendientes" %}selected{% endif %}>
-    FIVE y SAP No Coinciden
-  </option>
-</select>
-
-  <!-- Único botón para borrar filtros -->
-  {% if request.GET.q or tecnico_sel or producto_sel or estado_sel or comparacion_sel %}
-    <a
-      class="btn btn-secundario"
-      href="{% url 'almacen:unidades' %}"
-    >
-      Borrar filtros
-    </a>
-  {% endif %}
-
-</form>
-
-<!-- AVISO DEL TÉCNICO -->
-{% if tecnico_sel %}
-  <div class="tarjeta" style="margin-bottom: 16px; padding: 14px 18px;">
-    <strong>Unidades del técnico seleccionado</strong>
-    <p class="suave" style="margin: 5px 0 0;">
-      Se muestran las unidades relacionadas con el técnico seleccionado,
-      según su asignación y estado.
-    </p>
-  </div>
-{% endif %}
-
-<!-- TABLA DE UNIDADES -->
-<div class="tarjeta">
-
-
-  {% if object_list %}
-
-    <div class="tabla-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Remisión / Ingreso</th>
-            <th>Código Material</th>
-            <th>Material</th>
-            <th>Código unidad</th>
-            <th>Serial</th>
-            <th>Marca</th>
-            <th>Medida</th>
-            <th>Ubicación / Responsable</th>
-            <th>Estado</th>
-            <th>FIVE</th>
-            <th>SAP</th>
-            <th>Último cambio</th>
-
-            {% if hay_instaladas %}
-              <th>Orden</th>
-              <th>Cuenta contrato</th>
-            {% endif %}
-
-            <th></th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {% for u in object_list %}
-            <tr>
-
-              <!-- REMISIÓN / FECHA DE INGRESO -->
-              <td>
-                {% if u.remision %}
-                  {% if u.remision.comprobante_imagen %}
-                    <a
-                      href="{{ u.remision.comprobante_imagen.url }}"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Ver comprobante de remisión"
-                    >
-                      {{ u.remision.numero_remision }}
-                    </a>
-                  {% else %}
-                    {{ u.remision.numero_remision }}
-                  {% endif %}
-                {% else %}
-                  —
-                {% endif %}
-
-                <div class="suave">
-                  {{ u.fecha_ingreso|date:"d/m/Y" }}
-                </div>
-              </td>
-
-              <!-- CÓDIGO DEL PRODUCTO -->
-              <td class="codigo">
-                  <strong>
-                      {{ u.producto.codigo_producto|default:"—" }}
-                  </strong>
-              </td>
-
-              <!-- MATERIAL -->
-              <td>
-                  {{ u.producto.nombre|upper }}
-              </td>
-
-              <!-- CÓDIGO DE LA UNIDAD -->
-              <td>
-                  <a
-                      class="codigo"
-                      href="{% url 'almacen:unidad_detalle' u.pk %}"
-                  >
-                      <strong>{{ u.codigo }}</strong>
-                  </a>
-              </td>
-
-              <!-- SERIAL -->
-              <td class="codigo">
-                  {{ u.numero_serie|default:"—" }}
-              </td>
-
-              <!-- MARCA -->
-              <td>
-                {{ u.marca|default:"—" }}
-              </td>
-
-              <!-- MEDIDA -->
-              <td>
-                {{ u.medida|default:"—" }}
-              </td>
-
-              <!-- UBICACIÓN / RESPONSABLE -->
-              <td>
-                  {% if u.estado == "DISPONIBLE" %}
-                      Almacén
-
-                  {% elif u.estado == "ASIGNADO" %}
-                      {% if u.asignacion_relevante and u.asignacion_relevante.tecnico %}
-                          {{ u.asignacion_relevante.tecnico.get_full_name|default:u.asignacion_relevante.tecnico.username|upper }}
-                      {% else %}
-                          <span class="suave">Sin técnico registrado</span>
-                      {% endif %}
-
-                  {% elif u.estado == "INSTALADO" %}
-                      {% if u.asignacion_relevante and u.asignacion_relevante.tecnico %}
-                          {{ u.asignacion_relevante.tecnico.get_full_name|default:u.asignacion_relevante.tecnico.username|upper }}
-                          <div class="suave">
-                              Técnico de la instalación
-                          </div>
-                      {% else %}
-                          <span class="suave">Instalado — técnico no registrado</span>
-                      {% endif %}
-
-                  {% elif u.estado == "DANADO" %}
-                      Almacén
-
-                  {% elif u.estado == "BAJA" %}
-                      Devuelto / Fuera de servicio
-
-                  {% else %}
-                      —
-                  {% endif %}
-              </td>
-
-              <!-- ESTADO -->
-              <td>
-                <span class="chip chip-{{ u.estado|lower }}">
-                  {{ u.get_estado_display }}
-                </span>
-              </td>
-
-              <!-- FIVE -->
-              <td class="num">
-                <a
-                  class="cantidad-enlace"
-                  href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.producto.codigo_producto|default:u.producto.nombre|urlencode }}"
-                  title="Consultar asignaciones e instalaciones"
-                >
-                  {{ u.five }}
-                </a>
-              </td>
-
-              <!-- SAP -->
-              <td class="num">
-                <a
-                  class="cantidad-enlace {% if u.estado_sap == 'ok' %}cantidad-ok{% elif u.estado_sap == 'error' %}cantidad-error{% endif %}"
-                  href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.codigo|urlencode }}"
-                  title="{% if u.estado_sap == 'ok' %}FIVE y SAP coinciden{% elif u.estado_sap == 'error' %}FIVE y SAP no coinciden{% else %}Aún no aplica{% endif %}"
-                >
-                  {{ u.sap }}
-                </a>
-              </td>
-
-              <!-- ÚLTIMO CAMBIO -->
-              <td class="num suave">
-                {% if u.fecha_cambio_estado %}
-                  {{ u.fecha_cambio_estado|date:"d/m/Y H:i" }}
-                {% else %}
-                  —
-                {% endif %}
-              </td>
-
-              <!-- ORDEN Y CUENTA CONTRATO -->
-              {% if hay_instaladas %}
-
-                <td class="codigo">
-                  {% if u.estado == "INSTALADO" %}
-                    {% if u.asignacion_relevante and u.asignacion_relevante.operacion %}
-                      {{ u.asignacion_relevante.operacion.numero_orden|default:"—" }}
-                    {% else %}
-                      —
-                    {% endif %}
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
-
-                <td class="codigo">
-                  {% if u.estado == "INSTALADO" %}
-                    {% if u.asignacion_relevante and u.asignacion_relevante.operacion %}
-                      {{ u.asignacion_relevante.operacion.numero_cuenta_contrato|default:"—" }}
-                    {% else %}
-                      —
-                    {% endif %}
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
-
-              {% endif %}
-
-              <!-- ACCIONES -->
-              <td class="texto-derecha">
-                {% if u.estado in estados_editables %}
-                  <a
-                    class="btn btn-pequeno btn-secundario"
-                    href="{% url 'almacen:unidad_estado' u.pk %}"
-                  >
-                    Cambiar estado
-                  </a>
-                {% endif %}
-              </td>
-
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-  {% else %}
-
-    <div class="vacio">
-      <strong>No hay unidades con estos filtros</strong>
-      Registre un ingreso de un producto con código para crearlas.
-    </div>
-
-  {% endif %}
-
-
-</div>
-
-{% endblock %}
-
 {% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/inventario.css' %}">
+
 <style>
-/* ---------- CONTADOR DE MATERIALES ---------- */
+
+/* =========================================================
+   UNIDADES CON CÓDIGO - MISMA ESTRUCTURA QUE EXISTENCIAS
+========================================================= */
+
+/* CABECERA */
+
+.cabecera-unidades {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 12px;
+}
+
+.cabecera-unidades .cabecera-info {
+    min-width: 0;
+}
+
+.cabecera-unidades h1 {
+    font-size: 21px;
+    margin-bottom: 4px;
+}
+
+.cabecera-unidades p {
+    font-size: 11px;
+    margin-bottom: 0;
+}
+
+.cabecera-unidades .acciones {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.cabecera-unidades .btn {
+    padding: 7px 11px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* =========================================================
+   FILTROS COMPACTOS
+========================================================= */
+
+.filtros-inventario {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 10px;
+}
+
+.filtros-inventario .buscar-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 220px;
+    min-width: 160px;
+}
+
+.filtros-inventario .buscar-wrap svg {
+    position: absolute;
+    left: 9px;
+    width: 14px;
+    height: 14px;
+    color: #64748b;
+    pointer-events: none;
+}
+
+.filtros-inventario .buscar-wrap input {
+    width: 100%;
+    padding-left: 30px;
+}
+
+.filtros-inventario input,
+.filtros-inventario select {
+    height: 32px;
+    min-height: 32px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-size: 11px;
+    box-sizing: border-box;
+}
+
+.filtros-inventario select {
+    flex: 0 1 190px;
+    min-width: 150px;
+    max-width: 230px;
+}
+
+.filtros-inventario .btn {
+    padding: 6px 10px;
+    font-size: 10px;
+}
+
+/* =========================================================
+   CONTADOR DE UNIDADES
+========================================================= */
+
 .contador-materiales {
     display: inline-flex;
     align-items: baseline;
@@ -384,7 +117,7 @@
     border-radius: 7px;
     background: #f5f8f6;
     color: #526157;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .contador-materiales strong {
@@ -393,172 +126,189 @@
     font-weight: 800;
 }
 
-/* ---------- FILTROS ---------- */
-.filtros {
-    display: grid;
-    grid-template-columns: minmax(240px, 2fr)
-                           repeat(3, minmax(130px, 1fr))
-                           auto;
-    gap: 9px;
-    align-items: center;
-    margin-bottom: 14px;
-}
+/* =========================================================
+   TARJETA
+========================================================= */
 
-.filtros .input {
-    width: 100%;
+.tarjeta {
     min-width: 0;
-    box-sizing: border-box;
-    font-size: 13px;
-    padding: 9px 10px;
+    padding: 10px;
+    border-radius: 7px;
 }
 
-@media (max-width: 1000px) {
-    .filtros {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+/* =========================================================
+   TABLA COMPACTA
+========================================================= */
 
-    .filtros .buscar {
-        grid-column: 1 / -1;
-    }
-}
-
-@media (max-width: 600px) {
-    .filtros {
-        grid-template-columns: 1fr;
-    }
-
-    .filtros .buscar {
-        grid-column: auto;
-    }
-}
-
-/* ---------- CONTENEDOR DE LA TABLA ---------- */
 .tabla-wrap {
+    position: relative;
     width: 100%;
-    max-height: 62vh;
+    max-height: 68vh;
     overflow: auto;
-    border: 1px solid #e1e7e3;
-    border-radius: 8px;
+    background: #fff;
+    border-radius: 6px;
+    scrollbar-gutter: stable;
 }
 
-/* ---------- TABLA COMPACTA ---------- */
 .tabla-wrap table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 12px;
-    line-height: 1.35;
+    background: #fff;
+    font-size: 11px;
+}
+
+.tabla-wrap th,
+.tabla-wrap td {
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border-right: 1px solid #e2e8e5;
+    border-bottom: 1px solid #e2e8e5;
+    vertical-align: middle;
 }
 
 .tabla-wrap thead th {
     position: sticky;
     top: 0;
-    z-index: 2;
-    padding: 10px 8px;
-    background: #f1f5f3;
-    color: #34483c;
+    z-index: 5;
+    background: #f1f5f3 !important;
+    color: #334155;
     font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.35px;
-    white-space: nowrap;
+    font-weight: 700;
     text-align: left;
-    box-shadow: 0 1px 0 #d9e2dd;
+    white-space: nowrap;
+    box-shadow: 0 1px 0 #cbd5d1;
 }
 
 .tabla-wrap tbody td {
-    padding: 8px;
-    border-bottom: 1px solid #edf0ee;
-    vertical-align: middle;
+    font-size: 10px;
 }
 
-.tabla-wrap tbody tr:nth-child(even) {
-    background: #fafcfb;
+.tabla-wrap tbody tr:hover td {
+    background-color: #f8fafc;
 }
 
-.tabla-wrap tbody tr:hover {
-    background: #f0f6f2;
+.tabla-wrap .suave {
+    margin-top: 2px;
+    color: #64748b;
+    font-size: 9px;
 }
 
-/* ---------- ANCHOS DE COLUMNAS ---------- */
-/* Remisión e ingreso */
+/* =========================================================
+   ANCHOS DE COLUMNAS
+========================================================= */
+
+/* Remisión */
+
 .tabla-wrap th:nth-child(1),
 .tabla-wrap td:nth-child(1) {
-    min-width: 90px;
+    min-width: 100px;
 }
 
-/* Código de material */
+/* Código material */
+
 .tabla-wrap th:nth-child(2),
 .tabla-wrap td:nth-child(2) {
-    min-width: 85px;
-    max-width: 115px;
+    min-width: 95px;
 }
 
-/* Nombre del material */
+/* Material */
+
 .tabla-wrap th:nth-child(3),
 .tabla-wrap td:nth-child(3) {
-    min-width: 120px;
-    max-width: 175px;
+    min-width: 155px;
+    max-width: 220px;
+    overflow-wrap: anywhere;
 }
 
-/* Código de unidad y serial */
+/* Código unidad */
+
 .tabla-wrap th:nth-child(4),
-.tabla-wrap td:nth-child(4),
+.tabla-wrap td:nth-child(4) {
+    min-width: 110px;
+}
+
+/* Serial */
+
 .tabla-wrap th:nth-child(5),
 .tabla-wrap td:nth-child(5) {
-    min-width: 85px;
+    min-width: 100px;
 }
 
-/* Marca y medida */
+/* Marca */
+
 .tabla-wrap th:nth-child(6),
-.tabla-wrap td:nth-child(6),
+.tabla-wrap td:nth-child(6) {
+    min-width: 85px;
+    max-width: 120px;
+}
+
+/* Medida */
+
 .tabla-wrap th:nth-child(7),
 .tabla-wrap td:nth-child(7) {
-    min-width: 65px;
-    max-width: 95px;
+    min-width: 70px;
 }
 
-/* Ubicación y responsable */
+/* Ubicación */
+
 .tabla-wrap th:nth-child(8),
 .tabla-wrap td:nth-child(8) {
-    min-width: 135px;
-    max-width: 185px;
+    min-width: 155px;
+    max-width: 200px;
+    overflow-wrap: anywhere;
 }
 
 /* Estado */
+
 .tabla-wrap th:nth-child(9),
 .tabla-wrap td:nth-child(9) {
-    min-width: 85px;
+    min-width: 90px;
 }
 
 /* FIVE y SAP */
+
 .tabla-wrap th:nth-child(10),
 .tabla-wrap td:nth-child(10),
 .tabla-wrap th:nth-child(11),
 .tabla-wrap td:nth-child(11) {
-    min-width: 48px;
+    min-width: 65px;
     text-align: center;
 }
 
 /* Último cambio */
+
 .tabla-wrap th:nth-child(12),
 .tabla-wrap td:nth-child(12) {
-    min-width: 105px;
+    min-width: 120px;
     white-space: nowrap;
 }
 
 /* Orden y cuenta contrato */
+
 .tabla-wrap th:nth-child(13),
 .tabla-wrap td:nth-child(13),
 .tabla-wrap th:nth-child(14),
 .tabla-wrap td:nth-child(14) {
-    min-width: 90px;
+    min-width: 105px;
 }
 
-/* ---------- CÓDIGOS ---------- */
+/* Acciones */
+
+.tabla-wrap th:last-child,
+.tabla-wrap td:last-child {
+    min-width: 105px;
+    text-align: center;
+}
+
+/* =========================================================
+   CÓDIGOS
+========================================================= */
+
 .codigo {
     font-family: Consolas, "Courier New", monospace;
-    font-size: 11px;
+    font-size: 10px;
     overflow-wrap: anywhere;
 }
 
@@ -566,23 +316,16 @@
     overflow-wrap: anywhere;
 }
 
-/* ---------- RESPONSABLE Y FECHAS ---------- */
-.tabla-wrap td:nth-child(8) {
-    overflow-wrap: anywhere;
-}
+/* =========================================================
+   CANTIDADES FIVE / SAP
+========================================================= */
 
-.suave {
-    font-size: 11px;
-    color: #78857d;
-}
-
-/* ---------- CANTIDADES FIVE / SAP ---------- */
 .cantidad-enlace {
     display: inline-block;
     min-width: 25px;
     padding: 4px 6px;
     border-radius: 5px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 750;
     text-align: center;
     text-decoration: none;
@@ -605,17 +348,9 @@
     background: #fee2e2;
 }
 
-/* ---------- BOTONES DE ACCIÓN ---------- */
-.tabla-wrap .btn-pequeno {
-    padding: 5px 8px;
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-
-/* =========================================
+/* =========================================================
    ESTADOS DE LAS UNIDADES
-========================================= */
+========================================================= */
 
 .tabla-wrap .chip {
     display: inline-flex;
@@ -629,84 +364,712 @@
     border: 1px solid transparent;
 }
 
-/* DISPONIBLE - VERDE */
 .tabla-wrap .chip-disponible {
     color: #166534;
     background: #dcfce7;
     border-color: #86efac;
 }
 
-/* ASIGNADO - AZUL */
 .tabla-wrap .chip-asignado {
     color: #1d4ed8;
     background: #dbeafe;
     border-color: #93c5fd;
 }
 
-/* INSTALADO - MORADO */
 .tabla-wrap .chip-instalado {
     color: #7e22ce;
     background: #f3e8ff;
     border-color: #d8b4fe;
 }
 
-/* DAÑADO - ROJO */
 .tabla-wrap .chip-danado {
     color: #b91c1c;
     background: #fee2e2;
     border-color: #fca5a5;
 }
 
-/* BAJA - GRIS */
 .tabla-wrap .chip-baja {
     color: #475569;
     background: #e2e8f0;
     border-color: #cbd5e1;
 }
 
-/* DEVUELTO - GRIS AZULADO */
 .tabla-wrap .chip-devuelto {
     color: #334155;
     background: #e0f2fe;
     border-color: #7dd3fc;
 }
 
-/* RESERVADO - AMARILLO */
 .tabla-wrap .chip-reservado {
     color: #92400e;
     background: #fef3c7;
     border-color: #fcd34d;
 }
 
-/* ESTADO NO RECONOCIDO */
 .tabla-wrap .chip-default {
     color: #475569;
     background: #f1f5f9;
     border-color: #cbd5e1;
 }
 
+/* =========================================================
+   BOTONES
+========================================================= */
 
-/* ---------- TARJETA Y MÓVILES ---------- */
-.tarjeta {
-    min-width: 0;
+.tabla-wrap .btn-pequeno {
+    padding: 5px 8px;
+    font-size: 9px;
+    white-space: nowrap;
 }
 
+/* =========================================================
+   MENSAJE VACÍO
+========================================================= */
+
+.vacio {
+    padding: 25px 15px;
+    text-align: center;
+    color: #64748b;
+    font-size: 11px;
+}
+
+.vacio strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #334155;
+    font-size: 13px;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
 @media (max-width: 768px) {
+
+    .cabecera-unidades {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .cabecera-unidades .acciones {
+        width: 100%;
+    }
+
+    .filtros-inventario .buscar-wrap,
+    .filtros-inventario select {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
     .tabla-wrap {
         max-height: 65vh;
     }
 
-    .tabla-wrap table {
-        font-size: 11px;
-    }
-
-    .tabla-wrap thead th {
-        padding: 9px 7px;
-    }
-
-    .tabla-wrap tbody td {
-        padding: 7px;
-    }
 }
+
+@media (max-width: 480px) {
+
+    .cabecera-unidades h1 {
+        font-size: 18px;
+    }
+
+    .cabecera-unidades p {
+        font-size: 10px;
+    }
+
+}
+
 </style>
+{% endblock %}
+
+
+{% block contenido %}
+
+<!-- ======================================================
+     CABECERA
+====================================================== -->
+
+<header class="cabecera cabecera-unidades">
+
+    <div class="cabecera-info">
+        <h1>Unidades con código</h1>
+
+        <p>
+            Cada medidor, regulador y válvula tiene su código y su historia:
+            asignación, instalación y ubicación.
+        </p>
+    </div>
+
+    <div class="acciones">
+        <a class="btn btn-primario"
+           href="{% url 'almacen:ingreso_crear' %}">
+            Registrar ingreso
+        </a>
+    </div>
+
+</header>
+
+
+<!-- ======================================================
+     FILTROS
+====================================================== -->
+
+<form class="filtros filtros-inventario" method="get">
+
+    <div class="buscar-wrap">
+
+        <svg viewBox="0 0 24 24"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2"
+             stroke-linecap="round"
+             stroke-linejoin="round"
+             aria-hidden="true">
+
+            <circle cx="11" cy="11" r="7"/>
+            <path d="M21 21l-4.3-4.3"/>
+
+        </svg>
+
+        <input
+            class="input buscar"
+            type="search"
+            name="q"
+            value="{{ request.GET.q }}"
+            placeholder="Buscar código, serial, producto, marca, técnico o remisión..."
+            autocomplete="off"
+        >
+
+    </div>
+
+
+    <!-- TÉCNICO -->
+
+    <select
+        class="input"
+        name="tecnico"
+        onchange="this.form.submit()"
+    >
+
+        <option value="">Todos los técnicos</option>
+
+        {% for tecnico in tecnicos_lista %}
+
+            <option
+                value="{{ tecnico.pk }}"
+                {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
+                    selected
+                {% endif %}
+            >
+                {{ tecnico.get_full_name|default:tecnico.username|upper }}
+            </option>
+
+        {% endfor %}
+
+    </select>
+
+
+    <!-- PRODUCTO -->
+
+    <select
+        class="input"
+        name="producto"
+        onchange="this.form.submit()"
+    >
+
+        <option value="">Todos los productos</option>
+
+        {% for p in productos %}
+
+            <option
+                value="{{ p.pk }}"
+                {% if p.pk|stringformat:"s" == producto_sel %}
+                    selected
+                {% endif %}
+            >
+                {{ p.nombre_completo }}
+            </option>
+
+        {% endfor %}
+
+    </select>
+
+
+    <!-- ESTADO -->
+
+    <select
+        class="input"
+        name="estado"
+        onchange="this.form.submit()"
+    >
+
+        <option value="">Todos los estados</option>
+
+        {% for v, l in estados %}
+
+            <option
+                value="{{ v }}"
+                {% if v == estado_sel %}
+                    selected
+                {% endif %}
+            >
+                {{ l }}
+            </option>
+
+        {% endfor %}
+
+    </select>
+
+
+    <!-- COMPARACIÓN FIVE / SAP -->
+
+    <select
+        class="input"
+        name="comparacion"
+        onchange="this.form.submit()"
+    >
+
+        <option value="">Todos (FIVE / SAP)</option>
+
+        <option
+            value="coinciden"
+            {% if comparacion_sel == "coinciden" %}
+                selected
+            {% endif %}
+        >
+            ✓ FIVE y SAP coinciden
+        </option>
+
+        <option
+            value="pendientes"
+            {% if comparacion_sel == "pendientes" %}
+                selected
+            {% endif %}
+        >
+            ✕ FIVE y SAP no coinciden
+        </option>
+
+    </select>
+
+
+    <!-- LIMPIAR -->
+
+    {% if request.GET.q or tecnico_sel or producto_sel or estado_sel or comparacion_sel %}
+
+        <a
+            class="btn btn-secundario"
+            href="{% url 'almacen:unidades' %}"
+        >
+            Limpiar
+        </a>
+
+    {% endif %}
+
+</form>
+
+
+<!-- ======================================================
+     CONTADOR
+====================================================== -->
+
+<div class="contador-materiales">
+
+    <strong>{{ total_unidades_filtradas }}</strong>
+
+    <span>materiales</span>
+
+</div>
+
+
+<!-- ======================================================
+     AVISO DEL TÉCNICO
+====================================================== -->
+
+{% if tecnico_sel %}
+
+    <div class="tarjeta" style="margin-bottom: 10px;">
+
+        <strong>Unidades del técnico seleccionado</strong>
+
+        <p class="suave" style="margin: 5px 0 0;">
+
+            Se muestran las unidades relacionadas con el técnico seleccionado,
+            según su asignación y estado.
+
+        </p>
+
+    </div>
+
+{% endif %}
+
+
+<!-- ======================================================
+     TABLA DE UNIDADES
+====================================================== -->
+
+<div class="tarjeta">
+
+    {% if object_list %}
+
+        <div class="tabla-wrap">
+
+            <table class="tabla-general">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Remisión / Ingreso</th>
+
+                        <th>Código Material</th>
+
+                        <th>Material</th>
+
+                        <th>Código unidad</th>
+
+                        <th>Serial</th>
+
+                        <th>Marca</th>
+
+                        <th>Medida</th>
+
+                        <th>Ubicación / Responsable</th>
+
+                        <th>Estado</th>
+
+                        <th>FIVE</th>
+
+                        <th>SAP</th>
+
+                        <th>Último cambio</th>
+
+                        {% if hay_instaladas %}
+                            <th>Orden</th>
+                            <th>Cuenta contrato</th>
+                        {% endif %}
+
+                        <th>
+                            <span class="sr-only">Acciones</span>
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    {% for u in object_list %}
+
+                        <tr>
+
+                            <!-- REMISIÓN -->
+
+                            <td>
+
+                                {% if u.remision %}
+
+                                    {% if u.remision.comprobante_imagen %}
+
+                                        <a
+                                            href="{{ u.remision.comprobante_imagen.url }}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Ver comprobante de remisión"
+                                        >
+                                            {{ u.remision.numero_remision }}
+                                        </a>
+
+                                    {% else %}
+
+                                        {{ u.remision.numero_remision }}
+
+                                    {% endif %}
+
+                                {% else %}
+
+                                    —
+
+                                {% endif %}
+
+                                <div class="suave">
+                                    {{ u.fecha_ingreso|date:"d/m/Y" }}
+                                </div>
+
+                            </td>
+
+
+                            <!-- CÓDIGO MATERIAL -->
+
+                            <td class="codigo">
+
+                                <strong>
+                                    {{ u.producto.codigo_producto|default:"—" }}
+                                </strong>
+
+                            </td>
+
+
+                            <!-- MATERIAL -->
+
+                            <td class="col-producto">
+
+                                {{ u.producto.nombre|upper }}
+
+                            </td>
+
+
+                            <!-- CÓDIGO UNIDAD -->
+
+                            <td>
+
+                                <a
+                                    class="codigo"
+                                    href="{% url 'almacen:unidad_detalle' u.pk %}"
+                                >
+                                    <strong>{{ u.codigo }}</strong>
+                                </a>
+
+                            </td>
+
+
+                            <!-- SERIAL -->
+
+                            <td class="codigo">
+
+                                {{ u.numero_serie|default:"—" }}
+
+                            </td>
+
+
+                            <!-- MARCA -->
+
+                            <td>
+
+                                {{ u.marca|default:"—" }}
+
+                            </td>
+
+
+                            <!-- MEDIDA -->
+
+                            <td>
+
+                                {{ u.medida|default:"—" }}
+
+                            </td>
+
+
+                            <!-- UBICACIÓN / RESPONSABLE -->
+
+                            <td>
+
+                                {% if u.estado == "DISPONIBLE" %}
+
+                                    Almacén
+
+                                {% elif u.estado == "ASIGNADO" %}
+
+                                    {% if u.asignacion_relevante and u.asignacion_relevante.tecnico %}
+
+                                        {{ u.asignacion_relevante.tecnico.get_full_name|default:u.asignacion_relevante.tecnico.username|upper }}
+
+                                    {% else %}
+
+                                        <span class="suave">
+                                            Sin técnico registrado
+                                        </span>
+
+                                    {% endif %}
+
+                                {% elif u.estado == "INSTALADO" %}
+
+                                    {% if u.asignacion_relevante and u.asignacion_relevante.tecnico %}
+
+                                        {{ u.asignacion_relevante.tecnico.get_full_name|default:u.asignacion_relevante.tecnico.username|upper }}
+
+                                        <div class="suave">
+                                            Técnico de la instalación
+                                        </div>
+
+                                    {% else %}
+
+                                        <span class="suave">
+                                            Instalado — técnico no registrado
+                                        </span>
+
+                                    {% endif %}
+
+                                {% elif u.estado == "DANADO" %}
+
+                                    Almacén
+
+                                {% elif u.estado == "BAJA" %}
+
+                                    Devuelto / Fuera de servicio
+
+                                {% else %}
+
+                                    —
+
+                                {% endif %}
+
+                            </td>
+
+
+                            <!-- ESTADO -->
+
+                            <td>
+
+                                <span class="chip chip-{{ u.estado|lower }}">
+                                    {{ u.get_estado_display }}
+                                </span>
+
+                            </td>
+
+
+                            <!-- FIVE -->
+
+                            <td class="num">
+
+                                <a
+                                    class="cantidad-enlace"
+                                    href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.producto.codigo_producto|default:u.producto.nombre|urlencode }}"
+                                    title="Consultar asignaciones e instalaciones"
+                                >
+                                    {{ u.five }}
+                                </a>
+
+                            </td>
+
+
+                            <!-- SAP -->
+
+                            <td class="num">
+
+                                <a
+                                    class="cantidad-enlace {% if u.estado_sap == 'ok' %}cantidad-ok{% elif u.estado_sap == 'error' %}cantidad-error{% endif %}"
+                                    href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.codigo|urlencode }}"
+                                    title="{% if u.estado_sap == 'ok' %}FIVE y SAP coinciden{% elif u.estado_sap == 'error' %}FIVE y SAP no coinciden{% else %}Aún no aplica{% endif %}"
+                                >
+                                    {{ u.sap }}
+                                </a>
+
+                            </td>
+
+
+                            <!-- ÚLTIMO CAMBIO -->
+
+                            <td class="num suave">
+
+                                {% if u.fecha_cambio_estado %}
+
+                                    {{ u.fecha_cambio_estado|date:"d/m/Y H:i" }}
+
+                                {% else %}
+
+                                    —
+
+                                {% endif %}
+
+                            </td>
+
+
+                            <!-- ORDEN -->
+
+                            {% if hay_instaladas %}
+
+                                <td class="codigo">
+
+                                    {% if u.estado == "INSTALADO" %}
+
+                                        {% if u.asignacion_relevante and u.asignacion_relevante.operacion %}
+
+                                            {{ u.asignacion_relevante.operacion.numero_orden|default:"—" }}
+
+                                        {% else %}
+
+                                            —
+
+                                        {% endif %}
+
+                                    {% else %}
+
+                                        —
+
+                                    {% endif %}
+
+                                </td>
+
+
+                                <!-- CUENTA CONTRATO -->
+
+                                <td class="codigo">
+
+                                    {% if u.estado == "INSTALADO" %}
+
+                                        {% if u.asignacion_relevante and u.asignacion_relevante.operacion %}
+
+                                            {{ u.asignacion_relevante.operacion.numero_cuenta_contrato|default:"—" }}
+
+                                        {% else %}
+
+                                            —
+
+                                        {% endif %}
+
+                                    {% else %}
+
+                                        —
+
+                                    {% endif %}
+
+                                </td>
+
+                            {% endif %}
+
+
+                            <!-- ACCIONES -->
+
+                            <td class="texto-derecha">
+
+                                {% if u.estado in estados_editables %}
+
+                                    <a
+                                        class="btn btn-pequeno btn-secundario"
+                                        href="{% url 'almacen:unidad_estado' u.pk %}"
+                                    >
+                                        Cambiar estado
+                                    </a>
+
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% else %}
+
+        <div class="vacio">
+
+            <div class="vacio-icono">📦</div>
+
+            <strong>No hay unidades con estos filtros</strong>
+
+            Registre un ingreso de un producto con código para crearlas.
+
+        </div>
+
+    {% endif %}
+
+</div>
+
 {% endblock %}

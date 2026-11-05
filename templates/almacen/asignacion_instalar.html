@@ -1,7 +1,14 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block titulo %}Registrar operación · {{ tecnico.get_full_name|default:tecnico.username }}{% endblock %}
+{% block titulo %}
+  {% if modo_edicion %}
+    Editar operación
+  {% else %}
+    Registrar operación
+  {% endif %}
+  · {{ tecnico.get_full_name|default:tecnico.username }}
+{% endblock %}
 
 {% block extra_css %}
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css" rel="stylesheet">
@@ -42,7 +49,9 @@
   .ent .pend span.cero { opacity:.45; }
   .ent .hidden { display:none; }
   #n-inc { color:var(--warn); font-weight:700; margin-right:10px; }
-
+  .ent .campo-error input, .ent .campo-error select, .ent .campo-error textarea { border:2px solid #b42318; background:#fff5f4; }
+  .ent .campo-error label { color:#b42318; }
+  .ent .msg.err { font-size:12px; }
     /* Bloques de captura diferenciados */
   .ent .bloque { border:1px solid var(--line); border-left-width:5px; border-radius:8px; padding:10px 12px; margin-bottom:12px; background:#fff; }
   .ent .bloque:last-of-type { margin-bottom:0; }
@@ -66,11 +75,31 @@
 
 {% block contenido %}
 <div class="ent">
-  <h2>Editar operación · {{ tecnico.get_full_name|default:tecnico.username }}</h2>
+  <h2>
+  {% if modo_edicion %}
+    Editar operación
+  {% else %}
+    Registrar operación
+  {% endif %}
+  · {{ tecnico.get_full_name|default:tecnico.username }}
+</h2>
 
   {% if messages %}{% for m in messages %}
     <div class="card" style="border-color:{% if m.tags == 'error' %}#b42318{% elif m.tags == 'warning' %}#b54708{% else %}#2d6a4f{% endif %}">{{ m }}</div>
   {% endfor %}{% endif %}
+    {% if form.errors %}
+    <div class="card" style="border-color:#b42318;background:#fdecea">
+      <b style="color:#b42318">No se pudo guardar. Revise estos campos:</b>
+      <ul style="margin:6px 0 0 18px;color:#b42318">
+        {% for campo in form %}
+          {% for error in campo.errors %}
+            <li><b>{{ campo.label }}:</b> {{ error }}</li>
+          {% endfor %}
+        {% endfor %}
+        {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
 
   {{ estados_instalan|json_script:"estados-instalan" }}
   {{ pend_cantidad|json_script:"pend-cantidad" }}
@@ -82,24 +111,21 @@
     {% csrf_token %}
     <input type="hidden" name="payload" id="payload">
 
-    {% if form.non_field_errors %}
-      <div class="card" style="border-color:#b42318;color:#b42318">{{ form.non_field_errors }}</div>
-    {% endif %}
-
     <!-- Datos de la operación -->
+        <!-- Datos de la operación -->
     <div class="card top">
       {% for campo in form %}{% if campo.name != "observaciones" %}
-        <div>
+        <div class="{% if campo.errors %}campo-error{% endif %}">
           {{ campo.label_tag }}{{ campo }}
-          {% if campo.errors %}<div class="msg err">{{ campo.errors }}</div>{% endif %}
+          {% for error in campo.errors %}<div class="msg err">⚠ {{ error }}</div>{% endfor %}
         </div>
       {% endif %}{% endfor %}
     </div>
 
-    <div class="card">
+    <div class="card {% if form.observaciones.errors %}campo-error{% endif %}">
       <label for="{{ form.observaciones.id_for_label }}">Observaciones *</label>
       {{ form.observaciones }}
-      {% if form.observaciones.errors %}<div class="msg err">{{ form.observaciones.errors }}</div>{% endif %}
+      {% for error in form.observaciones.errors %}<div class="msg err">⚠ {{ error }}</div>{% endfor %}
     </div>
 
     <!-- Materiales -->
@@ -171,12 +197,13 @@
       <div class="scroll"><table id="informe"></table></div>
     </div>
 
-    <div class="foot">
-      <a href="{% url 'almacen:asignaciones' %}" class="btn sec">Cancelar</a>
-      <span><span id="n-inc"></span><b id="total-gen">0</b> pieza(s) &nbsp;
-        <button class="btn" id="btn-guardar" type="submit">
-        Guardar cambios
-    </button>
+        <div class="foot">
+      <a href="{% url 'operaciones:consulta_orden' %}" class="btn sec">Cancelar</a>
+      <span>
+        <span id="n-inc"></span><b id="total-gen">0</b> pieza(s) &nbsp;
+        <button class="btn" id="btn-guardar" type="submit">Guardar cambios</button>
+      </span>
+    </div>
   </form>
 </div>
 {% endblock %}
@@ -229,6 +256,27 @@
 
     // Materiales que ya pertenecen a la operación cuando se edita.
     var lineas = leerJSON("payload-previo", []);
+    function construirPayload() {
+        return lineas.map(function (l) {
+
+            return {
+                producto_id: l.producto,
+
+                cantidad: l.serializado
+                    ? l.unidades.length
+                    : l.cantidad,
+
+                seriales: l.serializado
+                    ? l.unidades.map(function (u) {
+                        return u.serial;
+                    })
+                    : [],
+
+                observaciones: ""
+            };
+        });
+    }
+
 
     if (!Array.isArray(pend)) pend = [];
     if (!Array.isArray(seriales)) seriales = [];
@@ -376,10 +424,8 @@
         return lineas.reduce(function (a, l) {
             return a + (
                 l.serializado
-                    ? l.unidades.filter(function (u) {
-                        return !!u.tipo;
-                    }).length
-                    : (exceso(l) > 0 ? 1 : 0)
+                    ? l.unidades.filter(function (u) { return !!u.tipo; }).length
+                    : exceso(l)
             );
         }, 0);
     }
@@ -938,16 +984,22 @@
         }
 
         var k = nInc();
+        var total = lineas.reduce(function (a, l) { return a + cantLinea(l); }, 0);
 
         if ($("n-inc")) {
             $("n-inc").textContent = k
-                ? "⚠ " + k + " inconsistencia(s)"
+                ? "✓ " + (total - k) + " correcta(s) · ⚠ " + k + " inconsistente(s) · "
                 : "";
+        }
+        if ($("total-gen")) {
+            $("total-gen").textContent = total;
         }
 
         // Mantener actualizado el payload.
         if ($("payload")) {
-            $("payload").value = JSON.stringify(lineas);
+            $("payload").value = JSON.stringify(
+            construirPayload()
+        );
         }
     }
 
@@ -1193,7 +1245,9 @@
              * Porque eso eliminaría los materiales existentes
              * cuando se edita una operación y se cambia el estado.
              */
-            $("payload").value = JSON.stringify(lineas);
+            $("payload").value = JSON.stringify(
+                construirPayload()
+            );
 
             /*
              * Evitar doble envío.
@@ -1214,6 +1268,9 @@
     render();
 
     pintarStock();
+
+    var resumenErr = document.querySelector(".campo-error, .card[style*='fdecea']");
+    if (resumenErr) resumenErr.scrollIntoView({ behavior: "smooth", block: "center" });
 
 })();
 </script>

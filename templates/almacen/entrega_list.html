@@ -1,71 +1,248 @@
 {% extends "base.html" %}
+
 {% block contenido %}
-<h2>Informe de entregas</h2>
-<form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-  <input name="q" value="{{ q }}" placeholder="Código, serial, material, técnico…">
-  <select name="tecnico">
-    <option value="">Todos los técnicos</option>
-    {% for t in tecnicos_lista %}
-      <option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.get_full_name|default:t.username }}</option>
-    {% endfor %}
-  </select>
-  <input type="date" name="desde" value="{{ desde }}"> <input type="date" name="hasta" value="{{ hasta }}">
-  <button>Filtrar</button>
-  <a href="?{{ request.GET.urlencode }}&export=xlsx">📥 Excel</a>
-  <a href="{% url 'almacen:entrega_nueva' %}">➕ Nueva entrega</a>
+
+<style>
+  .tabla-entregas-contenedor {
+      width: 100%;
+      max-height: 70vh;
+      overflow: auto;
+      position: relative;
+      border: 1px solid #d7dee8;
+      border-radius: 8px;
+      background: #fff;
+  }
+
+  .tabla-entregas {
+      border-collapse: separate;
+      border-spacing: 0;
+      width: max-content;
+      min-width: 100%;
+      font-size: 13px;
+  }
+
+  .tabla-entregas th,
+  .tabla-entregas td {
+      padding: 9px 10px;
+      border-right: 1px solid #d7dee8;
+      border-bottom: 1px solid #d7dee8;
+      white-space: nowrap;
+  }
+
+  /* Encabezado fijo */
+  .tabla-entregas thead th {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: #1f3a5f !important;
+      color: #fff !important;
+      text-align: center;
+      vertical-align: middle;
+      font-weight: 700;
+  }
+
+  /* Primera columna fija horizontalmente */
+  .tabla-entregas th:first-child,
+  .tabla-entregas td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: #fff;
+  }
+
+  .tabla-entregas thead th:first-child {
+      z-index: 7;
+      background: #1f3a5f !important;
+  }
+
+  .tabla-entregas tbody tr:nth-child(even) td {
+      background: #f7f9fc;
+  }
+
+  .tabla-entregas tbody tr:nth-child(even) td:first-child {
+      background: #f7f9fc;
+  }
+
+  .tabla-entregas tbody tr:hover td {
+      background: #edf3fa;
+  }
+
+  .tabla-entregas tbody tr:hover td:first-child {
+      background: #edf3fa;
+  }
+
+  .tabla-entregas tfoot td {
+      position: sticky;
+      bottom: 0;
+      z-index: 4;
+      background: #eef2f7;
+      font-weight: 700;
+  }
+
+  .tabla-entregas tfoot td:first-child {
+      z-index: 6;
+  }
+
+  .tabla-entregas th.material {
+      width: 110px;
+      min-width: 110px;
+      max-width: 110px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+  }
+
+  .filtros-entregas {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 12px;
+  }
+
+  .filtros-entregas input,
+  .filtros-entregas select {
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+  }
+
+  .filtros-entregas button,
+  .filtros-entregas a {
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      cursor: pointer;
+  }
+</style>
+
+<h2>Informe de Entregas y Devoluciones</h2>
+
+<form method="get" class="filtros-entregas">
+
+    <input
+        name="q"
+        value="{{ q }}"
+        placeholder="Código, serial, material, técnico..."
+    >
+
+    <select name="tecnico">
+        <option value="">Todos los técnicos</option>
+        {% for t in tecnicos_lista %}
+            <option value="{{ t.pk }}"
+                {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>
+                {{ t.get_full_name|default:t.username }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <input type="date" name="desde" value="{{ desde }}">
+    <input type="date" name="hasta" value="{{ hasta }}">
+
+    <button type="submit">Filtrar</button>
+
+    <a href="?{{ request.GET.urlencode }}&export=xlsx">
+        📥 Excel
+    </a>
+
+    <a href="{% url 'almacen:entrega_nueva' %}">
+        ➕ Nueva entrega
+    </a>
+
 </form>
 
-<div style="overflow:auto">
-<table border="1" cellpadding="5" style="border-collapse:collapse;font-size:13px">
-  <thead>
-    <tr style="background-color:#1f3a5f !important;">
-      <th style="color:#ffffff !important;">Código</th>
-      <th style="color:#ffffff !important;">Fecha</th>
-      <th style="color:#ffffff !important;">Técnico</th>
-      <th style="color:#ffffff !important;">C.C.</th>
-      <th style="color:#ffffff !important;">Entregó</th>
+<div class="tabla-entregas-contenedor">
 
-      {% for p in cols %}
-      <th style="
-          color:#ffffff !important;
-          background-color:#1f3a5f;
-          width:100px;
-          max-width:100px;
-          white-space:normal;
-          overflow-wrap:break-word;
-          text-align:center;
-          vertical-align:middle;
-          padding:8px 5px;
-      ">
-        {{ p.nombre_completo }}
-      </th>
-    {% endfor %}
+    <table class="tabla-entregas">
 
-      <th style="color:#ffffff !important;">Total</th>
-      <th style="color:#ffffff !important;">Acciones</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for f in filas %}
-    <tr>
-      <td><a href="{% url 'almacen:entrega_detalle' f.entrega.pk %}">{{ f.entrega.codigo }}</a></td>
-      <td>{{ f.entrega.fecha|date:"d/m/Y" }}</td>
-      <td>{{ f.entrega.tecnico.get_full_name|default:f.entrega.tecnico.username }}</td>
-      <td>{{ f.entrega.tecnico.cedula }}</td>
-      <td>{{ f.entrega.entregado_por.get_full_name|default:f.entrega.entregado_por.username }}</td>
-      {% for c in f.celdas %}<td align="center">{% if c %}{{ c }}{% endif %}</td>{% endfor %}
-      <td align="center"><b>{{ f.total }}</b></td>
-      <td><a href="{% url 'almacen:entrega_pdf' f.entrega.pk %}" target="_blank">PDF</a></td>
-    </tr>
-    {% empty %}<tr><td colspan="8">Sin entregas.</td></tr>{% endfor %}
-  </tbody>
-  {% if filas %}
-  <tfoot><tr style="background:#eef2f7;font-weight:700">
-    <td colspan="5" align="right">TOTALES</td>
-    {% for t in totales %}<td align="center">{{ t }}</td>{% endfor %}
-    <td align="center">{{ total_general }}</td><td></td>
-  </tr></tfoot>
-  {% endif %}
-</table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Fecha</th>
+                <th>Técnico</th>
+                <th>C.C.</th>
+                <th>Entregó</th>
+
+                {% for p in cols %}
+                    <th class="material">
+                        {{ p.nombre_completo }}
+                    </th>
+                {% endfor %}
+
+                <th>Total</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for f in filas %}
+                <tr>
+
+                    <td>
+                        <a href="{% url 'almacen:entrega_detalle' f.entrega.pk %}">
+                            {{ f.entrega.codigo }}
+                        </a>
+                    </td>
+
+                    <td>{{ f.entrega.fecha|date:"d/m/Y" }}</td>
+
+                    <td>
+                        {{ f.entrega.tecnico.get_full_name|default:f.entrega.tecnico.username }}
+                    </td>
+
+                    <td>{{ f.entrega.tecnico.cedula }}</td>
+
+                    <td>
+                        {{ f.entrega.entregado_por.get_full_name|default:f.entrega.entregado_por.username }}
+                    </td>
+
+                    {% for c in f.celdas %}
+                        <td align="center">
+                            {% if c %}{{ c }}{% else %}—{% endif %}
+                        </td>
+                    {% endfor %}
+
+                    <td align="center">
+                        <b>{{ f.total }}</b>
+                    </td>
+
+                    <td>
+                        <a href="{% url 'almacen:entrega_detalle' f.entrega.pk %}">
+                            Detalle
+                        </a>
+                        |
+                        <a href="{% url 'almacen:entrega_pdf' f.entrega.pk %}" target="_blank">
+                            PDF
+                        </a>
+                    </td>
+
+                </tr>
+
+            {% empty %}
+                <tr>
+                    <td colspan="8">Sin entregas ni devoluciones.</td>
+                </tr>
+            {% endfor %}
+
+        </tbody>
+
+        {% if filas %}
+            <tfoot>
+                <tr>
+                    <td colspan="5" align="right">TOTALES</td>
+
+                    {% for t in totales %}
+                        <td align="center">{{ t }}</td>
+                    {% endfor %}
+
+                    <td align="center">{{ total_general }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        {% endif %}
+
+    </table>
+
 </div>
+
 {% endblock %}

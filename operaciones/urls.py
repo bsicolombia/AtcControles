@@ -14,4 +14,5 @@ urlpatterns = [
     path("errores/", views.ErroresActualesView.as_view(), name="errores_actuales"),
     path("soporte/<int:pk>/", views.SoporteOperacionView.as_view(), name="soporte"),
     path("operacion/<int:pk>/editar/",views.OperacionUpdateView.as_view(),name="editar_instalacion",),
+    path("operacion/<int:pk>/reabrir/", views.OperacionReabrirView.as_view(), name="operacion_reabrir"),
 ]

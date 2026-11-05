@@ -239,7 +239,7 @@ class IngresoForm(EstiloMixin, forms.Form):
     )
 
     recogido_por = forms.CharField(
-        label="Recogido en VANI por",
+        label="Recogido en VANTI por",
         max_length=100,
         required=False,
     )
@@ -601,10 +601,14 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
         initial=Operacion.Estado.EJECUTADA,
     )
 
-    numero_orden = forms.CharField(label="Número de orden", max_length=10)
+    numero_orden = forms.CharField(
+        label="Número de orden", max_length=10,
+        error_messages={"required": "Este campo es obligatorio."},
+    )
 
     numero_cuenta_contrato = forms.CharField(
-        label="Número de cuenta contrato", max_length=10
+        label="Número de cuenta contrato", max_length=10,
+        error_messages={"required": "Este campo es obligatorio."},
     )
 
     fecha_instalacion = forms.DateField(
@@ -617,6 +621,7 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
         queryset=Anomalia.objects.none(),
         label="Anomalía",
         empty_label="Seleccione una anomalía",
+        error_messages={"required": "Seleccione una anomalía."},
         required=True,
     )
 

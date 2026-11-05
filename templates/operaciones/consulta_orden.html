@@ -110,6 +110,7 @@
                     <th>Fecha</th>
                     <th>Soporte</th>
                     <th>Editar</th>
+                    <th>Inconsistencias</th>
                 </tr>
             </thead>
 
@@ -158,13 +159,28 @@
                             {% endif %}
                         </td>
 
-                        <td>
+    
                         <td>
                             <a href="{% url 'operaciones:editar_instalacion' o.pk %}"
                             class="btn btn-sm btn-warning">
-                                <i class="bi bi-pencil-square"></i>
-                                Editar
+                                <i class="bi bi-pencil-square"></i> Editar
                             </a>
+                        </td>
+                        <td>
+                            {% if o.n_inc %}
+                                <span class="badge bg-warning text-dark">⚠ {{ o.n_inc }}</span>
+                                <form method="post"
+                                    action="{% url 'operaciones:operacion_reabrir' o.pk %}"
+                                    class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('Se revertirán TODOS los materiales de la orden {{ o.numero_orden }} a su estado anterior y la orden se eliminará. ¿Continuar?')">
+                                        ↩ Reactivar
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
                         </td>
                         </td>
                         
@@ -293,31 +309,65 @@
     </table>
     </div>
 
-    <h2 class="h5">Lo que dijo SAP sobre esta orden</h2>
-    <div class="table-responsive">
-    <table class="table table-bordered align-middle text-center">
+    <h2 class="h5">
+        Inconsistencias de esta orden
+        {% if inconsistencias %}
+            <span class="badge bg-warning text-dark">{{ inconsistencias|length }}</span>
+        {% endif %}
+    </h2>
+    <div class="table-responsive mb-4">
+    <table class="table table-bordered align-middle">
         <thead class="table-dark">
-            <tr><th rowspan="2">Carga</th><th rowspan="2">Serie / Producto</th>
-                <th colspan="3" class="bg-primary">Five</th><th colspan="3" class="bg-warning text-dark">SAP</th>
-                <th rowspan="2">Resultado</th></tr>
-            <tr><th>Instalado</th><th>Orden</th><th>Cuenta</th><th>Instalado</th><th>Orden</th><th>Cuenta</th></tr>
+            <tr>
+                <th>Tipo</th><th>Material</th><th>Serial</th><th>Cant.</th>
+                <th>¿Se instaló?</th><th>Detalle</th><th>Estado</th>
+            </tr>
         </thead>
         <tbody>
-        {% for r in registros %}
-            <tr>
-                <td><a href="{% url 'operaciones:carga_sap_detalle' r.carga_id %}">#{{ r.carga_id }}</a>
-                    <div class="small text-muted">{{ r.carga.fecha|date:"d/m/Y H:i" }}</div></td>
-                <td>{{ r.numero_serie|default:r.codigo_unidad|default:r.codigo_producto|default:"—" }}</td>
-                {% include "operaciones/_sap_celdas.html" with r=r %}
-                <td class="text-start">
-                    {% if r.estado == "OK" %}<span class="badge bg-success">Coincide</span>
-                    {% elif r.estado == "IGNORADO" %}<span class="badge bg-secondary">Ignorado</span>
-                    {% else %}<span class="badge bg-danger">{{ r.tipo_error|sap_meta:"etiqueta" }}</span>
-                        <div class="small mt-1">{{ r.diagnostico }}</div>{% endif %}
+        {% for i in inconsistencias %}
+            <tr class="{% if i.estado == 'PENDIENTE' %}table-warning{% endif %}">
+                <td class="fw-semibold">{{ i.get_tipo_display }}</td>
+                <td>{{ i.producto.nombre_completo|default:"—" }}</td>
+                <td>{{ i.serial_reportado|default:"—" }}</td>
+                <td>{{ i.cantidad }}</td>
+                <td>
+                    {% if i.instalado %}
+                        <span class="badge bg-success">Sí (regularizado)</span>
+                    {% else %}
+                        <span class="badge bg-secondary">No, solo reportado</span>
+                    {% endif %}
+                </td>
+                <td class="small">{{ i.detalle }}</td>
+                <td>
+                    {% if i.estado == 'PENDIENTE' %}
+                        <span class="badge bg-warning text-dark">Pendiente</span>
+                    {% else %}
+                        <span class="badge bg-success">Resuelta</span>
+                        <div class="small text-muted">{{ i.nota_resolucion }}</div>
+                    {% endif %}
                 </td>
             </tr>
         {% empty %}
-            <tr><td colspan="9" class="py-3">Ninguna carga de SAP ha incluido esta orden.</td></tr>
+            <tr>
+                <td>
+    {% if o.n_inc %}
+        <a href="?detalle={{ o.numero_orden|urlencode }}"
+           class="badge bg-warning text-dark text-decoration-none"
+           title="Ver inconsistencias">⚠ {{ o.n_inc }}</a>
+        <form method="post"
+              action="{% url 'operaciones:operacion_reabrir' o.pk %}"
+              class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-danger"
+                    onclick="return confirm('Se revertirán TODOS los materiales de la orden {{ o.numero_orden }} a su estado anterior y la orden se eliminará. ¿Continuar?')">
+                ↩ Reactivar
+            </button>
+        </form>
+    {% else %}
+        <span class="text-muted">—</span>
+    {% endif %}
+</td>
+            </tr>
         {% endfor %}
         </tbody>
     </table>
