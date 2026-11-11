@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block titulo %}Ingreso de IVT{% endblock %}
+
+{% block contenido %}
+<div class="container py-4" style="max-width:900px">
+  <h1 class="h4 mb-3">Ingreso de IVT por cajas</h1>
+
+  <form method="post" enctype="multipart/form-data" class="card card-body" id="form-ivt">
+    {% csrf_token %}
+    {{ form.cajas }}
+
+    {% if form.errors %}
+      <div class="alert alert-danger">
+        <b>Revise estos campos:</b>
+        <ul class="mb-0">
+          {% for campo in form %}{% for e in campo.errors %}<li><b>{{ campo.label }}:</b> {{ e }}</li>{% endfor %}{% endfor %}
+          {% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="mb-3">
+      <label class="form-label fw-bold" for="{{ form.numero_orden.id_for_label }}">{{ form.numero_orden.label }}</label>
+      {{ form.numero_orden }}
+      <datalist id="lista_remisiones">
+        {% for r in remisiones_existentes %}<option value="{{ r.numero_remision }}">{% endfor %}
+      </datalist>
+    </div>
+
+    <div id="aviso-remision-existe" class="alert alert-success" style="display:none">
+      <b>Remisión ya registrada.</b> <span id="resumen-remision"></span>
+    </div>
+
+    <div id="datos-remision-nueva" style="display:none">
+      <div class="mb-3">
+        <label class="form-label" for="{{ form.comprobante_imagen.id_for_label }}">{{ form.comprobante_imagen.label }}</label>
+        {{ form.comprobante_imagen }}
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-4"><label class="form-label">{{ form.fecha_recibo_bsi.label }}</label>{{ form.fecha_recibo_bsi }}</div>
+        <div class="col-md-4"><label class="form-label">{{ form.recogido_por.label }}</label>{{ form.recogido_por }}</div>
+        <div class="col-md-4"><label class="form-label">{{ form.recibido_almacen_por.label }}</label>{{ form.recibido_almacen_por }}</div>
+      </div>
+    </div>
+
+    <h2 class="h6 mt-2">Cajas</h2>
+    <table class="table table-sm align-middle">
+      <thead class="table-dark">
+        <tr><th>Caja</th><th>Cantidad</th><th>Consecutivo inicial</th><th>Consecutivo final</th><th></th></tr>
+      </thead>
+      <tbody id="cajas-body"></tbody>
+    </table>
+    <div class="d-flex justify-content-between mb-3">
+      <button type="button" class="btn btn-outline-primary btn-sm" id="btn-caja">+ Agregar caja</button>
+      <b>Total: <span id="total-ivt">0</span> IVT</b>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">{{ form.observacion.label }}</label>{{ form.observacion }}
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary" type="submit">Registrar ingreso</button>
+      <a class="btn btn-outline-secondary" href="{% url 'almacen:ivt_lista' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  /* ---------- Remisión: mostrar datos solo si es nueva ---------- */
+  var url = "{% url 'almacen:api_remision' %}";
+  var inp = document.getElementById("{{ form.numero_orden.id_for_label }}");
+  var nueva = document.getElementById("datos-remision-nueva");
+  var existe = document.getElementById("aviso-remision-existe");
+  var resumen = document.getElementById("resumen-remision");
+  var campos = [
+    "{{ form.comprobante_imagen.id_for_label }}", "{{ form.fecha_recibo_bsi.id_for_label }}",
+    "{{ form.recogido_por.id_for_label }}", "{{ form.recibido_almacen_por.id_for_label }}"
+  ].map(function (id) { return document.getElementById(id); });
+  var t = null, ultima = 0;
+
+  function modo(m, d) {
+    var esNueva = m === "nueva";
+    nueva.style.display = esNueva ? "" : "none";
+    existe.style.display = m === "existe" ? "" : "none";
+    campos.forEach(function (c) { c.required = esNueva; c.disabled = !esNueva; });
+    if (m === "existe" && d) {
+      var p = [];
+      if (d.fecha) p.push("recibida por BSI el " + d.fecha);
+      if (d.recogido_por) p.push("recogida por " + d.recogido_por);
+      resumen.textContent = p.join(", ");
+    }
+  }
+  function consultar() {
+    var n = inp.value.trim();
+    if (!n) return modo("vacio");
+    var id = ++ultima;
+    fetch(url + "?numero=" + encodeURIComponent(n)).then(function (r) { return r.json(); })
+      .then(function (d) { if (id === ultima) modo(d.existe ? "existe" : "nueva", d); })
+      .catch(function () { if (id === ultima) modo("nueva"); });
+  }
+  inp.addEventListener("input", function () { clearTimeout(t); t = setTimeout(consultar, 350); });
+  modo("vacio"); if (inp.value.trim()) consultar();
+
+  /* ---------- Cajas ---------- */
+  var tbody = document.getElementById("cajas-body");
+  var hidden = document.getElementById("id_cajas");
+  var siguiente = {{ siguiente_ivt }};
+  var cajas = [];
+  try { cajas = JSON.parse(hidden.value) || []; } catch (e) { cajas = []; }
+
+  function pad(n) { var s = String(n); while (s.length < 5) s = "0" + s; return s; }
+  function sincronizar() {
+    hidden.value = JSON.stringify(cajas);
+    document.getElementById("total-ivt").textContent =
+      cajas.reduce(function (a, c) { return a + (c.cantidad > 0 ? c.cantidad : 0); }, 0);
+  }
+  function pintar() {
+    tbody.innerHTML = "";
+    cajas.forEach(function (c, i) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td>' + (i + 1) + '</td>' +
+        '<td><input type="number" min="1" class="form-control form-control-sm"></td>' +
+        '<td><input type="number" min="1" class="form-control form-control-sm"></td>' +
+        '<td class="fw-bold"></td>' +
+        '<td><button type="button" class="btn btn-sm btn-outline-danger">✕</button></td>';
+      var inputs = tr.querySelectorAll("input"), fin = tr.children[3];
+      inputs[0].value = c.cantidad; inputs[1].value = c.inicial;
+      function act() {
+        c.cantidad = parseInt(inputs[0].value, 10) || 0;
+        c.inicial = parseInt(inputs[1].value, 10) || 0;
+        fin.textContent = (c.cantidad > 0 && c.inicial > 0) ? pad(c.inicial + c.cantidad - 1) : "—";
+        sincronizar();
+      }
+      inputs[0].addEventListener("input", act); inputs[1].addEventListener("input", act);
+      tr.querySelector("button").onclick = function () { cajas.splice(i, 1); pintar(); };
+      tbody.appendChild(tr); act();
+    });
+    sincronizar();
+  }
+  function agregar() {
+    var u = cajas[cajas.length - 1];
+    cajas.push({ cantidad: u ? u.cantidad : 16000, inicial: u ? u.inicial + u.cantidad : siguiente });
+    pintar();
+  }
+  document.getElementById("btn-caja").addEventListener("click", agregar);
+  if (!cajas.length) agregar(); else pintar();
+})();
+</script>
+{% endblock %}

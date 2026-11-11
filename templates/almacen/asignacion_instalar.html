@@ -224,6 +224,8 @@
 
     var urlCheck = "{% url 'almacen:api_validar_serial_instalacion' %}";
     var tecnicoId = "{{ tecnico.pk }}";
+    var urlIvt = "{% url 'almacen:api_validar_ivt' %}";
+    var opIvt = "{% if operacion %}&operacion={{ operacion.pk }}{% endif %}";
 
     /* ============================================================
        LECTURA SEGURA DE LOS JSON DEL HTML
@@ -1272,6 +1274,24 @@
     var resumenErr = document.querySelector(".campo-error, .card[style*='fdecea']");
     if (resumenErr) resumenErr.scrollIntoView({ behavior: "smooth", block: "center" });
 
+        var campoIvt = $("id_numero_ivt");
+    if (campoIvt) {
+        var avisoIvt = document.createElement("div");
+        avisoIvt.className = "msg";
+        campoIvt.parentNode.appendChild(avisoIvt);
+
+        campoIvt.addEventListener("blur", function () {
+            var n = campoIvt.value.trim();
+            if (!n) { avisoIvt.textContent = ""; return; }
+            fetch(urlIvt + "?tecnico=" + encodeURIComponent(tecnicoId) +
+                  "&numero=" + encodeURIComponent(n) + opIvt)
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    avisoIvt.textContent = d.mensaje;
+                    avisoIvt.className = "msg " + (d.ok ? "ok" : "err");
+                });
+        });
+    }
 })();
 </script>
 {% endblock %}

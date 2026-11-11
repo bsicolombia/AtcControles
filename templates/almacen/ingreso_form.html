@@ -131,6 +131,60 @@
         font-size: 12px;
         font-weight: 600;
     }
+    .ivt-caja { display:grid; grid-template-columns: 1fr 1fr auto auto; gap:8px; align-items:center; margin-bottom:8px; }
+    .ivt-caja .ivt-rango { color:#2d6a4f; font-weight:700; white-space:nowrap; }
+    @media (max-width:600px){ .ivt-caja { grid-template-columns: 1fr 1fr; } }
+
+    #bloque-material,
+#bloque-ivt {
+    width: 100%;
+}
+
+#bloque-ivt .ivt-caja {
+    display: grid;
+    grid-template-columns: minmax(100px, 1fr) minmax(100px, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 12px;
+    background: #f7fbf8;
+    border: 1px solid #dce8e1;
+    border-radius: 9px;
+}
+
+#bloque-ivt .ivt-caja input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#bloque-ivt .ivt-rango {
+    color: #2d6a4f;
+    font-weight: 700;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+#bloque-ivt .ivt-eliminar {
+    min-width: 35px;
+    height: 35px;
+    border: 1px solid #fecaca;
+    border-radius: 7px;
+    background: #fff;
+    color: #b91c1c;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+@media(max-width:600px) {
+    #bloque-ivt .ivt-caja {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    #bloque-ivt .ivt-rango {
+        grid-column: 1;
+    }
+}
 
     /* Observaciones */
     .observaciones-campo textarea {
@@ -306,6 +360,28 @@
                 </div>
             </div>
 
+            <div class="campo ingreso-campo">
+                <label>¿Qué está ingresando?</label>
+
+                <div style="display:flex;gap:22px;flex-wrap:wrap">
+                    <label style="display:inline-flex;gap:6px;align-items:center;font-weight:500">
+                        <input type="radio"
+                            name="tipo_ingreso"
+                            value="PRODUCTO"
+                            {% if tipo_ingreso != "IVT" %}checked{% endif %}>
+                        Material
+                    </label>
+
+                    <label style="display:inline-flex;gap:6px;align-items:center;font-weight:500">
+                        <input type="radio"
+                            name="tipo_ingreso"
+                            value="IVT"
+                            {% if tipo_ingreso == "IVT" %}checked{% endif %}>
+                        IVT (cajas)
+                    </label>
+                </div>
+            </div>
+
 
             <!-- ==========================================
                  FECHA
@@ -327,7 +403,7 @@
                 {% endfor %}
             </div>
 
-
+            <div id="bloque-material">
             <!-- ==========================================
                  PRODUCTO
                  ========================================== -->
@@ -440,6 +516,33 @@
                     {% endfor %}
                 </div>
             </div>
+        </div>
+
+        <div id="bloque-ivt" style="display:none">
+
+            <div class="campo ingreso-campo">
+
+                <label>Cajas de IVT</label>
+
+                <div id="ivt-cajas"></div>
+
+                <button type="button" class="btn" id="btn-add-caja">
+                    + Agregar caja
+                </button>
+
+                <span class="ayuda" style="display:block;margin-top:8px">
+                    Cada caja corresponde a un rango consecutivo.
+                    Ejemplo: inicial 00001 y cantidad 100 = 00001 a 00100.
+                </span>
+
+                <div class="aviso-codigo visible" style="margin-top:12px">
+                    <strong>Siguiente consecutivo sugerido:</strong>
+                    {{ siguiente_ivt|stringformat:"05d" }}
+                </div>
+
+            </div>
+
+        </div>
 
 
             <!-- ==========================================
@@ -664,6 +767,203 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Si el formulario volvió con errores, recupera la info del producto elegido
     actualizarProducto(selectorProducto.getValue());
+    
+// ==========================================
+// TIPO DE INGRESO: MATERIAL / IVT
+// ==========================================
+
+const radios = document.querySelectorAll(
+    'input[name="tipo_ingreso"]'
+);
+
+const bloqueMaterial = document.getElementById("bloque-material");
+const bloqueIVT = document.getElementById("bloque-ivt");
+const contCajas = document.getElementById("ivt-cajas");
+const btnAddCaja = document.getElementById("btn-add-caja");
+
+const siguienteIVT = Number("{{ siguiente_ivt|default:1 }}");
+
+const reqProducto = producto.required;
+const reqCantidad = cantidad ? cantidad.required : false;
+
+function pad(n) {
+    return String(n).padStart(5, "0");
+}
+
+// Crear una caja
+function filaCaja(ini = "", cant = "") {
+
+    const div = document.createElement("div");
+    div.className = "ivt-caja";
+
+    const inputInicial = document.createElement("input");
+    inputInicial.type = "number";
+    inputInicial.min = "1";
+    inputInicial.name = "ivt_inicial";
+    inputInicial.className = "input";
+    inputInicial.placeholder = "Consecutivo inicial";
+    inputInicial.required = true;
+    inputInicial.value = ini;
+
+    const inputCantidad = document.createElement("input");
+    inputCantidad.type = "number";
+    inputCantidad.min = "1";
+    inputCantidad.name = "ivt_cantidad";
+    inputCantidad.className = "input";
+    inputCantidad.placeholder = "Cantidad";
+    inputCantidad.required = true;
+    inputCantidad.value = cant;
+
+    const rango = document.createElement("small");
+    rango.className = "ivt-rango";
+    rango.textContent = "—";
+
+    const eliminar = document.createElement("button");
+    eliminar.type = "button";
+    eliminar.className = "ivt-eliminar";
+    eliminar.textContent = "×";
+    eliminar.title = "Eliminar caja";
+
+    function calcular() {
+
+        const inicial = parseInt(inputInicial.value, 10);
+        const cantidadCaja = parseInt(inputCantidad.value, 10);
+
+        inputInicial.setCustomValidity("");
+        inputCantidad.setCustomValidity("");
+
+        if (
+            !Number.isInteger(inicial) ||
+            !Number.isInteger(cantidadCaja) ||
+            inicial < 1 ||
+            cantidadCaja < 1
+        ) {
+            rango.textContent = "—";
+            return;
+        }
+
+        const final = inicial + cantidadCaja - 1;
+
+        if (final > 99999) {
+
+            inputCantidad.setCustomValidity(
+                "El rango no puede superar el consecutivo 99999."
+            );
+
+            rango.textContent = "Rango inválido";
+            return;
+        }
+
+        rango.textContent = pad(inicial) + " - " + pad(final);
+    }
+
+    inputInicial.addEventListener("input", calcular);
+    inputCantidad.addEventListener("input", calcular);
+
+    eliminar.addEventListener("click", function () {
+        div.remove();
+    });
+
+    div.appendChild(inputInicial);
+    div.appendChild(inputCantidad);
+    div.appendChild(rango);
+    div.appendChild(eliminar);
+
+    contCajas.appendChild(div);
+    // Aplicar el estado según el tipo de ingreso seleccionado
+    const esIVT = document.querySelector(
+        'input[name="tipo_ingreso"]:checked'
+    )?.value === "IVT";
+
+    div.querySelectorAll("input").forEach(function(campo) {
+        campo.disabled = !esIVT;
+        campo.required = esIVT;
+    });
+
+    calcular();
+}
+
+// Agregar caja
+btnAddCaja.addEventListener("click", function () {
+
+    let siguiente = siguienteIVT;
+
+    const filas = contCajas.querySelectorAll(".ivt-caja");
+
+    if (filas.length) {
+
+        const ultima = filas[filas.length - 1];
+        const campos = ultima.querySelectorAll("input");
+
+        const inicial = parseInt(campos[0].value, 10);
+        const cantidadCaja = parseInt(campos[1].value, 10);
+
+        if (inicial > 0 && cantidadCaja > 0) {
+            siguiente = inicial + cantidadCaja;
+        }
+    }
+
+    filaCaja(siguiente, "");
+});
+
+    function cambiarTipo() {
+
+        const seleccionado = document.querySelector(
+            'input[name="tipo_ingreso"]:checked'
+        );
+
+        const esIVT = seleccionado?.value === "IVT";
+
+        // Mostrar y ocultar bloques
+        bloqueMaterial.style.display = esIVT ? "none" : "block";
+        bloqueIVT.style.display = esIVT ? "block" : "none";
+
+        // Activar o desactivar TomSelect
+        if (esIVT) {
+            selectorProducto.disable();
+        } else {
+            selectorProducto.enable();
+        }
+
+        // Campos de material
+        producto.required = !esIVT && reqProducto;
+
+        if (cantidad) {
+            cantidad.required = !esIVT && reqCantidad;
+        }
+
+        if (seriales) {
+            seriales.required = !esIVT &&
+                serialesSeccion.classList.contains("visible");
+        }
+
+        // IMPORTANTE:
+        // Los campos IVT deben estar habilitados solamente
+        // cuando se selecciona IVT.
+        contCajas.querySelectorAll("input").forEach(function(campo) {
+            campo.disabled = !esIVT;
+            campo.required = esIVT;
+        });
+
+        if (!esIVT) {
+            actualizarProducto(selectorProducto.getValue());
+        }
+    }
+
+    // Eventos
+    radios.forEach(function (radio) {
+        radio.addEventListener("change", cambiarTipo);
+    });
+
+    // Primera caja
+        // Crear primera caja si no existe
+    if (!contCajas.querySelector(".ivt-caja")) {
+        filaCaja(siguienteIVT, "");
+    }
+
+    // Estado inicial
+    cambiarTipo();
+
 });
 </script>
 {% endblock %}

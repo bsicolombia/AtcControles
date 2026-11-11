@@ -21,9 +21,9 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
-
+from django.utils.dateparse import parse_date
 from .models import (Asignacion, Categoria, Inconsistencia, Inventario,
-                     MovimientoInventario, Producto, UnidadSerializada)
+                     MovimientoInventario, Producto, UnidadSerializada,IVT)
 from django.db.models import Count
 from usuarios.roles import DIGITADOR, tiene_rol
 from django.db.models import Prefetch
@@ -35,6 +35,8 @@ from usuarios.roles import ADMINISTRADOR
 from urllib.parse import urlencode
 from . import services
 from .forms import (
+    AsignarIVTForm,
+    IngresoIVTForm,
     AsignacionForm,
     CambioEstadoForm,
     CategoriaForm,
@@ -72,8 +74,16 @@ from django.http import HttpResponse
 from io import BytesIO
 from operaciones.models import CargaSAP, RegistroSAP
 from django.db.models import Sum
-
-
+from django.db.models import Min, Max
+ETIQUETAS_ERRORES = {
+    "NO_ASIGNADO": "INSTALADO NO ASIGNADO A ESTE TECNICO",
+    "OTRO_TECNICO": "INSTALADO ASIGNADO A OTRO TECNICO",
+    "NO_REGISTRADO": "SERIAL INEXISTENTE",
+    "YA_INSTALADO": "YA INSTALADO",
+    "NO_UTILIZABLE": "DAÑADO / BAJA",
+    "EXCEDE_CANTIDAD": "EXCEDE CANTIDAD ASIGNADA",
+    "SIN_STOCK": "SIN STOCK",
+}
 
 def tecnicos_queryset():
     return (
@@ -732,15 +742,72 @@ class IngresoView(FormPageMixin, RolRequeridoMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # Pasamos todas las remisiones existentes para alimentar el buscador/select
         ctx["remisiones_existentes"] = RemisionIngreso.objects.all().order_by("-fecha_registro")[:50]
+        ctx["siguiente_ivt"] = (IVT.objects.aggregate(m=Max("numero"))["m"] or 0) + 1
         return ctx
 
     def post(self, request, *args, **kwargs):
+        if request.POST.get("tipo_ingreso") == "IVT":
+            return self._post_ivt(request)
+
         form = self.form_class(request.POST, request.FILES)
         if form.is_valid():
             return self.form_valid(form)
         return self.render_to_response(self.get_context_data(form=form))
+
+    def _post_ivt(self, request):
+        p = request.POST
+        numero = p.get("numero_orden", "").strip().upper()
+
+        def volver():
+            form = self.form_class(initial={"numero_orden": numero})
+            return self.render_to_response(
+                self.get_context_data(form=form, tipo_ingreso="IVT")
+            )
+
+        if not numero:
+            messages.error(request, "Escriba el número de orden / remisión.")
+            return volver()
+
+        cajas = []
+        try:
+            for ini, cant in zip(p.getlist("ivt_inicial"), p.getlist("ivt_cantidad")):
+                if not ini.strip() and not cant.strip():
+                    continue
+                cajas.append((int(ini), int(cant)))
+        except ValueError:
+            messages.error(request, "Hay una caja con consecutivo o cantidad inválidos.")
+            return volver()
+
+        if not cajas:
+            messages.error(request, "Agregue al menos una caja de IVT.")
+            return volver()
+
+        try:
+            with transaction.atomic():
+                remision = services.obtener_o_crear_remision(
+                    numero=numero,
+                    usuario=request.user,
+                    imagen=request.FILES.get("comprobante_imagen"),
+                    fecha_recibo_bsi=parse_date(p.get("fecha_recibo_bsi") or ""),
+                    recogido_por=p.get("recogido_por", "").strip(),
+                    recibido_almacen_por=p.get("recibido_almacen_por", "").strip(),
+                )
+                creadas = services.registrar_ingreso_ivt(
+                    cajas=cajas, remision=remision, usuario=request.user,
+                    fecha_ingreso=timezone.localdate(),
+                    observacion=p.get("observacion", "").strip(),
+                )
+        except services.ErrorInventario as e:
+            messages.error(request, str(e))
+            return volver()
+
+        total = sum(c.cantidad for c in creadas)
+        messages.success(
+            request,
+            f"Ingresaron {total} IVT en {len(creadas)} caja(s) con la remisión {numero}.",
+        )
+        return redirect(f"{reverse('almacen:ivt_lista')}?q={numero}")
 
     def form_valid(self, form):
         d = form.cleaned_data
@@ -1078,33 +1145,34 @@ class UnidadUpdateView(FormPageMixin, RolRequeridoMixin, UpdateView):
 # ============================================================
 # CONSOLIDADO DE ASIGNACIONES, FIVE Y SAP
 # ============================================================
-
 def _obtener_contexto_asignaciones(request):
     """
-    Construye el consolidado por técnico y producto.
+    Consolidado por técnico y material.
 
-    ASIGNADOS:
-        Cantidad que se ha entregado al técnico y no se ha devuelto.
-
-    FIVE:
-        Cantidad instalada registrada en el sistema.
-
-    SAP:
-        Cantidad reportada en la última carga SAP.
-
-    DEBE_TENER:
-        Cantidad asignada menos la cantidad reportada por SAP,
-        sin permitir resultados negativos.
+    ASIGNADOS:    material entregado y no devuelto.
+    FIVE:         cantidad instalada según FIVE.
+    SAP:          cantidad instalada reportada por SAP.
+    DEBE_TENER:   ASIGNADOS - mayor valor entre FIVE y SAP.
+    DIFERENCIAS:  diferencia absoluta entre FIVE y SAP.
+    ERRORES:      una fila por tipo de Inconsistencia pendiente,
+                  con su cantidad en la columna del material.
+    IVT:          consolidado independiente por técnico.
     """
 
     q = request.GET.get("q", "").strip()
     estado_sel = request.GET.get("estado", "").strip()
     tecnico_sel = request.GET.get("tecnico", "").strip()
+    ivt_estado_sel = request.GET.get("ivt_estado", "").strip()
+
+    # =========================================================
+    # ASIGNACIONES
+    # =========================================================
 
     qs = (
         Asignacion.objects
         .select_related(
             "tecnico",
+            "tecnico__supervisor",
             "producto",
             "producto__categoria",
             "unidad_serializada",
@@ -1113,27 +1181,11 @@ def _obtener_contexto_asignaciones(request):
         .order_by("-fecha_asignacion", "-id")
     )
 
-    # --------------------------------------------------------
-    # FILTRO POR TÉCNICO
-    # --------------------------------------------------------
-
     if tecnico_sel.isdigit():
-        qs = qs.filter(
-            tecnico_id=int(tecnico_sel)
-        )
-
-    # --------------------------------------------------------
-    # FILTRO POR ESTADO DE ASIGNACIÓN
-    # --------------------------------------------------------
+        qs = qs.filter(tecnico_id=int(tecnico_sel))
 
     if estado_sel:
-        qs = qs.filter(
-            estado=estado_sel
-        )
-
-    # --------------------------------------------------------
-    # BÚSQUEDA GENERAL
-    # --------------------------------------------------------
+        qs = qs.filter(estado=estado_sel)
 
     if q:
         filtros = (
@@ -1141,13 +1193,9 @@ def _obtener_contexto_asignaciones(request):
             | Q(tecnico__first_name__icontains=q)
             | Q(tecnico__last_name__icontains=q)
             | Q(tecnico__username__icontains=q)
-
-            # Supervisor
             | Q(tecnico__supervisor__first_name__icontains=q)
             | Q(tecnico__supervisor__last_name__icontains=q)
             | Q(tecnico__supervisor__username__icontains=q)
-
-            # Producto
             | Q(producto__nombre__icontains=q)
             | Q(producto__codigo_producto__icontains=q)
             | Q(producto__marca__icontains=q)
@@ -1155,22 +1203,15 @@ def _obtener_contexto_asignaciones(request):
             | Q(producto__medida__icontains=q)
             | Q(producto__color__icontains=q)
             | Q(producto__presentacion__icontains=q)
-
-            # Operación
             | Q(operacion__numero_orden__icontains=q)
             | Q(operacion__numero_cuenta_contrato__icontains=q)
-
-            # Unidad serializada
             | Q(unidad_serializada__codigo__icontains=q)
             | Q(unidad_serializada__numero_serie__icontains=q)
         )
 
         unidad = (
             UnidadSerializada.objects
-            .filter(
-                Q(codigo__iexact=q)
-                | Q(numero_serie__iexact=q)
-            )
+            .filter(Q(codigo__iexact=q) | Q(numero_serie__iexact=q))
             .first()
         )
 
@@ -1185,9 +1226,77 @@ def _obtener_contexto_asignaciones(request):
         else:
             qs = qs.filter(filtros)
 
-    # --------------------------------------------------------
-    # AGRUPAR ASIGNACIONES POR TÉCNICO Y PRODUCTO
-    # --------------------------------------------------------
+    # =========================================================
+    # IVT (consulta independiente)
+    # =========================================================
+
+    ivt_queryset = (
+        IVT.objects
+        .select_related("tecnico", "operacion", "caja", "caja__remision")
+        .filter(tecnico__isnull=False)
+    )
+
+    if tecnico_sel.isdigit():
+        ivt_queryset = ivt_queryset.filter(tecnico_id=int(tecnico_sel))
+
+    if ivt_estado_sel in IVT.Estado.values:
+        ivt_queryset = ivt_queryset.filter(estado=ivt_estado_sel)
+
+    if q:
+        filtros_ivt = (
+            Q(operacion__numero_orden__icontains=q)
+            | Q(caja__remision__numero_remision__icontains=q)
+        )
+        if q.isdigit():
+            filtros_ivt |= Q(numero=int(q))
+
+        ivt_queryset = ivt_queryset.filter(filtros_ivt)
+
+    # =========================================================
+    # INCONSISTENCIAS PENDIENTES (técnico, material, tipo)
+    # =========================================================
+
+    inconsistencias_qs = Inconsistencia.objects.filter(
+        tecnico__isnull=False,
+        estado=Inconsistencia.Estado.PENDIENTE,
+    )
+
+    if tecnico_sel.isdigit():
+        inconsistencias_qs = inconsistencias_qs.filter(
+            tecnico_id=int(tecnico_sel)
+        )
+
+    if q:
+        inconsistencias_qs = inconsistencias_qs.filter(
+            Q(tecnico__cedula__icontains=q)
+            | Q(tecnico__first_name__icontains=q)
+            | Q(tecnico__last_name__icontains=q)
+            | Q(tecnico__username__icontains=q)
+            | Q(serial_reportado__icontains=q)
+            | Q(producto__nombre__icontains=q)
+            | Q(producto__codigo_producto__icontains=q)
+            | Q(operacion__numero_orden__icontains=q)
+        )
+
+    errores_agrupados = list(
+        inconsistencias_qs
+        .values("tecnico_id", "producto_id", "tipo")
+        .annotate(n=Count("id"))
+    )
+
+    errores_dict = {}    # (tecnico, producto, tipo) -> n
+    errores_total = {}   # (tecnico, tipo) -> n  (incluye los sin material)
+
+    for e in errores_agrupados:
+        clave_total = (e["tecnico_id"], e["tipo"])
+        errores_total[clave_total] = errores_total.get(clave_total, 0) + e["n"]
+
+        if e["producto_id"]:
+            errores_dict[(e["tecnico_id"], e["producto_id"], e["tipo"])] = e["n"]
+
+    # =========================================================
+    # AGRUPAR TÉCNICOS Y PRODUCTOS
+    # =========================================================
 
     productos_dict = OrderedDict()
     tecnicos_dict = OrderedDict()
@@ -1198,190 +1307,270 @@ def _obtener_contexto_asignaciones(request):
         producto = asignacion.producto
         tecnico = asignacion.tecnico
 
-        productos_dict.setdefault(
-            producto.pk,
-            producto,
-        )
+        productos_dict.setdefault(producto.pk, producto)
 
         bloque = tecnicos_dict.setdefault(
             tecnico.pk,
-            {
-                "tecnico": tecnico,
-                "productos": {},
-            },
+            {"tecnico": tecnico, "productos": {}},
         )
 
-        datos = bloque["productos"].setdefault(
-            producto.pk,
-            _datos_vacios(),
-        )
+        datos = bloque["productos"].setdefault(producto.pk, _datos_vacios())
 
-        # Las asignaciones devueltas no cuentan
-        # como materiales en poder del técnico.
         if asignacion.estado == Asignacion.Estado.DEVUELTA:
             continue
 
-        # ----------------------------------------------------
-        # ASIGNADOS
-        # ----------------------------------------------------
-
         datos["asignados"] += asignacion.cantidad or 0
-
-        # ----------------------------------------------------
-        # FIVE: CANTIDAD INSTALADA
-        # ----------------------------------------------------
 
         if asignacion.estado == Asignacion.Estado.INSTALADA:
             datos["five"] += asignacion.cantidad or 0
         else:
             datos["five"] += asignacion.cantidad_instalada or 0
 
-    productos = list(productos_dict.values())
-    tecnicos = []
+    # =========================================================
+    # TÉCNICOS QUE SOLO TIENEN IVT O SOLO ERRORES
+    # =========================================================
+
+    ids_tecnicos_extra = set(
+        ivt_queryset.values_list("tecnico_id", flat=True).distinct()
+    )
+    ids_tecnicos_extra |= {e["tecnico_id"] for e in errores_agrupados}
+    ids_tecnicos_extra -= set(tecnicos_dict.keys())
+
+    if ids_tecnicos_extra:
+        for t in (
+            User.objects
+            .filter(pk__in=ids_tecnicos_extra)
+            .select_related("supervisor")
+        ):
+            tecnicos_dict[t.pk] = {"tecnico": t, "productos": {}}
+
+    # =========================================================
+    # MATERIALES QUE SOLO TIENEN ERRORES
+    # =========================================================
+
+    ids_prod_extra = {
+        e["producto_id"] for e in errores_agrupados if e["producto_id"]
+    } - set(productos_dict.keys())
+
+    if ids_prod_extra:
+        for p in Producto.objects.filter(pk__in=ids_prod_extra):
+            productos_dict[p.pk] = p
+
+    # =========================================================
+    # CONSOLIDADO IVT POR TÉCNICO
+    # =========================================================
+
+    ivt_por_tecnico = list(
+        ivt_queryset
+        .values(
+            "tecnico_id",
+            "tecnico__first_name",
+            "tecnico__last_name",
+            "tecnico__username",
+        )
+        .annotate(
+            total=Count("id"),
+            disponibles=Count("id", filter=Q(estado=IVT.Estado.DISPONIBLE)),
+            asignados=Count("id", filter=Q(estado=IVT.Estado.ASIGNADO)),
+            instalados=Count("id", filter=Q(estado=IVT.Estado.INSTALADO)),
+            anulados=Count("id", filter=Q(estado=IVT.Estado.ANULADO)),
+            perdidos=Count("id", filter=Q(estado=IVT.Estado.PERDIDO)),
+            minimo_asignado=Min("numero", filter=Q(estado=IVT.Estado.ASIGNADO)),
+            maximo_asignado=Max("numero", filter=Q(estado=IVT.Estado.ASIGNADO)),
+            minimo_instalado=Min("numero", filter=Q(estado=IVT.Estado.INSTALADO)),
+            maximo_instalado=Max("numero", filter=Q(estado=IVT.Estado.INSTALADO)),
+        )
+        .order_by("tecnico__first_name", "tecnico__last_name")
+    )
+
+    ivt_datos = {fila["tecnico_id"]: fila for fila in ivt_por_tecnico}
+
+    ivt_vacio = {
+        "total": 0, "disponibles": 0, "asignados": 0,
+        "instalados": 0, "anulados": 0, "perdidos": 0,
+        "minimo_asignado": None, "maximo_asignado": None,
+        "minimo_instalado": None, "maximo_instalado": None,
+    }
+
+    # =========================================================
+    # ORDENAR (técnicos por nombre, materiales por nombre/medida)
+    # =========================================================
+
+    productos = sorted(
+        productos_dict.values(),
+        key=lambda p: (p.nombre or "", p.medida or ""),
+    )
+
+    bloques = sorted(
+        tecnicos_dict.values(),
+        key=lambda b: (
+            (b["tecnico"].first_name or "").lower(),
+            (b["tecnico"].last_name or "").lower(),
+            b["tecnico"].username,
+        ),
+    )
+
+    # =========================================================
+    # CONSTRUIR FILAS POR TÉCNICO
+    # =========================================================
 
     base_unidades = reverse("almacen:unidades")
-    base_inventario = reverse("dashboard")
+    base_inventario = reverse("almacen:inventario")
+    base_inconsistencias = reverse("almacen:inconsistencias")
 
-    # --------------------------------------------------------
-    # CONSTRUIR LAS FILAS DEL CONSOLIDADO
-    # --------------------------------------------------------
+    def url_celda(tecnico_pk, producto, tipo):
+        if producto.es_serializado:
+            estado = (
+                UnidadSerializada.Estado.INSTALADO
+                if tipo == "FIVE"
+                else UnidadSerializada.Estado.ASIGNADO
+            )
+            return f"{base_unidades}?" + urlencode({
+                "tecnico": tecnico_pk,
+                "producto": producto.pk,
+                "estado": estado,
+            })
 
-    for bloque in tecnicos_dict.values():
+        return f"{base_inventario}?" + urlencode({
+            "tecnico": tecnico_pk,
+            "q": producto.codigo_producto or producto.nombre,
+        })
+
+    tecnicos = []
+
+    for bloque in bloques:
+        tecnico = bloque["tecnico"]
 
         filas = {
             "ASIGNADOS": [],
+            "DEBE_TENER": [],
             "FIVE": [],
             "SAP": [],
-            "DEBE_TENER": [],
+            "DIFERENCIAS": [],
         }
 
         productos_detalle = []
 
         for producto in productos:
-
-            datos = bloque["productos"].get(
-                producto.pk,
-                _datos_vacios(),
-            )
+            datos = bloque["productos"].get(producto.pk, _datos_vacios())
 
             asignados = datos["asignados"]
             five = datos["five"]
+            sap = datos_sap.get((tecnico.pk, producto.pk), 0)
 
-            # Cantidad reportada por SAP para este técnico
-            # y este producto.
-            sap = datos_sap.get(
-                (
-                    bloque["tecnico"].pk,
-                    producto.pk,
-                ),
-                0,
-            )
-
-            debe_tener = max(
-                asignados - sap,
-                0,
-            )
-
+            mayor_instalado = max(five, sap)
+            debe_tener = max(asignados - mayor_instalado, 0)
+            diferencia = abs(five - sap)
             coincide = sap == five
 
-            # ------------------------------------------------
-            # ENLACE PARA CADA CELDA
-            # ------------------------------------------------
-
-            def crear_celda(cantidad, tipo):
-                if producto.es_serializado:
-
-                    estado = (
-                        UnidadSerializada.Estado.INSTALADO
-                        if tipo == "FIVE"
-                        else UnidadSerializada.Estado.ASIGNADO
-                    )
-
-                    parametros = urlencode({
-                        "tecnico": bloque["tecnico"].pk,
-                        "producto": producto.pk,
-                        "estado": estado,
-                    })
-
-                    url = f"{base_unidades}?{parametros}"
-
-                else:
-                    parametros = urlencode({
-                        "tecnico": bloque["tecnico"].pk,
-                        "q": (
-                            producto.codigo_producto
-                            or producto.nombre
-                        ),
-                    })
-
-                    url = f"{base_inventario}?{parametros}"
-
+            def celda(cantidad, tipo):
                 return {
                     "cantidad": cantidad,
-                    "url": url,
+                    "url": url_celda(tecnico.pk, producto, tipo),
                 }
 
-            # ASIGNADOS
-            filas["ASIGNADOS"].append(
-                crear_celda(
-                    asignados,
-                    "ASIGNADOS",
-                )
-            )
+            filas["ASIGNADOS"].append(celda(asignados, "ASIGNADOS"))
+            filas["DEBE_TENER"].append(celda(debe_tener, "DEBE_TENER"))
+            filas["FIVE"].append(celda(five, "FIVE"))
 
-            # FIVE
-            filas["FIVE"].append(
-                crear_celda(
-                    five,
-                    "FIVE",
-                )
-            )
-
-            # SAP
-            celda_sap = crear_celda(
-                sap,
-                "SAP",
-            )
-
+            celda_sap = celda(sap, "SAP")
             celda_sap["coincide"] = coincide
-
-            celda_sap["estado_conciliacion"] = (
-                "ok" if coincide else "error"
-            )
-
+            celda_sap["estado_conciliacion"] = "ok" if coincide else "error"
             filas["SAP"].append(celda_sap)
 
-            # DEBE TENER
-            filas["DEBE_TENER"].append(
-                crear_celda(
-                    debe_tener,
-                    "DEBE_TENER",
-                )
-            )
+            filas["DIFERENCIAS"].append(celda(diferencia, "DIFERENCIAS"))
 
-            # DETALLE DEL PRODUCTO
             productos_detalle.append({
                 "producto": producto,
                 "asignados": asignados,
                 "five": five,
                 "sap": sap,
+                "mayor_instalado": mayor_instalado,
+                "diferencia": diferencia,
                 "debe_tener": debe_tener,
             })
 
+        # -----------------------------------------------------
+        # FILAS DE ERRORES: una por tipo de inconsistencia
+        # -----------------------------------------------------
+
+        filas_errores = []
+
+        for tipo, etiqueta in Inconsistencia.Tipo.choices:
+            celdas_error = []
+
+            for producto in productos:
+                n = errores_dict.get((tecnico.pk, producto.pk, tipo), 0)
+
+                url = ""
+                if n:
+                    url = f"{base_inconsistencias}?" + urlencode({
+                        "tipo": tipo,
+                        "estado": "PENDIENTE",
+                        "tecnico": tecnico.pk,
+                        "producto": producto.pk,
+                    })
+
+                celdas_error.append({"cantidad": n, "url": url})
+
+            total_tipo = errores_total.get((tecnico.pk, tipo), 0)
+
+            filas_errores.append({
+                "tipo": tipo,
+                "etiqueta": etiqueta,
+                "corto": ETIQUETAS_ERRORES.get(tipo, tipo),
+                "celdas": celdas_error,
+                "total": total_tipo,
+                "url_total": (
+                    f"{base_inconsistencias}?" + urlencode({
+                        "tipo": tipo,
+                        "estado": "PENDIENTE",
+                        "tecnico": tecnico.pk,
+                    })
+                ) if total_tipo else "",
+            })
+
         tecnicos.append({
-            "tecnico": bloque["tecnico"],
+            "tecnico": tecnico,
             "filas": filas,
+            "errores": filas_errores,
             "productos_detalle": productos_detalle,
+            "ivt": ivt_datos.get(tecnico.pk, ivt_vacio),
         })
+
+    # =========================================================
+    # RESUMEN GENERAL IVT (sin filtros de pantalla)
+    # =========================================================
+
+    ivt_total = IVT.objects.count()
+    ivt_disponibles = IVT.objects.filter(estado=IVT.Estado.DISPONIBLE).count()
+
+    # =========================================================
+    # CONTEXTO
+    # =========================================================
 
     return {
         "tecnicos": tecnicos,
         "productos": productos,
+
         "estados": Asignacion.Estado.choices,
+        "ivt_estados": IVT.Estado.choices,
+
         "estado_sel": estado_sel,
+        "ivt_estado_sel": ivt_estado_sel,
+
         "q": q,
         "tecnico_sel": tecnico_sel,
+
+        "tecnicos_lista": User.objects.filter(is_active=True).order_by(
+            "first_name", "last_name"
+        ),
+
+        "ivt_por_tecnico": ivt_por_tecnico,
+        "ivt_disponibles": ivt_disponibles,
+        "ivt_total": ivt_total,
     }
+
     
 class AsignacionListView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_DIGITADOR
@@ -1578,7 +1767,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         self._cargar()
         
-        form = InstalacionMasivaForm(request.POST, request.FILES)
+        form = InstalacionMasivaForm(request.POST, request.FILES, tecnico=self.tecnico)
 
         try:
             lineas = json.loads(request.POST.get("payload", "[]"))
@@ -1617,6 +1806,11 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     observaciones=d["observaciones"],
                     archivo=d.get("archivo_soporte"),
                 )
+                
+                if instala:
+                    services.vincular_ivt(
+                        numero=d["numero_ivt"], operacion=op,
+                        tecnico=self.tecnico, usuario=request.user)
 
                 if instala:
                     novedades = services.sincronizar_materiales_operacion(
@@ -1870,6 +2064,8 @@ class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
                 )
 
                 g["pendiente"] += a.cantidad_pendiente
+                
+        self.ivt_rangos = services.rangos_ivt(tecnico=self.tecnico)
 
     # ==========================================================
     # CONSTRUIR CONTEXTO
@@ -1946,6 +2142,9 @@ class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
             ),
 
             valores_post=valores_post,
+            ivt_rangos=self.ivt_rangos,
+            ivt_filas=kwargs.get("ivt_filas", []),
+            error_ivt=errores_celdas.get("ivt", []),
         )
 
         return ctx
@@ -2194,6 +2393,47 @@ class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
                     danado,
                     UnidadSerializada.Estado.DAÑADO,
                 ))
+    
+        # ======================================================
+        # 3b. VALIDAR RANGOS DE IVT
+        # ======================================================
+
+        filas_ivt = []   # lo escrito, para repintar si hay error
+        por_ivt = []     # (inicial, final, estado) válidos
+
+        for ini_raw, fin_raw, est in zip(
+            request.POST.getlist("ivt_ini"),
+            request.POST.getlist("ivt_fin"),
+            request.POST.getlist("ivt_estado"),
+        ):
+            ini_raw, fin_raw = ini_raw.strip(), fin_raw.strip()
+            if not ini_raw and not fin_raw:
+                continue
+
+            filas_ivt.append({"ini": ini_raw, "fin": fin_raw, "estado": est})
+
+            try:
+                ini = int(ini_raw)
+                fin = int(fin_raw or ini_raw)   # solo "desde" = un único IVT
+            except ValueError:
+                error_celda("ivt", f'IVT "{ini_raw}" - "{fin_raw}": no es un rango válido.')
+                continue
+
+            if ini < 1 or fin < ini:
+                error_celda("ivt", f"IVT {ini_raw}-{fin_raw}: el final debe ser mayor o igual al inicial.")
+                continue
+
+            if est not in ("DISPONIBLE", "ANULADO", "PERDIDO"):
+                error_celda("ivt", f"IVT {ini:05d}-{fin:05d}: seleccione cómo regresa.")
+                continue
+
+            por_ivt.append((ini, fin, est))
+
+        ordenados = sorted(por_ivt)
+        for (_, f1, _), (i2, _, _) in zip(ordenados, ordenados[1:]):
+            if i2 <= f1:
+                error_celda("ivt", "Hay rangos de IVT que se cruzan entre sí.")
+                break
 
         # ======================================================
         # 4. CALCULAR TOTAL SOLICITADO
@@ -2268,6 +2508,7 @@ class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
                 self.get_context_data(
                     errores_celdas=errores_celdas,
                     valores_post=valores_post,
+                    ivt_filas=filas_ivt,
                 )
             )
 
@@ -2346,6 +2587,32 @@ class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
                             estado_retorno=estado,
                             observacion=obs,
                         )
+                        
+                                # ----------------------------------------------
+                # IVT POR RANGO
+                # ----------------------------------------------
+
+                for ini, fin, estado in por_ivt:
+
+                    total = services.devolver_ivt_rango(
+                        tecnico=self.tecnico,
+                        inicial=ini,
+                        final=fin,
+                        usuario=request.user,
+                        estado_retorno=estado,
+                        observacion=obs,
+                    )
+
+                    EntregaItem.objects.create(
+                        entrega=documento,
+                        producto=None,
+                        ivt_inicial=ini,
+                        ivt_final=fin,
+                        serial=f"{ini:05d}-{fin:05d}",
+                        cantidad=total,
+                        estado_retorno=estado,
+                        observacion=obs,
+                    )
 
         except services.ErrorInventario as e:
 
@@ -2544,7 +2811,32 @@ class EntregaCreateView(RolRequeridoMixin, TemplateView):
         ctx["form"] = kwargs.get("form") or EntregaForm()
         ctx["productos"] = Producto.objects.filter(estado=True).order_by("nombre", "medida")
         ctx["payload_previo"] = kwargs.get("payload", [])
+        ctx["payload_ivt_previo"] = kwargs.get("payload_ivt", [])
+
+        disp = IVT.objects.filter(estado=IVT.Estado.DISPONIBLE)
+        ctx["ivt_disponibles"] = disp.count()
+        ctx["ivt_primero"] = disp.aggregate(m=Min("numero"))["m"] or ""
         return ctx
+    
+    def _resolver_ivt(self, rangos):
+        resueltos, errores = [], []
+        for r in rangos:
+            try:
+                ini, fin = int(r["inicial"]), int(r["final"])
+            except (KeyError, ValueError, TypeError):
+                errores.append("Hay un rango de IVT inválido en la lista.")
+                continue
+            if ini < 1 or fin < ini:
+                errores.append(f"IVT {ini}-{fin}: el final debe ser mayor o igual al inicial.")
+                continue
+            resueltos.append((ini, fin))
+
+        ordenados = sorted(resueltos)
+        for (_, f1), (i2, _) in zip(ordenados, ordenados[1:]):
+            if i2 <= f1:
+                errores.append("Hay rangos de IVT que se cruzan entre sí.")
+                break
+        return resueltos, errores
 
     def _resolver(self, items):
         """Valida el JSON del navegador contra la BD (no se confía en el cliente)."""
@@ -2580,17 +2872,27 @@ class EntregaCreateView(RolRequeridoMixin, TemplateView):
             items = json.loads(request.POST.get("payload", "[]"))
         except ValueError:
             items = []
+        try:
+            ivt_items = json.loads(request.POST.get("payload_ivt", "[]"))
+            if not isinstance(ivt_items, list):
+                ivt_items = []
+        except ValueError:
+            ivt_items = []
 
         def volver():
-            return self.render_to_response(self.get_context_data(form=form, payload=items))
+            return self.render_to_response(
+                self.get_context_data(form=form, payload=items, payload_ivt=ivt_items)
+            )
 
         if not form.is_valid():
             return volver()
-        if not items:
-            messages.error(request, "Agregue al menos un material.")
+        if not items and not ivt_items:
+            messages.error(request, "Agregue al menos un material o un rango de IVT.")
             return volver()
 
         resueltos, errores = self._resolver(items)
+        ivt_resueltos, errores_ivt = self._resolver_ivt(ivt_items)
+        errores += errores_ivt
         if errores:
             for e in errores:
                 messages.error(request, e)
@@ -2627,6 +2929,19 @@ class EntregaCreateView(RolRequeridoMixin, TemplateView):
                         EntregaItem.objects.create(
                             entrega=entrega, producto=producto, cantidad=cantidad,
                         )
+
+                # ---- IVT: cada rango es una línea más del documento ----
+                for ini, fin in ivt_resueltos:
+                    total = services.asignar_ivt_rango(
+                        tecnico=d["tecnico"], inicial=ini, final=fin,
+                        usuario=request.user, fecha=d["fecha"],
+                        observacion=d["observaciones"],
+                    )
+                    EntregaItem.objects.create(
+                        entrega=entrega, producto=None,
+                        ivt_inicial=ini, ivt_final=fin,
+                        serial=f"{ini:05d}-{fin:05d}", cantidad=total,
+                    )
         except services.ErrorInventario as e:
             messages.error(request, str(e))
             return volver()
@@ -3311,6 +3626,7 @@ class InconsistenciaListView(RolRequeridoMixin, TemplateView):
         g = self.request.GET
         tipo, estado = g.get("tipo", "").strip(), g.get("estado", "").strip()
         tecnico, q = g.get("tecnico", "").strip(), g.get("q", "").strip()
+        producto = g.get("producto", "").strip()
 
         qs = Inconsistencia.objects.select_related(
             "tecnico", "producto", "unidad_serializada", "operacion"
@@ -3321,6 +3637,8 @@ class InconsistenciaListView(RolRequeridoMixin, TemplateView):
             qs = qs.filter(estado=estado)
         if tecnico.isdigit():
             qs = qs.filter(tecnico_id=int(tecnico))
+        if producto.isdigit():                             # NUEVO
+           qs = qs.filter(producto_id=int(producto))
         if q:
             qs = qs.filter(
                 Q(serial_reportado__icontains=q)
@@ -3335,12 +3653,14 @@ class InconsistenciaListView(RolRequeridoMixin, TemplateView):
             .values_list("tipo").annotate(n=Count("id"))
         )
         ctx.update(
-            items=qs[:300],
+            items=qs[:500],
             resumen=[(v, l, conteo.get(v, 0)) for v, l in Inconsistencia.Tipo.choices],
             total_pendientes=sum(conteo.values()),
             tipos=Inconsistencia.Tipo.choices,
             estados=Inconsistencia.Estado.choices,
             tipo_sel=tipo, estado_sel=estado, tecnico_sel=tecnico, q=q,
+            producto_sel=producto,                         # NUEVO
+            productos_lista=Producto.objects.filter(estado=True).order_by("nombre", "medida"),  # NUEVO
             tecnicos_lista=tecnicos_queryset(),
         )
         return ctx
@@ -3359,3 +3679,242 @@ class InconsistenciaResolverView(RolRequeridoMixin, View):
             i.save()
             messages.success(request, "Inconsistencia marcada como resuelta.")
         return redirect(request.POST.get("next") or "almacen:inconsistencias")
+    
+class IngresoIVTView(RolRequeridoMixin, FormView):
+    roles_permitidos = ROLES_ALMACEN
+    form_class = IngresoIVTForm
+    template_name = "almacen/ingreso_ivt_form.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["remisiones_existentes"] = RemisionIngreso.objects.order_by("-fecha_registro")[:50]
+        ctx["siguiente_ivt"] = (IVT.objects.aggregate(m=Max("numero"))["m"] or 0) + 1
+        return ctx
+
+    def form_valid(self, form):
+        d = form.cleaned_data
+        try:
+            with transaction.atomic():
+                remision = services.obtener_o_crear_remision(
+                    numero=d["numero_orden"], usuario=self.request.user,
+                    imagen=d.get("comprobante_imagen"),
+                    fecha_recibo_bsi=d.get("fecha_recibo_bsi"),
+                    recogido_por=d.get("recogido_por", ""),
+                    recibido_almacen_por=d.get("recibido_almacen_por", ""),
+                )
+                cajas = services.registrar_ingreso_ivt(
+                    cajas=d["cajas"], remision=remision, usuario=self.request.user,
+                    fecha_ingreso=timezone.localdate(), observacion=d["observacion"],
+                )
+        except services.ErrorInventario as e:
+            form.add_error(None, str(e))
+            return self.form_invalid(form)
+
+        total = sum(c.cantidad for c in cajas)
+        messages.success(
+            self.request,
+            f"Ingresaron {total} IVT en {len(cajas)} caja(s) con la remisión {d['numero_orden']}.")
+        return redirect(f"{reverse('almacen:ivt_lista')}?q={d['numero_orden']}")
+
+
+class AsignarIVTView(RolRequeridoMixin, FormView):
+    roles_permitidos = ROLES_ALMACEN
+    form_class = AsignarIVTForm
+    template_name = "almacen/ivt_asignar_form.html"
+    success_url = reverse_lazy("almacen:ivt_lista")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        disp = IVT.objects.filter(estado=IVT.Estado.DISPONIBLE)
+        ctx["disponibles"] = disp.count()
+        ctx["primer_disponible"] = disp.aggregate(m=Min("numero"))["m"]
+        return ctx
+
+    def form_valid(self, form):
+        d = form.cleaned_data
+        try:
+            n = services.asignar_ivt_rango(
+                tecnico=d["tecnico"], inicial=d["consecutivo_inicial"],
+                final=d["consecutivo_final"], usuario=self.request.user,
+                fecha=d["fecha"], observacion=d["observaciones"])
+        except services.ErrorInventario as e:
+            form.add_error(None, str(e))
+            return self.form_invalid(form)
+        messages.success(self.request, f"{n} IVT asignados a {d['tecnico']}.")
+        return super().form_valid(form)
+
+
+class IVTListView(RolRequeridoMixin, TemplateView):
+    roles_permitidos = ROLES_ALMACEN
+    template_name = "almacen/ivt_list.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+
+        estado = g.get("estado", "").strip()
+        tecnico = g.get("tecnico", "").strip()
+        desde = g.get("desde", "").strip()
+        hasta = g.get("hasta", "").strip()
+        q = g.get("q", "").strip()
+        fisico = g.get("fisico", "").strip()
+
+        # =====================================================
+        # TODOS LOS IVT: SIN PAGINACIÓN
+        # =====================================================
+        qs = (
+            IVT.objects
+            .select_related(
+                "tecnico",
+                "operacion",
+                "caja__remision"
+            )
+            .order_by("numero")
+        )
+
+        # =====================================================
+        # FILTRO POR ESTADO
+        # Si no selecciona estado, muestra TODOS.
+        # Incluye DISPONIBLE, ASIGNADO, INSTALADO,
+        # ANULADO y PERDIDO.
+        # =====================================================
+        if estado in IVT.Estado.values:
+            qs = qs.filter(estado=estado)
+
+        # =====================================================
+        # FILTRO POR TÉCNICO
+        # =====================================================
+        if tecnico.isdigit():
+            qs = qs.filter(tecnico_id=int(tecnico))
+
+        # =====================================================
+        # FILTRO POR RANGO IVT
+        # =====================================================
+        if desde.isdigit():
+            qs = qs.filter(numero__gte=int(desde))
+
+        if hasta.isdigit():
+            qs = qs.filter(numero__lte=int(hasta))
+
+        # =====================================================
+        # FILTRO FÍSICO PERDIDO
+        # =====================================================
+        if fisico == "1":
+            qs = qs.filter(fisico_perdido=True)
+
+        # =====================================================
+        # BÚSQUEDA POR ORDEN O REMISIÓN
+        # =====================================================
+        if q:
+            qs = qs.filter(
+                Q(operacion__numero_orden__icontains=q) |
+                Q(caja__remision__numero_remision__icontains=q)
+            )
+
+        # =====================================================
+        # CONTADORES POR ESTADO (SIN FILTROS)
+        # =====================================================
+        conteo = dict(
+            IVT.objects
+            .values_list("estado")
+            .annotate(n=Count("id"))
+        )
+
+        resumen = [
+            (v, l, conteo.get(v, 0))
+            for v, l in IVT.Estado.choices
+        ]
+
+        # =====================================================
+        # RESUMEN IVT POR TÉCNICO
+        # Cuenta todos los estados de cada técnico
+        # =====================================================
+        por_tecnico = (
+            IVT.objects
+            .filter(tecnico__isnull=False)
+            .values(
+                "tecnico_id",
+                "tecnico__first_name",
+                "tecnico__last_name",
+                "tecnico__username",
+            )
+            .annotate(
+                asignados=Count("id", filter=Q(estado=IVT.Estado.ASIGNADO)),
+                instalados=Count("id", filter=Q(estado=IVT.Estado.INSTALADO)),
+                perdidos=Count("id", filter=Q(estado=IVT.Estado.PERDIDO)),
+                anulados=Count("id", filter=Q(estado=IVT.Estado.ANULADO)),
+                total=Count("id"),
+            )
+            .order_by("tecnico__first_name", "tecnico__username")
+        )
+
+        # =====================================================
+        # QUERYSTRING PARA CONSERVAR FILTROS
+        # =====================================================
+        params = g.copy()
+        params.pop("page", None)
+
+        # =====================================================
+        # CONTEXTO
+        # page_obj AHORA ES EL QUERYSET COMPLETO
+        # NO UTILIZAMOS PAGINATOR
+        # =====================================================
+        ctx.update({
+            "page_obj": qs,
+
+            "resumen": resumen,
+            "por_tecnico": por_tecnico,
+
+            "estados": IVT.Estado.choices,
+            "tecnicos_lista": tecnicos_queryset(),
+
+            "estado_sel": estado,
+            "tecnico_sel": tecnico,
+            "desde": desde,
+            "hasta": hasta,
+            "q": q,
+            "fisico_sel": fisico,
+
+            "querystring": params.urlencode(),
+        })
+
+        return ctx
+
+
+
+class IVTCambiarEstadoView(RolRequeridoMixin, View):
+    roles_permitidos = ROLES_ALMACEN
+
+    def post(self, request):
+        ids = [int(i) for i in request.POST.getlist("ids") if i.isdigit()]
+        accion = request.POST.get("accion", "")
+        motivo = request.POST.get("motivo", "")
+        try:
+            if accion == "FISICO_PERDIDO":
+                n = services.marcar_ivt_fisico_perdido(ids=ids, usuario=request.user, motivo=motivo)
+            else:
+                n = services.cambiar_estado_ivt(
+                    ids=ids, nuevo_estado=accion, usuario=request.user, motivo=motivo)
+            messages.success(request, f"{n} IVT actualizados.")
+        except services.ErrorInventario as e:
+            messages.error(request, str(e))
+
+        siguiente = request.POST.get("next", "")
+        if siguiente and url_has_allowed_host_and_scheme(
+                siguiente, allowed_hosts={request.get_host()}):
+            return redirect(siguiente)
+        return redirect("almacen:ivt_lista")
+
+
+class ValidarIVTJson(RolRequeridoMixin, View):
+    roles_permitidos = ROLES_DIGITADOR
+
+    def get(self, request):
+        tecnico = get_object_or_404(User, pk=request.GET.get("tecnico"), rol="TECNICO")
+        op = Operacion.objects.filter(pk=request.GET.get("operacion") or 0).first()
+        try:
+            ivt = services.validar_ivt_para_operacion(
+                numero=request.GET.get("numero", ""), tecnico=tecnico, operacion=op)
+        except services.ErrorInventario as e:
+            return JsonResponse({"ok": False, "mensaje": "✗ " + str(e)})
+        return JsonResponse({"ok": True, "mensaje": f"✓ IVT {ivt.codigo} asignado a este técnico."})

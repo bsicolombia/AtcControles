@@ -1,72 +1,425 @@
 {% extends "base.html" %}
 {% block titulo %}Inconsistencias{% endblock %}
+
+{% block extra_css %}
+<style>
+.pagina-inc {
+    --borde: #dfe7e2;
+    --borde-suave: #e8eeea;
+    --fondo-cab: #f0f5f2;
+    --texto: #1e293b;
+    --texto-2: #475569;
+    --texto-3: #64748b;
+}
+
+/* ---------- Cabecera ---------- */
+.inc-cab {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.inc-cab h1 { margin: 0 0 4px; font-size: 24px; color: var(--texto); }
+.inc-cab p  { margin: 0; font-size: 13px; color: var(--texto-3); }
+
+.inc-badge-pend {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: #fff4e5;
+    border: 1px solid #f5c98a;
+    color: #b54708;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* ---------- Resumen por tipo ---------- */
+.inc-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.inc-chip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #cbd5e1;
+    border-radius: 9px;
+    color: var(--texto-3);
+    font-size: 12px;
+    text-decoration: none;
+    transition: background-color .2s ease, border-color .2s ease;
+}
+.inc-chip strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.inc-chip:hover  { background: #f1f5f9; }
+
+.inc-chip.hay {
+    background: #fffaf0;
+    border-color: #f5c98a;
+    border-left-color: #f59e0b;
+    color: #92400e;
+}
+.inc-chip.hay:hover { background: #fff4e0; }
+
+.inc-chip.activo {
+    outline: 2px solid #166534;
+    outline-offset: 1px;
+}
+
+/* ---------- Filtros ---------- */
+.inc-filtros {
+    display: grid;
+    grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(160px, 1fr)) auto;
+    gap: 14px;
+    align-items: end;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+}
+
+.inc-filtros .campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.inc-filtros label  { font-size: 12px; font-weight: 700; color: var(--texto-2); }
+
+.inc-filtros input,
+.inc-filtros select {
+    width: 100%;
+    height: 40px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--texto);
+}
+.inc-filtros input:focus,
+.inc-filtros select:focus { outline: 2px solid #a7c5b2; border-color: #166534; }
+
+.inc-filtros .acciones { display: flex; gap: 8px; }
+
+.inc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    padding: 0 16px;
+    border: 1px solid #166534;
+    border-radius: 7px;
+    background: #166534;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.inc-btn:hover { background: #14532d; }
+.inc-btn.sec { background: #fff; color: #334155; border-color: #cbd5e1; }
+.inc-btn.sec:hover { background: #f1f5f9; }
+
+/* ---------- Contador ---------- */
+.inc-contador {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.inc-pastilla {
+    padding: 5px 12px;
+    font-size: 12px;
+    color: var(--texto-2);
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 999px;
+}
+.inc-pastilla strong { color: var(--texto); font-size: 13px; }
+
+/* ---------- Tabla con scroll y encabezado fijo ---------- */
+.inc-scroll {
+    max-height: 70vh;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    scrollbar-gutter: stable;
+}
+
+.inc-tabla {
+    width: 100%;
+    min-width: 1300px;
+    border-collapse: separate;   /* necesario para que el sticky conserve los bordes */
+    border-spacing: 0;
+    table-layout: fixed;
+    font-size: 13px;
+}
+
+.inc-tabla th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 46px;
+    padding: 10px 10px;
+    background: var(--fondo-cab);
+    color: #334155;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .4px;
+    text-align: left;
+    white-space: nowrap;
+    border-right: 1px solid var(--borde-suave);
+    box-shadow: inset 0 -1px 0 #d5e0d9;
+}
+
+.inc-tabla td {
+    padding: 10px;
+    border-right: 1px solid var(--borde-suave);
+    border-bottom: 1px solid var(--borde-suave);
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    color: #334155;
+}
+
+.inc-tabla tbody tr:hover td { background: #f7faf8; }
+.inc-tabla tr.pendiente td { background: #fffaf0; }
+.inc-tabla tr.pendiente:hover td { background: #fff4e0; }
+
+/* Anchos de columna */
+.c-fecha    { width: 130px; }
+.c-tipo     { width: 150px; }
+.c-tecnico  { width: 190px; }
+.c-material { width: 210px; }
+.c-serial   { width: 130px; }
+.c-cant     { width: 70px; text-align: center !important; }
+.c-orden    { width: 110px; }
+.c-instalo  { width: 150px; }
+.c-detalle  { width: 260px; }
+.c-estado   { width: 300px; }
+
+/* Etiquetas */
+.etq {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.etq-si   { background: #e6f5ec; color: #15803d; }
+.etq-no   { background: #f1f5f9; color: #64748b; }
+.etq-pend { background: #fef3c7; color: #b45309; }
+.etq-ok   { background: #e6f5ec; color: #15803d; }
+
+.inc-tabla td.num { text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Formulario de resolución */
+.resolver-form { display: flex; gap: 6px; }
+.resolver-form input {
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    padding: 0 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 12px;
+}
+.resolver-form button {
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid #166534;
+    border-radius: 6px;
+    background: #166534;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.resolver-form button:hover { background: #14532d; }
+
+.resuelta-info { margin-top: 6px; font-size: 11px; color: #64748b; line-height: 1.4; }
+
+.inc-vacio { padding: 36px 16px !important; text-align: center; color: #64748b; }
+
+@media (max-width: 1200px) {
+    .inc-filtros { grid-template-columns: 1fr 1fr; }
+    .inc-filtros .campo-q, .inc-filtros .acciones { grid-column: 1 / -1; }
+}
+@media (max-width: 768px) {
+    .inc-filtros { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
+
 {% block contenido %}
-<h2>Inconsistencias de inventario
-  {% if total_pendientes %}<span style="color:#b54708">· {{ total_pendientes }} pendiente(s)</span>{% endif %}
-</h2>
+<div class="pagina-inc">
 
-<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-  {% for valor, etiqueta, n in resumen %}
-    <a href="?tipo={{ valor }}&estado=PENDIENTE"
-       style="padding:3px 10px;border-radius:12px;text-decoration:none;font-size:12px;
-              background:{% if n %}#fff4e5;color:#b54708;border:1px solid #f5c98a{% else %}#f6f8fb;color:#777;border:1px solid #d9dee7{% endif %}">
-      {{ etiqueta }}: <b>{{ n }}</b></a>
-  {% endfor %}
-</div>
+    <!-- ============ CABECERA ============ -->
+    <div class="inc-cab">
+        <div>
+            <h1>Inconsistencias de inventario</h1>
+            <p>Diferencias reportadas por los técnicos que requieren revisión o regularización.</p>
+        </div>
 
-<form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-  <input name="q" value="{{ q }}" placeholder="Serial, material, orden, técnico…">
-  <select name="tipo"><option value="">Todos los tipos</option>
-    {% for v, l in tipos %}<option value="{{ v }}" {% if tipo_sel == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-  <select name="estado"><option value="">Todos los estados</option>
-    {% for v, l in estados %}<option value="{{ v }}" {% if estado_sel == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-  <select name="tecnico"><option value="">Todos los técnicos</option>
-    {% for t in tecnicos_lista %}<option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.get_full_name|default:t.username }}</option>{% endfor %}</select>
-  <button>Filtrar</button>
-</form>
-
-<div style="overflow:auto">
-<table border="1" cellpadding="5" style="border-collapse:collapse;font-size:13px;width:100%">
-  <thead>
-  <tr style="background-color:#1f3a5f !important;">
-    <th style="color:#ffffff !important;">Fecha</th>
-    <th style="color:#ffffff !important;">Tipo</th>
-    <th style="color:#ffffff !important;">Técnico</th>
-    <th style="color:#ffffff !important;">Material</th>
-    <th style="color:#ffffff !important;">Serial</th>
-    <th style="color:#ffffff !important;">Cant.</th>
-    <th style="color:#ffffff !important;">Orden</th>
-    <th style="color:#ffffff !important;">¿Se instaló?</th>
-    <th style="color:#ffffff !important;">Detalle</th>
-    <th style="color:#ffffff !important;">Estado</th>
-  </tr>
-</thead>
-  <tbody>
-  {% for i in items %}
-    <tr style="{% if i.estado == 'PENDIENTE' %}background:#fffaf0{% endif %}">
-      <td>{{ i.fecha|date:"d/m/Y H:i" }}</td>
-      <td><b>{{ i.get_tipo_display }}</b></td>
-      <td>{{ i.tecnico.get_full_name|default:i.tecnico.username }}</td>
-      <td>{{ i.producto.nombre_completo|default:"—" }}</td>
-      <td>{{ i.serial_reportado|default:"—" }}</td>
-      <td align="center">{{ i.cantidad }}</td>
-      <td>{{ i.operacion.numero_orden|default:"—" }}</td>
-      <td>{% if i.instalado %}Sí (regularizado){% else %}No, solo reportado{% endif %}</td>
-      <td style="max-width:320px">{{ i.detalle }}</td>
-      <td>
-        {% if i.estado == 'PENDIENTE' %}
-          <form method="post" action="{% url 'almacen:inconsistencia_resolver' i.pk %}" style="display:flex;gap:4px">
-            {% csrf_token %}
-            <input name="nota" placeholder="Nota (qué se hizo)" style="width:150px">
-            <button>Resolver</button>
-          </form>
-        {% else %}
-          Resuelta {{ i.fecha_resolucion|date:"d/m/Y" }} · {{ i.resuelto_por }}<br><small>{{ i.nota_resolucion }}</small>
+        {% if total_pendientes %}
+            <span class="inc-badge-pend">{{ total_pendientes }} pendiente(s)</span>
         {% endif %}
-      </td>
-    </tr>
-  {% empty %}<tr><td colspan="10">Sin inconsistencias.</td></tr>{% endfor %}
-  </tbody>
-</table>
+    </div>
+
+
+    <!-- ============ RESUMEN POR TIPO ============ -->
+    <div class="inc-resumen">
+        {% for valor, etiqueta, n in resumen %}
+            <a class="inc-chip {% if n %}hay{% endif %} {% if tipo_sel == valor %}activo{% endif %}"
+               href="?tipo={{ valor }}&estado=PENDIENTE&tecnico={{ tecnico_sel }}&producto={{ producto_sel }}">
+                <span>{{ etiqueta }}</span>
+                <strong>{{ n }}</strong>
+            </a>
+        {% endfor %}
+    </div>
+
+
+    <!-- ============ FILTROS ============ -->
+    <form class="inc-filtros" method="get">
+
+        <div class="campo campo-q">
+            <label for="i-q">Búsqueda</label>
+            <input id="i-q" type="search" name="q" value="{{ q }}" placeholder="Serial, material, orden o técnico">
+        </div>
+
+        <div class="campo">
+            <label for="i-tipo">Tipo</label>
+            <select id="i-tipo" name="tipo">
+                <option value="">Todos los tipos</option>
+                {% for v, l in tipos %}
+                    <option value="{{ v }}" {% if tipo_sel == v %}selected{% endif %}>{{ l }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="campo">
+            <label for="i-estado">Estado</label>
+            <select id="i-estado" name="estado">
+                <option value="">Todos los estados</option>
+                {% for v, l in estados %}
+                    <option value="{{ v }}" {% if estado_sel == v %}selected{% endif %}>{{ l }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="campo">
+            <label for="i-tecnico">Técnico</label>
+            <select id="i-tecnico" name="tecnico">
+                <option value="">Todos los técnicos</option>
+                {% for t in tecnicos_lista %}
+                    <option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ t.get_full_name|default:t.username }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="campo">
+            <label for="i-producto">Material</label>
+            <select id="i-producto" name="producto">
+                <option value="">Todos los materiales</option>
+                {% for p in productos_lista %}
+                    <option value="{{ p.pk }}" {% if producto_sel == p.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ p.nombre_completo }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="acciones">
+            <button class="inc-btn" type="submit">Filtrar</button>
+            {% if q or tipo_sel or estado_sel or tecnico_sel or producto_sel %}
+                <a class="inc-btn sec" href="{% url 'almacen:inconsistencias' %}">Limpiar</a>
+            {% endif %}
+        </div>
+
+    </form>
+
+
+    <!-- ============ CONTADOR ============ -->
+    <div class="inc-contador">
+        <span class="inc-pastilla">Registros <strong>{{ items|length }}</strong></span>
+        {% if total_pendientes %}
+            <span class="inc-pastilla">Pendientes en total <strong>{{ total_pendientes }}</strong></span>
+        {% endif %}
+    </div>
+
+
+    <!-- ============ TABLA ============ -->
+    <div class="inc-scroll">
+        <table class="inc-tabla">
+            <thead>
+                <tr>
+                    <th class="c-fecha">FECHA</th>
+                    <th class="c-tipo">TIPO</th>
+                    <th class="c-tecnico">TÉCNICO</th>
+                    <th class="c-material">MATERIAL</th>
+                    <th class="c-serial">SERIAL</th>
+                    <th class="c-cant">CANT.</th>
+                    <th class="c-orden">ORDEN</th>
+                    <th class="c-instalo">¿SE INSTALÓ?</th>
+                    <th class="c-detalle">DETALLE</th>
+                    <th class="c-estado">ESTADO</th>
+                </tr>
+            </thead>
+
+            <tbody>
+            {% for i in items %}
+                <tr class="{% if i.estado == 'PENDIENTE' %}pendiente{% endif %}">
+                    <td>{{ i.fecha|date:"d/m/Y H:i" }}</td>
+                    <td><strong>{{ i.get_tipo_display }}</strong></td>
+                    <td>{{ i.tecnico.get_full_name|default:i.tecnico.username }}</td>
+                    <td>{{ i.producto.nombre_completo|default:"—" }}</td>
+                    <td>{{ i.serial_reportado|default:"—" }}</td>
+                    <td class="num">{{ i.cantidad }}</td>
+                    <td>{{ i.operacion.numero_orden|default:"—" }}</td>
+                    <td>
+                        {% if i.instalado %}
+                            <span class="etq etq-si">Sí (regularizado)</span>
+                        {% else %}
+                            <span class="etq etq-no">No, solo reportado</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ i.detalle }}</td>
+                    <td>
+                        {% if i.estado == 'PENDIENTE' %}
+                            <span class="etq etq-pend">Pendiente</span>
+                            <form class="resolver-form" method="post" action="{% url 'almacen:inconsistencia_resolver' i.pk %}" style="margin-top:8px">
+                                {% csrf_token %}
+                                <input name="nota" placeholder="Nota (qué se hizo)">
+                                <button>Resolver</button>
+                            </form>
+                        {% else %}
+                            <span class="etq etq-ok">Resuelta</span>
+                            <div class="resuelta-info">
+                                {{ i.fecha_resolucion|date:"d/m/Y" }} · {{ i.resuelto_por }}
+                                {% if i.nota_resolucion %}<br>{{ i.nota_resolucion }}{% endif %}
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td class="inc-vacio" colspan="10">Sin inconsistencias para los filtros seleccionados.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
 </div>
 {% endblock %}

@@ -8,18 +8,19 @@
 
 <style>
 
+
 /* =========================================================
-   UNIDADES CON CÓDIGO - MISMA ESTRUCTURA QUE EXISTENCIAS
+   UNIDADES CON CÓDIGO - DISEÑO ULTRA COMPACTO
 ========================================================= */
 
 /* CABECERA */
-
 .cabecera-unidades {
+    margin-top: 5px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 15px;
-    margin-bottom: 12px;
+    gap: 8px;
+    
 }
 
 .cabecera-unidades .cabecera-info {
@@ -27,126 +28,121 @@
 }
 
 .cabecera-unidades h1 {
-    font-size: 21px;
-    margin-bottom: 4px;
+    font-size: 16px;
+    margin: 0 0 2px;
+    line-height: 1.2;
 }
 
 .cabecera-unidades p {
-    font-size: 11px;
-    margin-bottom: 0;
+    font-size: 9px;
+    margin: 0;
+    line-height: 1.3;
 }
 
 .cabecera-unidades .acciones {
-    display: flex;
-    align-items: center;
     flex-shrink: 0;
 }
 
 .cabecera-unidades .btn {
-    padding: 7px 11px;
-    font-size: 11px;
-    white-space: nowrap;
+    padding: 4px 8px;
+    font-size: 9px;
 }
 
-/* =========================================================
-   FILTROS COMPACTOS
-========================================================= */
-
+/* FILTROS */
 .filtros-inventario {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 7px;
-    margin-bottom: 10px;
+    gap: 4px;
+    margin: 0 0 5px;
 }
 
 .filtros-inventario .buscar-wrap {
     position: relative;
     display: flex;
     align-items: center;
-    flex: 1 1 220px;
-    min-width: 160px;
+    flex: 1 1 170px;
+    min-width: 120px;
 }
 
 .filtros-inventario .buscar-wrap svg {
     position: absolute;
-    left: 9px;
-    width: 14px;
-    height: 14px;
+    left: 7px;
+    width: 11px;
+    height: 11px;
     color: #64748b;
     pointer-events: none;
 }
 
 .filtros-inventario .buscar-wrap input {
     width: 100%;
-    padding-left: 30px;
+    padding-left: 23px;
 }
 
 .filtros-inventario input,
 .filtros-inventario select {
-    height: 32px;
-    min-height: 32px;
-    padding-top: 5px;
-    padding-bottom: 5px;
-    font-size: 11px;
+    height: 25px;
+    min-height: 25px;
+    padding: 3px 5px;
+    font-size: 9px;
     box-sizing: border-box;
 }
 
 .filtros-inventario select {
-    flex: 0 1 190px;
-    min-width: 150px;
-    max-width: 230px;
+    flex: 0 1 145px;
+    min-width: 115px;
+    max-width: 180px;
 }
 
 .filtros-inventario .btn {
-    padding: 6px 10px;
-    font-size: 10px;
+    padding: 4px 7px;
+    font-size: 9px;
 }
 
-/* =========================================================
-   CONTADOR DE UNIDADES
-========================================================= */
-
+/* CONTADOR */
 .contador-materiales {
     display: inline-flex;
-    align-items: baseline;
-    gap: 5px;
-    padding: 5px 10px;
-    margin-bottom: 8px;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    margin: 0 0 5px;
     border: 1px solid #dce5df;
-    border-radius: 7px;
+    border-radius: 5px;
     background: #f5f8f6;
     color: #526157;
-    font-size: 11px;
+    font-size: 9px;
 }
 
 .contador-materiales strong {
     color: #245c3c;
-    font-size: 15px;
+    font-size: 12px;
     font-weight: 800;
 }
 
-/* =========================================================
-   TARJETA
-========================================================= */
-
+/* TARJETAS */
 .tarjeta {
     min-width: 0;
-    padding: 10px;
-    border-radius: 7px;
+    padding: 5px;
+    border-radius: 5px;
 }
 
-/* =========================================================
-   TABLA COMPACTA
-========================================================= */
+/* AVISO TÉCNICO */
+.tarjeta[style*="margin-bottom"] {
+    margin-bottom: 5px !important;
+}
 
+.tarjeta .suave {
+    font-size: 9px;
+}
+
+/* TABLA */
 .tabla-wrap {
     position: relative;
     width: 100%;
-    max-height: 68vh;
+    max-height: 75vh;
     overflow: auto;
     background: #fff;
-    border-radius: 6px;
+    border-radius: 4px;
     scrollbar-gutter: stable;
 }
 
@@ -156,16 +152,17 @@
     border-collapse: separate;
     border-spacing: 0;
     background: #fff;
-    font-size: 11px;
+    font-size: 9px;
 }
 
 .tabla-wrap th,
 .tabla-wrap td {
     box-sizing: border-box;
-    padding: 6px 8px;
+    padding: 3px 5px;
     border-right: 1px solid #e2e8e5;
     border-bottom: 1px solid #e2e8e5;
     vertical-align: middle;
+    line-height: 1.2;
 }
 
 .tabla-wrap thead th {
@@ -174,7 +171,7 @@
     z-index: 5;
     background: #f1f5f3 !important;
     color: #334155;
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 700;
     text-align: left;
     white-space: nowrap;
@@ -182,7 +179,7 @@
 }
 
 .tabla-wrap tbody td {
-    font-size: 10px;
+    font-size: 9px;
 }
 
 .tabla-wrap tbody tr:hover td {
@@ -190,142 +187,112 @@
 }
 
 .tabla-wrap .suave {
-    margin-top: 2px;
+    margin-top: 1px;
     color: #64748b;
-    font-size: 9px;
+    font-size: 8px;
+    line-height: 1.2;
 }
 
-/* =========================================================
-   ANCHOS DE COLUMNAS
-========================================================= */
-
-/* Remisión */
-
+/* ANCHOS DE COLUMNAS */
 .tabla-wrap th:nth-child(1),
 .tabla-wrap td:nth-child(1) {
-    min-width: 100px;
+    min-width: 78px;
+    max-width: 95px;
 }
-
-/* Código material */
 
 .tabla-wrap th:nth-child(2),
 .tabla-wrap td:nth-child(2) {
-    min-width: 95px;
+    min-width: 75px;
+    max-width: 90px;
 }
-
-/* Material */
 
 .tabla-wrap th:nth-child(3),
 .tabla-wrap td:nth-child(3) {
-    min-width: 155px;
-    max-width: 220px;
+    min-width: 110px;
+    max-width: 145px;
     overflow-wrap: anywhere;
 }
-
-/* Código unidad */
 
 .tabla-wrap th:nth-child(4),
 .tabla-wrap td:nth-child(4) {
-    min-width: 110px;
+    min-width: 85px;
+    max-width: 100px;
 }
-
-/* Serial */
 
 .tabla-wrap th:nth-child(5),
 .tabla-wrap td:nth-child(5) {
-    min-width: 100px;
+    min-width: 75px;
+    max-width: 95px;
 }
-
-/* Marca */
 
 .tabla-wrap th:nth-child(6),
 .tabla-wrap td:nth-child(6) {
-    min-width: 85px;
-    max-width: 120px;
+    min-width: 65px;
+    max-width: 85px;
 }
-
-/* Medida */
 
 .tabla-wrap th:nth-child(7),
 .tabla-wrap td:nth-child(7) {
-    min-width: 70px;
+    min-width: 48px;
+    max-width: 65px;
 }
-
-/* Ubicación */
 
 .tabla-wrap th:nth-child(8),
 .tabla-wrap td:nth-child(8) {
-    min-width: 155px;
-    max-width: 200px;
+    min-width: 110px;
+    max-width: 145px;
     overflow-wrap: anywhere;
 }
 
-/* Estado */
-
 .tabla-wrap th:nth-child(9),
 .tabla-wrap td:nth-child(9) {
-    min-width: 90px;
+    min-width: 75px;
+    max-width: 90px;
 }
-
-/* FIVE y SAP */
 
 .tabla-wrap th:nth-child(10),
 .tabla-wrap td:nth-child(10),
 .tabla-wrap th:nth-child(11),
 .tabla-wrap td:nth-child(11) {
-    min-width: 65px;
+    min-width: 45px;
+    width: 45px;
     text-align: center;
 }
 
-/* Último cambio */
-
 .tabla-wrap th:nth-child(12),
 .tabla-wrap td:nth-child(12) {
-    min-width: 120px;
+    min-width: 95px;
     white-space: nowrap;
 }
-
-/* Orden y cuenta contrato */
 
 .tabla-wrap th:nth-child(13),
 .tabla-wrap td:nth-child(13),
 .tabla-wrap th:nth-child(14),
 .tabla-wrap td:nth-child(14) {
-    min-width: 105px;
+    min-width: 75px;
+    max-width: 95px;
 }
-
-/* Acciones */
 
 .tabla-wrap th:last-child,
 .tabla-wrap td:last-child {
-    min-width: 105px;
+    min-width: 85px;
     text-align: center;
 }
 
-/* =========================================================
-   CÓDIGOS
-========================================================= */
-
+/* CÓDIGOS */
 .codigo {
     font-family: Consolas, "Courier New", monospace;
-    font-size: 10px;
+    font-size: 8px;
     overflow-wrap: anywhere;
 }
 
-.tabla-wrap td:nth-child(3) {
-    overflow-wrap: anywhere;
-}
-
-/* =========================================================
-   CANTIDADES FIVE / SAP
-========================================================= */
-
+/* CANTIDADES FIVE / SAP */
 .cantidad-enlace {
     display: inline-block;
-    min-width: 25px;
-    padding: 4px 6px;
-    border-radius: 5px;
-    font-size: 11px;
+    min-width: 19px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 9px;
     font-weight: 750;
     text-align: center;
     text-decoration: none;
@@ -348,18 +315,15 @@
     background: #fee2e2;
 }
 
-/* =========================================================
-   ESTADOS DE LAS UNIDADES
-========================================================= */
-
+/* ESTADOS */
 .tabla-wrap .chip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 4px 7px;
-    border-radius: 5px;
-    font-size: 9px;
-    font-weight: 800;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: 700;
     white-space: nowrap;
     border: 1px solid transparent;
 }
@@ -412,43 +376,40 @@
     border-color: #cbd5e1;
 }
 
-/* =========================================================
-   BOTONES
-========================================================= */
-
+/* BOTONES */
 .tabla-wrap .btn-pequeno {
-    padding: 5px 8px;
-    font-size: 9px;
+    padding: 3px 5px;
+    font-size: 8px;
     white-space: nowrap;
 }
 
-/* =========================================================
-   MENSAJE VACÍO
-========================================================= */
-
+/* VACÍO */
 .vacio {
-    padding: 25px 15px;
+    padding: 15px 10px;
     text-align: center;
     color: #64748b;
-    font-size: 11px;
+    font-size: 9px;
 }
 
 .vacio strong {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
     color: #334155;
-    font-size: 13px;
+    font-size: 11px;
 }
 
-/* =========================================================
-   RESPONSIVE
-========================================================= */
+.vacio-icono {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
 
+/* RESPONSIVE */
 @media (max-width: 768px) {
 
     .cabecera-unidades {
         align-items: flex-start;
         flex-wrap: wrap;
+        gap: 5px;
     }
 
     .cabecera-unidades .acciones {
@@ -462,7 +423,7 @@
     }
 
     .tabla-wrap {
-        max-height: 65vh;
+        max-height: 70vh;
     }
 
 }
@@ -470,13 +431,66 @@
 @media (max-width: 480px) {
 
     .cabecera-unidades h1 {
-        font-size: 18px;
+        font-size: 15px;
     }
 
     .cabecera-unidades p {
-        font-size: 10px;
+        font-size: 9px;
     }
 
+    .tarjeta {
+        padding: 3px;
+    }
+
+    .tabla-wrap th,
+    .tabla-wrap td {
+        padding: 3px 4px;
+    }
+
+}
+
+
+/* =========================================================
+   ENLACES CLICABLES - AZUL Y SUBRAYADO
+   SIN AFECTAR BOTONES
+========================================================= */
+
+/* Todos los enlaces normales de la tabla */
+.tabla-wrap a:not(.btn),
+.tabla-wrap a:not(.btn):visited {
+    color: #2563eb;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+/* Al pasar el mouse */
+.tabla-wrap a:not(.btn):hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+}
+
+/* Código de unidad */
+.tabla-wrap a.codigo,
+.tabla-wrap a.codigo:visited {
+    color: #2563eb;
+    text-decoration: underline;
+    font-weight: 700;
+}
+
+/* Cantidades FIVE y SAP */
+.tabla-wrap a.cantidad-enlace,
+.tabla-wrap a.cantidad-enlace:visited {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+/* Mantener los botones con su diseño original */
+.tabla-wrap a.btn,
+.tabla-wrap a.btn:visited,
+.tabla-wrap a.btn:hover {
+    text-decoration: none;
 }
 
 </style>

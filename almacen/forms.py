@@ -1,6 +1,7 @@
 from django import forms
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+import json
 User = get_user_model()
 from operaciones.models import Operacion
 from . import services
@@ -740,11 +741,126 @@ class InstalacionForm(DatosOperacionForm):
                 "pendiente(s) por instalar."
             )
         return cantidad
-
 class InstalacionMasivaForm(DatosOperacionForm):
-    """Datos comunes de la orden. Las cantidades van por fila en la plantilla."""
+    """Datos comunes de la orden + IVT obligatorio cuando se instala."""
+
+    numero_ivt = forms.IntegerField(
+        label="N.º de IVT", min_value=1, required=False,
+        help_text="Obligatorio cuando la orden instala material.",
+    )
+
+    field_order = [
+        "tipo_operacion", "estado", "numero_orden", "numero_cuenta_contrato",
+        "numero_ivt", "fecha_instalacion", "anomalia",
+        "archivo_soporte", "observaciones",
+    ]
+
+    def __init__(self, *args, tecnico=None, **kwargs):
+        self.tecnico = tecnico
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        data = super().clean()
+        if data.get("estado") in Operacion.ESTADOS_QUE_INSTALAN:
+            numero = data.get("numero_ivt")
+            if not numero:
+                self.add_error("numero_ivt", "Este campo es obligatorio: indique el IVT de la visita.")
+            elif self.tecnico:
+                op = Operacion.objects.filter(numero_orden=data.get("numero_orden")).first()
+                try:
+                    services.validar_ivt_para_operacion(
+                        numero=numero, tecnico=self.tecnico, operacion=op)
+                except services.ErrorInventario as e:
+                    self.add_error("numero_ivt", str(e))
+        return data
 
 
+# ---------------------------------------------------------
+# IVT
+# ---------------------------------------------------------
+class IngresoIVTForm(forms.Form):
+    numero_orden = forms.CharField(
+        label="Número de orden / remisión", max_length=30,
+        widget=forms.TextInput(attrs={"list": "lista_remisiones", "autocomplete": "off"}),
+    )
+    comprobante_imagen = forms.ImageField(label="Foto de la remisión / orden", required=False)
+    fecha_recibo_bsi = forms.DateField(
+        label="Fecha en que recibió BSI", required=False, widget=DateInput(),
+        initial=timezone.localdate)
+    recogido_por = forms.CharField(label="Recogido en VANTI por", max_length=100, required=False)
+    recibido_almacen_por = forms.CharField(label="Recibido en almacén por", max_length=100, required=False)
+    cajas = forms.CharField(widget=forms.HiddenInput)
+    observacion = forms.CharField(
+        label="Observaciones", required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for f in self.fields.values():
+            if not isinstance(f.widget, forms.HiddenInput):
+                f.widget.attrs["class"] = "form-control"
+
+    def clean_numero_orden(self):
+        return self.cleaned_data["numero_orden"].strip().upper()
+
+    def clean_cajas(self):
+        try:
+            crudo = json.loads(self.cleaned_data["cajas"])
+        except ValueError:
+            raise forms.ValidationError("Formato de cajas inválido.")
+        if not isinstance(crudo, list) or not crudo:
+            raise forms.ValidationError("Agregue al menos una caja.")
+        cajas = []
+        for i, c in enumerate(crudo, 1):
+            try:
+                ini, cant = int(c["inicial"]), int(c["cantidad"])
+            except (KeyError, TypeError, ValueError):
+                raise forms.ValidationError(f"Caja {i}: datos inválidos.")
+            if ini < 1 or cant < 1:
+                raise forms.ValidationError(f"Caja {i}: inicial y cantidad deben ser mayores que cero.")
+            cajas.append((ini, cant))
+        return cajas
+
+    def clean(self):
+        data = super().clean()
+        num = data.get("numero_orden")
+        if num and not RemisionIngreso.objects.filter(numero_remision=num).exists():
+            if not data.get("comprobante_imagen"):
+                self.add_error("comprobante_imagen",
+                               "Remisión nueva: debe adjuntar la foto del comprobante.")
+            for campo, msg in {
+                "fecha_recibo_bsi": "Indique la fecha en que recibió BSI.",
+                "recogido_por": "Indique quién recogió el material en VANTI.",
+                "recibido_almacen_por": "Indique quién lo recibió en almacén.",
+            }.items():
+                if not data.get(campo):
+                    self.add_error(campo, msg)
+        for campo in ("recogido_por", "recibido_almacen_por"):
+            if data.get(campo):
+                data[campo] = data[campo].strip().upper()
+        return data
+
+
+class AsignarIVTForm(forms.Form):
+    tecnico = forms.ModelChoiceField(queryset=User.objects.none(), label="Técnico")
+    consecutivo_inicial = forms.IntegerField(label="Consecutivo inicial", min_value=1)
+    consecutivo_final = forms.IntegerField(label="Consecutivo final", min_value=1)
+    fecha = forms.DateField(label="Fecha", widget=DateInput(), initial=timezone.localdate)
+    observaciones = forms.CharField(label="Observaciones", required=False,
+                                    widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["tecnico"].queryset = User.objects.filter(
+            rol="TECNICO", is_active=True).order_by("first_name", "last_name")
+        for f in self.fields.values():
+            f.widget.attrs["class"] = "form-control"
+
+    def clean(self):
+        data = super().clean()
+        ini, fin = data.get("consecutivo_inicial"), data.get("consecutivo_final")
+        if ini and fin and fin < ini:
+            self.add_error("consecutivo_final", "El final debe ser mayor o igual al inicial.")
+        return data
 # ---------------------------------------------------------
 # INVENTARIO
 # ---------------------------------------------------------

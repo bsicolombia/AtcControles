@@ -2,422 +2,1254 @@
 {% load sap_extras %}
 {% block titulo %}Consulta de orden{% endblock %}
 
+{% block extra_css %}
+<style>
+/* =========================================================
+   BASE Y VARIABLES
+========================================================= */
+.pagina-cons {
+    --borde: #dfe7e2;
+    --borde-suave: #e8eeea;
+    --fondo-cab: #f0f5f2;
+    --texto: #1e293b;
+    --texto-2: #475569;
+    --texto-3: #64748b;
+    --verde-900: #166534;
+    --verde-100: #eaf3ed;
+    --azul: #2563eb;
+    font-size: 10px;
+}
+
+/* CABECERA */
+.cons-cab {
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: var(--fondo-cab);
+    border: 1px solid var(--borde);
+    border-left: 4px solid var(--verde-900);
+    border-radius: 7px;
+}
+.cons-cab h1 { margin: 0 0 3px; font-size: 14px; font-weight: 800; letter-spacing: .2px; color: var(--texto); }
+.cons-cab p  { margin: 0; font-size: 10px; line-height: 1.4; color: var(--texto-3); }
+
+/* BOTONES */
+.btn-c {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 30px; padding: 0 12px;
+    border: 1px solid var(--verde-900); border-radius: 5px;
+    background: var(--verde-900); color: #fff;
+    font-size: 10px; font-weight: 700; letter-spacing: .2px;
+    text-decoration: none; cursor: pointer; white-space: nowrap;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+.btn-c:hover { background: #14532d; border-color: #14532d; color: #fff; }
+.btn-c.gris { background: #fff; color: #334155; border-color: #cbd5e1; }
+.btn-c.gris:hover { background: #f1f5f9; color: #334155; }
+
+.btn-mini {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 22px; padding: 2px 9px;
+    border: 1px solid #cfdcd4; border-radius: 5px;
+    background: #f8faf9; color: #334155;
+    font-size: 9px; font-weight: 700; text-decoration: none;
+    white-space: nowrap; cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+.btn-mini:hover { background: var(--verde-100); border-color: #a7c5b2; color: var(--verde-900); }
+.btn-mini.azul   { border-color: #bfdbfe; background: #eff6ff; color: var(--azul); }
+.btn-mini.azul:hover { background: #dbeafe; }
+.btn-mini.warn   { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+.btn-mini.warn:hover { background: #fef3c7; }
+.btn-mini.danger { border-color: #fecaca; background: #fff5f5; color: #b91c1c; }
+.btn-mini.danger:hover { background: #fee2e2; }
+
+/* TARJETAS */
+.cons-card {
+    background: #fff; border: 1px solid var(--borde);
+    border-radius: 7px; margin-bottom: 10px;
+}
+.cons-card-cab {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    align-items: flex-end; gap: 8px; padding: 10px 12px 6px;
+}
+.cons-card-cab h2 { margin: 0 0 2px; font-size: 13px; font-weight: 800; color: var(--texto); }
+.cons-card-cab p  { margin: 0; font-size: 9px; color: var(--texto-3); }
+
+/* FILTROS (2 filas compactas) */
+.cons-filtros {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px; align-items: end;
+    padding: 9px 12px; margin-bottom: 10px;
+    background: #fff; border: 1px solid var(--borde); border-radius: 7px;
+}
+.cons-filtros .f-q { grid-column: span 2; }
+.cons-filtros .f-botones { grid-column: span 2; }
+.cons-filtros .campo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cons-filtros label {
+    margin: 0; font-size: 9px; font-weight: 700; letter-spacing: .2px;
+    color: var(--texto-2); text-transform: uppercase;
+}
+.cons-filtros input,
+.cons-filtros select {
+    width: 100%; height: 30px; box-sizing: border-box; padding: 0 8px;
+    border: 1px solid #cbd5e1; border-radius: 5px; background: #fff;
+    font-size: 10px; color: var(--texto);
+}
+.cons-filtros input:focus,
+.cons-filtros select:focus { outline: 2px solid #a7c5b2; border-color: var(--verde-900); }
+.f-botones { display: flex; gap: 5px; }
+
+/* MIGAS DE PAN */
+.cons-migas {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+    margin-bottom: 8px; font-size: 9px; color: var(--texto-3);
+}
+.miga {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 5px 3px 10px;
+    background: var(--verde-100); border: 1px solid #cfe3d6; border-radius: 999px;
+    font-weight: 700; color: var(--verde-900);
+}
+.miga a {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #cfe3d6; color: var(--verde-900);
+    font-size: 10px; line-height: 1; text-decoration: none;
+}
+.miga a:hover { background: #fecaca; color: #b91c1c; }
+
+/* CHIPS DE AÑO */
+.anios { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip-anio {
+    padding: 3px 10px; border: 1px solid var(--borde); border-radius: 999px;
+    background: #fff; color: var(--texto-2);
+    font-size: 9px; font-weight: 700; text-decoration: none;
+    transition: background-color .15s ease;
+}
+.chip-anio:hover { background: var(--verde-100); color: var(--verde-900); }
+.chip-anio.activo { background: var(--verde-900); border-color: var(--verde-900); color: #fff; }
+.chip-volver { border-style: dashed; color: var(--azul); }
+
+/* LEYENDA EJECUTADAS / NO EJECUTADAS */
+.leyenda { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; font-size: 9px; color: var(--texto-2); }
+.leyenda span { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.leyenda i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.leyenda i.ej { background: #22c55e; }
+.leyenda i.no { background: #ef4444; }
+
+/* TABLAS (encabezado fijo + scroll) */
+.cons-scroll {
+    max-height: 62vh; overflow: auto; margin: 4px 12px 12px;
+    border: 1px solid var(--borde); border-radius: 7px; background: #fff;
+    scrollbar-gutter: stable;
+}
+.tabla-c { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 10px; }
+.tabla-c th {
+    position: sticky; top: 0; z-index: 10; height: 30px; padding: 5px 8px;
+    background: var(--fondo-cab); color: #334155;
+    font-size: 9px; font-weight: 800; letter-spacing: .3px;
+    text-align: left; white-space: nowrap;
+    border-right: 1px solid var(--borde-suave);
+    box-shadow: inset 0 -2px 0 #cfdcd4;
+}
+.tabla-c th a { color: inherit; text-decoration: none; }
+.tabla-c th a:hover { color: var(--azul); text-decoration: underline; }
+.tabla-c td {
+    padding: 5px 8px;
+    border-right: 1px solid var(--borde-suave);
+    border-bottom: 1px solid var(--borde-suave);
+    vertical-align: middle; color: #334155;
+}
+.tabla-c tbody tr:hover td { background: #f4f9f6; }
+.tabla-c .centro, .tabla-c th.centro { text-align: center; }
+.tabla-c a.orden { color: var(--azul); font-weight: 800; text-decoration: none; }
+.tabla-c a.orden:hover { text-decoration: underline; }
+
+.etq {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: #e0f2fe; color: #075985;
+    font-size: 9px; font-weight: 700; white-space: nowrap;
+}
+.etq-ok  { background: #dcfce7; color: #166534; }
+.etq-no  { background: #fee2e2; color: #991b1b; }
+.etq-inc { background: #fef3c7; color: #92400e; }
+/* ESTADOS DE LAS ÓRDENES */
+.etq-ejecutada,
+.etq-efectiva {
+    background: #dcfce7 !important;
+    color: #166534 !important;
+    border: 1px solid #bbf7d0;
+}
+
+.etq-no-ejecutada,
+.etq-anulada,
+.etq-cancelada {
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fecaca;
+}
+
+.etq-pendiente,
+.etq-creada,
+.etq-asignada {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+    border: 1px solid #fde68a;
+}
+.sin-datos { padding: 22px 12px !important; text-align: center; color: var(--texto-3); }
+
+/* MATRIZ DEL RESUMEN */
+.tabla-res { min-width: 100%; table-layout: auto; }
+.tabla-res .c-nombre {
+    position: sticky; left: 0; z-index: 6; min-width: 190px;
+    background: #fff; font-weight: 700; color: var(--texto);
+    text-transform: uppercase; box-shadow: 2px 0 5px rgba(15, 23, 42, .06);
+}
+.tabla-res thead .c-nombre { z-index: 30; background: #e3ece7; }
+.tabla-res tbody tr:hover td.c-nombre { background: #f4f9f6; }
+.tabla-res th.col-dato { min-width: 58px; text-align: center; padding: 5px 4px; }
+.tabla-res td.col-dato { text-align: center; padding: 4px; }
+
+/* Par de pastillas: ejecutadas | no ejecutadas */
+.par { display: inline-flex; gap: 3px; align-items: center; justify-content: center; }
+
+.cel {
+    display: inline-block; min-width: 22px; padding: 2px 6px; border-radius: 999px;
+    font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums;
+    text-align: center; text-decoration: none;
+    transition: filter .15s ease, box-shadow .15s ease;
+}
+.cel.ej { background: #dcfce7; color: #166534; }
+.cel.no { background: #fee2e2; color: #b91c1c; }
+.cel.nada { background: #f1f5f9; color: #cbd5e1; font-weight: 600; }
+a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
+.cero { color: #cbd5e1; }
+
+.tabla-res th.col-total,
+.tabla-res td.col-total { text-align: center; background: #f8fafc; border-left: 2px solid #cfdcd4; min-width: 80px; }
+
+.tabla-res tfoot td {
+    position: sticky; bottom: 0; z-index: 8; padding: 6px 4px;
+    background: var(--verde-100); font-weight: 800; color: var(--texto);
+    text-align: center; border-top: 2px solid #cfe0d5;
+}
+.tabla-res tfoot td.c-nombre { z-index: 12; text-align: left; padding-left: 8px; background: var(--verde-100); }
+.tabla-res tfoot td.col-total { background: #dcebe2; }
+
+/* LISTADO */
+.cons-total { font-size: 9px; color: var(--texto-2); }
+.cons-total strong { font-size: 11px; color: var(--texto); }
+.cons-paginacion {
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+    gap: 6px; padding: 0 12px 12px;
+}
+.cons-paginacion .pag-info {
+    padding: 5px 12px; font-size: 9px; font-weight: 700; color: var(--texto-2);
+    background: var(--verde-100); border: 1px solid #d8e8dc; border-radius: 5px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 1300px) {
+    .cons-filtros { grid-template-columns: repeat(4, 1fr); }
+    .cons-filtros .f-q, .cons-filtros .f-botones { grid-column: 1 / -1; }
+}
+@media (max-width: 768px) {
+    .cons-filtros { grid-template-columns: 1fr 1fr; padding: 8px; }
+    .cons-scroll { margin-left: 8px; margin-right: 8px; }
+}
+
+/* =========================================================
+   DETALLE PROFESIONAL DE ORDEN
+========================================================= */
+
+.det-orden {
+    --det-borde: #dfe7e2;
+    --det-fondo: #f5f8f6;
+    --det-verde: #166534;
+    --det-texto: #1e293b;
+    --det-sec: #64748b;
+    color: var(--det-texto);
+    font-size: 10px;
+}
+
+/* CABECERA DEL DETALLE */
+.det-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    background: #f0f5f2;
+    border: 1px solid var(--det-borde);
+    border-left: 4px solid var(--det-verde);
+    border-radius: 7px;
+}
+
+.det-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.det-header-info .det-label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .7px;
+    color: var(--det-sec);
+}
+
+.det-header-info h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--det-texto);
+}
+
+.det-header-info p {
+    margin: 0;
+    font-size: 10px;
+    color: var(--det-sec);
+}
+
+.det-header-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+}
+
+/* TARJETA GENERAL */
+.det-card {
+    margin-bottom: 10px;
+    background: #fff;
+    border: 1px solid var(--det-borde);
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.det-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 9px 12px;
+    background: #f0f5f2;
+    border-bottom: 1px solid var(--det-borde);
+}
+
+.det-card-header h3 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--det-texto);
+}
+
+.det-card-header p {
+    margin: 2px 0 0;
+    font-size: 9px;
+    color: var(--det-sec);
+}
+
+/* INFORMACIÓN GENERAL */
+.det-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+}
+
+.det-dato {
+    min-width: 0;
+    padding: 9px 10px;
+    background: #fafcfb;
+    border: 1px solid #e8eeea;
+    border-radius: 5px;
+}
+
+.det-dato .etiqueta {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--det-sec);
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+
+.det-dato .valor {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--det-texto);
+}
+
+.det-dato.destacado {
+    background: #f0f7f2;
+    border-color: #cfe3d6;
+}
+
+.det-dato.destacado .valor {
+    color: var(--det-verde);
+}
+
+/* INDICADORES */
+.det-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.det-estado.ok {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.det-estado.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.det-estado.pendiente {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.det-estado.neutro {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+/* CONTENIDO DE TARJETAS */
+.det-card-body {
+    padding: 10px 12px;
+}
+
+/* TABLAS DEL DETALLE */
+.det-tabla-scroll {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.det-tabla {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 10px;
+}
+
+.det-tabla th {
+    padding: 9px 10px;
+    background: #f8faf9;
+    color: #475569;
+    font-size: 9px;
+    font-weight: 800;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--det-borde);
+}
+
+.det-tabla td {
+    padding: 8px 10px;
+    color: #334155;
+    border-bottom: 1px solid #edf1ee;
+    vertical-align: middle;
+}
+
+.det-tabla tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.det-tabla tbody tr:hover td {
+    background: #f5f9f6;
+}
+
+.det-tabla .principal {
+    font-weight: 800;
+    color: var(--det-texto);
+}
+
+.det-tabla .secundario {
+    display: block;
+    margin-top: 3px;
+    font-size: 9px;
+    color: var(--det-sec);
+}
+
+.det-tabla .centro {
+    text-align: center;
+}
+
+/* INCONSISTENCIAS */
+.det-inc-pendiente td {
+    background: #fffbeb;
+}
+
+.det-inc-resuelta td {
+    background: #fff;
+}
+
+.det-inc-pendiente:hover td {
+    background: #fef3c7 !important;
+}
+
+.det-inc-resuelta:hover td {
+    background: #f0fdf4 !important;
+}
+
+.det-contador {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+/* MENSAJES VACÍOS */
+.det-vacio {
+    padding: 22px 12px !important;
+    text-align: center;
+    color: #94a3b8 !important;
+    font-size: 10px;
+}
+
+.det-vacio .icono {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 20px;
+}
+
+/* IDENTIFICADORES */
+.det-serial {
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 800;
+    color: #1d4ed8;
+}
+
+/* RESPONSIVE */
+@media (max-width: 1100px) {
+    .det-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 650px) {
+    .det-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: 8px;
+    }
+
+    .det-header {
+        align-items: flex-start;
+    }
+
+    .det-header-acciones {
+        width: 100%;
+    }
+
+    .det-header-acciones a {
+        flex: 1;
+    }
+
+    .det-card-body {
+        padding: 8px;
+    }
+}
+
+</style>
+{% endblock %}
+
+
 {% block contenido %}
-<div class="container-fluid py-4">
-    <h1>Consulta de orden</h1>
-    <p class="text-muted">Escriba un número de orden, o un serial / código de medidor.</p>
+<div class="container-fluid py-3 pagina-cons">
 
-    <form method="get" class="card card-body mb-4">
-    <div class="row g-3">
+    <!-- ============ CABECERA ============ -->
+    <div class="cons-cab">
+        <h1>CONSULTA DE ORDEN</h1>
+        <p>Resumen de órdenes ejecutadas y no ejecutadas por técnico, por año, mes y día. Escriba una orden, cuenta contrato, serial o código de medidor.</p>
+    </div>
 
-        <div class="col-md-4">
-            <label for="q" class="form-label">
-                Orden o cuenta contrato
-            </label>
-            <input
-                type="search"
-                id="q"
-                name="q"
-                value="{{ q }}"
-                class="form-control"
-                placeholder="Escriba el número de orden..."
-            >
+
+    <!-- ============ FILTROS ============ -->
+    <form method="get" class="cons-filtros">
+
+        <div class="campo f-q">
+            <label for="q">Orden o cuenta contrato</label>
+            <input type="search" id="q" name="q" value="{{ q }}" placeholder="Número de orden, cuenta, serial...">
         </div>
 
-        <div class="col-md-2">
-            <label for="estado" class="form-label">Estado</label>
-            <select id="estado" name="estado" class="form-select">
-                <option value="">Todos los estados</option>
+        <div class="campo">
+            <label for="estado">Estado</label>
+            <select id="estado" name="estado">
+                <option value="">Todos</option>
                 {% for valor, etiqueta in estados_orden %}
-                    <option value="{{ valor }}"
-                        {% if estado_sel == valor|stringformat:"s" %}
-                            selected
-                        {% endif %}>
-                        {{ etiqueta }}
-                    </option>
+                    <option value="{{ valor }}" {% if estado_sel == valor|stringformat:"s" %}selected{% endif %}>{{ etiqueta }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <div class="col-md-3">
-            <label for="tipo" class="form-label">
-                Tipo de operación
-            </label>
-            <select id="tipo" name="tipo" class="form-select">
+        <div class="campo">
+            <label for="tipo">Tipo de operación</label>
+            <select id="tipo" name="tipo">
                 <option value="">Todos los tipos</option>
                 {% for valor, etiqueta in tipos_operacion %}
-                    <option value="{{ valor }}"
-                        {% if tipo_sel == valor|stringformat:"s" %}
-                            selected
-                        {% endif %}>
-                        {{ etiqueta }}
-                    </option>
+                    <option value="{{ valor }}" {% if tipo_sel == valor|stringformat:"s" %}selected{% endif %}>{{ etiqueta }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <div class="col-md-3">
-            <label for="tecnico" class="form-label">Técnico</label>
-            <select id="tecnico" name="tecnico" class="form-select">
+        <div class="campo">
+            <label for="tecnico">Técnico</label>
+            <select id="tecnico" name="tecnico">
                 <option value="">Todos los técnicos</option>
                 {% for t in tecnicos %}
-                    <option value="{{ t.pk }}"
-                        {% if tecnico_sel == t.pk|stringformat:"s" %}
-                            selected
-                        {% endif %}>
+                    <option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>
                         {{ t.get_full_name|default:t.username }}
                     </option>
                 {% endfor %}
             </select>
         </div>
 
-        <div class="col-12 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">
-                Buscar
-            </button>
-            <a href="{% url 'operaciones:consulta_orden' %}"
-               class="btn btn-outline-secondary">
-                Limpiar filtros
-            </a>
+        <div class="campo">
+            <label for="anomalia">Anomalía</label>
+            <select id="anomalia" name="anomalia">
+                <option value="">Todas</option>
+                {% for a in anomalias %}
+                    <option value="{{ a.pk }}" {% if anomalia_sel == a.pk|stringformat:"s" %}selected{% endif %}>{{ a.codigo }} - {{ a.descripcion }}</option>
+                {% endfor %}
+            </select>
         </div>
 
-    </div>
-</form>
+        <div class="campo">
+            <label for="resultado">Resultado</label>
+            <select id="resultado" name="resultado">
+                <option value="">Todas (ejecutadas y no)</option>
+                <option value="EJECUTADAS" {% if resultado_sel == "EJECUTADAS" %}selected{% endif %}>Solo ejecutadas</option>
+                <option value="NO_EJECUTADAS" {% if resultado_sel == "NO_EJECUTADAS" %}selected{% endif %}>Solo no ejecutadas</option>
+            </select>
+        </div>
 
-{% if error_detalle %}
-    <div class="alert alert-warning">
-        {{ error_detalle }}
-    </div>
-{% endif %}
+        <div class="campo">
+            <label for="anio">Año</label>
+            <select id="anio" name="anio">
+                <option value="">Todos</option>
+                {% for a in anios %}
+                    <option value="{{ a.valor }}" {% if anio_sel == a.valor|stringformat:"s" %}selected{% endif %}>{{ a.valor }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="campo">
+            <label for="mes">Mes</label>
+            <select id="mes" name="mes">
+                <option value="">Todos</option>
+                {% for num, nombre in meses %}
+                    <option value="{{ num }}" {% if mes_sel == num|stringformat:"s" %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="campo">
+            <label for="fecha">Día</label>
+            <input type="date" id="fecha" name="fecha" value="{{ fecha_sel }}">
+        </div>
+
+        <div class="f-botones">
+            <button type="submit" class="btn-c">Buscar</button>
+            <a href="{% url 'operaciones:consulta_orden' %}" class="btn-c gris">Limpiar</a>
+        </div>
+
+    </form>
+
+    {% if error_detalle %}
+        <div class="alert alert-warning py-2 small">{{ error_detalle }}</div>
+    {% endif %}
+
 
 {% if mostrar_listado %}
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h5 mb-0">Órdenes registradas</h2>
-        <span class="text-muted">
-            Total: {{ total_ordenes }}
-        </span>
+
+    <!-- ============ RESUMEN DE EJECUCIÓN POR TÉCNICO ============ -->
+    {% if resumen %}
+    <div class="cons-card">
+        <div class="cons-card-cab">
+            <div>
+                <h2>Resumen de ejecución por técnico · {{ resumen.titulo }}</h2>
+                <p>
+                    {% if resumen.nivel == "mes" %}
+                        Órdenes por mes. Haga clic en un número (o en el mes) para ver los días de ese mes.
+                    {% else %}
+                        Órdenes por día. Haga clic en un número (o en el día) para ver las órdenes de ese día.
+                    {% endif %}
+                </p>
+                <div class="leyenda">
+                    <span><i class="ej"></i> Ejecutadas</span>
+                    <span><i class="no"></i> No ejecutadas</span>
+                </div>
+            </div>
+
+            <div class="anios">
+                {% if resumen.url_volver %}
+                    <a class="chip-anio chip-volver" href="{{ resumen.url_volver }}">← Ver todo {{ resumen.anio }}</a>
+                {% endif %}
+                {% for a in anios %}
+                    <a class="chip-anio {% if a.activo %}activo{% endif %}" href="{{ a.url }}">{{ a.valor }}</a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="cons-scroll">
+            <table class="tabla-c tabla-res">
+                <thead>
+                    <tr>
+                        <th class="c-nombre">TÉCNICO</th>
+                        {% for c in resumen.columnas %}
+                            <th class="col-dato"><a href="{{ c.url }}" title="Ver {{ c.label }}">{{ c.label }}</a></th>
+                        {% endfor %}
+                        <th class="col-total">TOTAL</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for f in resumen.filas %}
+                        <tr>
+                            <td class="c-nombre">{{ f.nombre }}</td>
+
+                            {% for c in f.celdas %}
+                                <td class="col-dato">
+                                    {% if c.ej or c.no %}
+                                        <div class="par">
+                                            {% if c.ej %}
+                                                <a class="cel ej" href="{{ c.url_ej }}" title="Ejecutadas">{{ c.ej }}</a>
+                                            {% else %}
+                                                <span class="cel nada">0</span>
+                                            {% endif %}
+
+                                            {% if c.no %}
+                                                <a class="cel no" href="{{ c.url_no }}" title="No ejecutadas">{{ c.no }}</a>
+                                            {% else %}
+                                                <span class="cel nada">0</span>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <span class="cero">·</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+
+                            <td class="col-total">
+                                <div class="par">
+                                    {% if f.total_ej %}
+                                        <a class="cel ej" href="{{ f.url_ej }}" title="Ejecutadas">{{ f.total_ej }}</a>
+                                    {% else %}
+                                        <span class="cel nada">0</span>
+                                    {% endif %}
+
+                                    {% if f.total_no %}
+                                        <a class="cel no" href="{{ f.url_no }}" title="No ejecutadas">{{ f.total_no }}</a>
+                                    {% else %}
+                                        <span class="cel nada">0</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td class="sin-datos" colspan="{{ resumen.columnas|length|add:2 }}">No hay órdenes en este período con los filtros seleccionados.</td></tr>
+                    {% endfor %}
+                </tbody>
+
+                {% if resumen.filas %}
+                <tfoot>
+                    <tr>
+                        <td class="c-nombre">TOTAL</td>
+                        {% for t in resumen.totales %}
+                            <td>
+                                {% if t.ej or t.no %}
+                                    <div class="par">
+                                        <span class="cel ej">{{ t.ej }}</span>
+                                        <span class="cel no">{{ t.no }}</span>
+                                    </div>
+                                {% else %}
+                                    <span class="cero">·</span>
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                        <td class="col-total">
+                            <div class="par">
+                                <span class="cel ej">{{ resumen.total_ej }}</span>
+                                <span class="cel no">{{ resumen.total_no }}</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- ============ LISTADO DE ÓRDENES ============ -->
+    <div class="cons-card">
+        <div class="cons-card-cab">
+            <div>
+                <h2>Órdenes registradas</h2>
+                {% if migas %}
+                    <div class="cons-migas" style="margin:4px 0 0;">
+                        <span>Filtrando por:</span>
+                        {% for m in migas %}
+                            <span class="miga">{{ m.label }} <a href="{{ m.quitar }}" title="Quitar filtro">×</a></span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            <span class="cons-total">Total: <strong>{{ total_ordenes }}</strong></span>
+        </div>
+
+        <div class="cons-scroll">
+            <table class="tabla-c">
+                <thead>
+                    <tr>
+                        <th>ORDEN</th>
+                        <th>CUENTA CONTRATO</th>
+                        <th>TIPO DE OPERACIÓN</th>
+                        <th>ESTADO</th>
+                        <th>TÉCNICO</th>
+                        <th>FECHA</th>
+                        <th class="centro">SOPORTE</th>
+                        <th class="centro">EDITAR</th>
+                        <th class="centro">INCONSISTENCIAS</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for o in page_obj %}
+                        <tr>
+                            <td>
+                                <a href="?detalle={{ o.numero_orden|urlencode }}" class="orden">{{ o.numero_orden }}</a>
+                            </td>
+                            <td>{{ o.numero_cuenta_contrato|default:"—" }}</td>
+                            <td>{{ o.get_tipo_operacion_display }}</td>
+                            
+<td>
+    <span class="etq
+        {% if o.estado == 'EFECTIVA' %}
+            etq-efectiva
+        {% elif o.estado == 'EJECUTADA' %}
+            etq-ejecutada
+        {% elif o.estado == 'NO_EJECUTADA' %}
+            etq-no-ejecutada
+        {% elif o.estado == 'ANULADA' %}
+            etq-anulada
+        {% elif o.estado == 'CANCELADA' %}
+            etq-cancelada
+        {% elif o.estado == 'PENDIENTE' or o.estado == 'CREADA' or o.estado == 'ASIGNADA' %}
+            etq-pendiente
+        {% else %}
+            etq-no-ejecutada
+        {% endif %}">
+        {{ o.get_estado_display }}
+    </span>
+</td>
+
+                            <td>
+                                {% if o.tecnico %}{{ o.tecnico.get_full_name|default:o.tecnico.username }}{% else %}—{% endif %}
+                            </td>
+                            <td>{{ o.fecha_operacion|date:"d/m/Y"|default:"—" }}</td>
+
+                            <td class="centro">
+                                {% if o.archivo_soporte %}
+                                    <a href="{% url 'operaciones:soporte' o.pk %}"
+                                       target="_blank" rel="noopener noreferrer"
+                                       class="btn-mini azul">Ver soporte</a>
+                                {% else %}
+                                    <span class="cero">Sin soporte</span>
+                                {% endif %}
+                            </td>
+
+                            <td class="centro">
+                                <a href="{% url 'operaciones:editar_instalacion' o.pk %}" class="btn-mini warn">Editar</a>
+                            </td>
+
+                            <td class="centro">
+                                {% if o.n_inc %}
+                                    <span class="etq etq-inc">⚠ {{ o.n_inc }}</span>
+                                    <form method="post"
+                                          action="{% url 'operaciones:operacion_reabrir' o.pk %}"
+                                          class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-mini danger"
+                                                onclick="return confirm('Se revertirán TODOS los materiales de la orden {{ o.numero_orden }} a su estado anterior y la orden se eliminará. ¿Continuar?')">
+                                            ↩ Reactivar
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <span class="cero">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="9" class="sin-datos">No se encontraron órdenes con los filtros seleccionados.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+            <nav class="cons-paginacion" aria-label="Paginación de órdenes">
+                {% if page_obj.has_previous %}
+                    <a class="btn-mini" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">← Anterior</a>
+                {% endif %}
+
+                <span class="pag-info">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+
+                {% if page_obj.has_next %}
+                    <a class="btn-mini" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">Siguiente →</a>
+                {% endif %}
+            </nav>
+        {% endif %}
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-striped table-hover table-bordered align-middle">
-            <thead class="table-dark">
-                <tr>
-                    <th>Orden</th>
-                    <th>Cuenta contrato</th>
-                    <th>Tipo de operación</th>
-                    <th>Estado</th>
-                    <th>Técnico</th>
-                    <th>Fecha</th>
-                    <th>Soporte</th>
-                    <th>Editar</th>
-                    <th>Inconsistencias</th>
-                </tr>
-            </thead>
+{% endif %}
 
-            <tbody>
-                {% for o in page_obj %}
+
+
+{% if operacion %}
+
+<div class="det-orden">
+
+    <!-- CABECERA -->
+    <div class="det-header">
+        <div class="det-header-info">
+            <span class="det-label">CONSULTA DE OPERACIÓN</span>
+            <h2>Orden {{ operacion.numero_orden }}</h2>
+            <p>Detalle de ejecución, materiales e inconsistencias registradas.</p>
+        </div>
+
+        <div class="det-header-acciones">
+            {% if operacion.archivo_soporte %}
+                <a href="{% url 'operaciones:soporte' operacion.pk %}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="btn-mini azul">
+                    Ver soporte
+                </a>
+            {% endif %}
+
+            <a href="{% url 'operaciones:consulta_orden' %}"
+               class="btn-c gris">
+                ← Volver al listado
+            </a>
+        </div>
+    </div>
+
+
+    <!-- INFORMACIÓN GENERAL -->
+    <div class="det-card">
+
+        <div class="det-card-header">
+            <div>
+                <h3>Información general de la orden</h3>
+                <p>Datos principales de identificación y ejecución.</p>
+            </div>
+
+            
+<span class="det-estado
+    {% if operacion.estado == 'EFECTIVA' or operacion.estado == 'EJECUTADA' %}
+        ok
+    {% elif operacion.estado == 'PENDIENTE' or operacion.estado == 'CREADA' or operacion.estado == 'ASIGNADA' %}
+        pendiente
+    {% else %}
+        error
+    {% endif %}">
+    {{ operacion.get_estado_display }}
+</span>
+
+        </div>
+
+        <div class="det-grid">
+
+            <div class="det-dato destacado">
+                <span class="etiqueta">Número de orden</span>
+                <span class="valor">{{ operacion.numero_orden }}</span>
+            </div>
+
+            <div class="det-dato">
+                <span class="etiqueta">Cuenta contrato</span>
+                <span class="valor">{{ operacion.numero_cuenta_contrato|default:"—" }}</span>
+            </div>
+
+            <div class="det-dato">
+                <span class="etiqueta">Tipo de operación</span>
+                <span class="valor">{{ operacion.get_tipo_operacion_display }}</span>
+            </div>
+
+            <div class="det-dato">
+                <span class="etiqueta">Estado</span>
+                <span class="valor">{{ operacion.get_estado_display }}</span>
+            </div>
+
+            <div class="det-dato">
+                <span class="etiqueta">Técnico responsable</span>
+                <span class="valor">
+                    {% if operacion.tecnico %}
+                        {{ operacion.tecnico.get_full_name|default:operacion.tecnico.username }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </div>
+
+            <div class="det-dato">
+                <span class="etiqueta">Fecha de operación</span>
+                <span class="valor">
+                    {{ operacion.fecha_operacion|date:"d/m/Y"|default:"—" }}
+                </span>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- MATERIALES EN FIVE -->
+    <div class="det-card">
+
+        <div class="det-card-header">
+            <div>
+                <h3>Materiales registrados en Five</h3>
+                <p>Materiales asignados e instalados durante la operación.</p>
+            </div>
+        </div>
+
+        <div class="det-tabla-scroll">
+            <table class="det-tabla">
+                <thead>
                     <tr>
+                        <th>Producto</th>
+                        <th>Identificador</th>
+                        <th class="centro">Cantidad</th>
+                        <th>Estado</th>
+                        <th>Técnico</th>
+                        <th>Instalación</th>
+                        <th>Validación SAP</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for m in materiales %}
+                    <tr>
+
                         <td>
-                            <a href="?detalle={{ o.numero_orden|urlencode }}"
-                               class="fw-bold text-decoration-none">
-                                {{ o.numero_orden }}
-                            </a>
-                        </td>
-
-                        <td>{{ o.numero_cuenta_contrato|default:"—" }}</td>
-
-                        <td>{{ o.get_tipo_operacion_display }}</td>
-
-                        <td>
-                            <span class="badge bg-info text-dark">
-                                {{ o.get_estado_display }}
+                            <span class="principal">
+                                {{ m.producto.nombre_completo }}
                             </span>
                         </td>
 
                         <td>
-                            {% if o.tecnico %}
-                                {{ o.tecnico.get_full_name|default:o.tecnico.username }}
+                            <span class="det-serial">
+                                {{ m.identificador_consulta }}
+                            </span>
+                            <span class="secundario">
+                                {{ m.tipo_identificador }}
+                            </span>
+                        </td>
+
+                        <td class="centro">
+                            <strong>
+                                {% if m.unidad_serializada_id %}
+                                    1
+                                {% else %}
+                                    {{ m.cantidad }}
+                                {% endif %}
+                            </strong>
+                        </td>
+
+                        <td>
+                            <span class="det-estado neutro">
+                                {{ m.get_estado_display }}
+                            </span>
+                        </td>
+
+                        <td>
+                            {% if m.tecnico %}
+                                {{ m.tecnico.get_full_name|default:m.tecnico.username }}
                             {% else %}
                                 —
                             {% endif %}
                         </td>
 
                         <td>
-                            {{ o.fecha_operacion|date:"d/m/Y"|default:"—" }}
+                            {{ m.fecha_instalacion|date:"d/m/Y"|default:"—" }}
                         </td>
+
                         <td>
-                            {% if o.archivo_soporte %}
-                                <a href="{% url 'operaciones:soporte' o.pk %}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-file-earmark-text"></i>
-                                    Ver soporte
-                                </a>
+                            {% if m.sap %}
+
+                                {% if m.sap.estado == "OK" %}
+                                    <span class="det-estado ok">✓ Coincide</span>
+
+                                {% elif m.sap.estado == "IGNORADO" %}
+                                    <span class="det-estado neutro">Ignorado</span>
+
+                                {% else %}
+                                    <span class="det-estado error">
+                                        {{ m.sap.tipo_error|sap_meta:"etiqueta" }}
+                                    </span>
+                                {% endif %}
+
+                            {% elif m.unidad_serializada_id %}
+                                <span class="det-estado pendiente">
+                                    No reportado en SAP
+                                </span>
+
                             {% else %}
-                                <span class="text-muted">Sin soporte</span>
+                                <span class="det-estado neutro">
+                                    Opcional · No reportado
+                                </span>
                             {% endif %}
                         </td>
 
-    
-                        <td>
-                            <a href="{% url 'operaciones:editar_instalacion' o.pk %}"
-                            class="btn btn-sm btn-warning">
-                                <i class="bi bi-pencil-square"></i> Editar
-                            </a>
-                        </td>
-                        <td>
-                            {% if o.n_inc %}
-                                <span class="badge bg-warning text-dark">⚠ {{ o.n_inc }}</span>
-                                <form method="post"
-                                    action="{% url 'operaciones:operacion_reabrir' o.pk %}"
-                                    class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-danger"
-                                            onclick="return confirm('Se revertirán TODOS los materiales de la orden {{ o.numero_orden }} a su estado anterior y la orden se eliminará. ¿Continuar?')">
-                                        ↩ Reactivar
-                                    </button>
-                                </form>
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        </td>
-                        
-                        </td>
-
-                        
                     </tr>
-                {% empty %}
+
+                    {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-4">
-                            No se encontraron órdenes con los filtros seleccionados.
+                        <td colspan="7" class="det-vacio">
+                            <span class="icono">▤</span>
+                            Esta orden no tiene materiales asignados.
                         </td>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    {% if page_obj.has_other_pages %}
-        <nav aria-label="Paginación de órdenes">
-            <ul class="pagination justify-content-center">
-
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link"
-                           href="?q={{ q|urlencode }}&estado={{ estado_sel|urlencode }}&tipo={{ tipo_sel|urlencode }}&tecnico={{ tecnico_sel|urlencode }}&page={{ page_obj.previous_page_number }}">
-                            Anterior
-                        </a>
-                    </li>
-                {% endif %}
-
-                <li class="page-item active">
-                    <span class="page-link">
-                        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-                    </span>
-                </li>
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link"
-                           href="?q={{ q|urlencode }}&estado={{ estado_sel|urlencode }}&tipo={{ tipo_sel|urlencode }}&tecnico={{ tecnico_sel|urlencode }}&page={{ page_obj.next_page_number }}">
-                            Siguiente
-                        </a>
-                    </li>
-                {% endif %}
-
-            </ul>
-        </nav>
-    {% endif %}
-{% endif %}
-
-    {% if operacion %}
-    <div class="card mb-4">
-        <div class="card-body row g-3">
-            <div class="col-md-2"><div class="small text-muted">Orden</div><div class="fw-bold">{{ operacion.numero_orden }}</div></div>
-            <div class="col-md-2"><div class="small text-muted">Cuenta contrato</div><div class="fw-bold">{{ operacion.numero_cuenta_contrato }}</div></div>
-            <div class="col-md-2"><div class="small text-muted">Tipo</div><div>{{ operacion.get_tipo_operacion_display }}</div></div>
-            <div class="col-md-2"><div class="small text-muted">Estado</div><div><span class="badge bg-info text-dark">{{ operacion.get_estado_display }}</span></div></div>
-            <div class="col-md-2"><div class="small text-muted">Técnico</div><div>{{ operacion.tecnico.get_full_name|default:operacion.tecnico.username }}</div></div>
-            <div class="col-md-2"><div class="small text-muted">Fecha</div><div>{{ operacion.fecha_operacion|date:"d/m/Y" }}</div></div>
-            <div class="col-md-2">
-    <div class="small text-muted">Soporte</div>
-    <div>
-        {% if operacion.archivo_soporte %}
-            <a href="{% url 'operaciones:soporte' operacion.pk %}"
-               target="_blank"
-               rel="noopener noreferrer"
-               class="btn btn-sm btn-outline-primary">
-                Ver soporte
-            </a>
-        {% else %}
-            <span class="text-muted">Sin soporte</span>
-        {% endif %}
-    </div>
-</div>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <h2 class="h5">Materiales en Five</h2>
-    <div class="table-responsive mb-4">
-    <table class="table table-bordered align-middle">
-        <thead class="table-dark"><tr>
-            <th>Producto</th><th>Serie</th><th>Cant.</th><th>Estado</th><th>Técnico</th>
-            <th>Instalado</th><th>En SAP</th></tr></thead>
-        <tbody>
-        {% for m in materiales %}
-            <tr>
-                <td>{{ m.producto.nombre_completo }}</td>
-                <td>
-                    <div class="fw-semibold">
-                        {{ m.identificador_consulta }}
-                    </div>
-                    <div class="small text-muted">
-                        {{ m.tipo_identificador }}
-                    </div>
-                </td>
-                <td>{% if m.unidad_serializada_id %}1{% else %} {{ m.cantidad }}{% endif %}</td>
-                <td><span class="badge bg-secondary">{{ m.get_estado_display }}</span></td>
-                <td>{{ m.tecnico.get_full_name|default:m.tecnico.username }}</td>
-                <td>{{ m.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
-                
-                <td>
-                    {% if m.sap %}
-                        {% if m.sap.estado == "OK" %}
-                            <span class="badge bg-success">Coincide</span>
-                        {% elif m.sap.estado == "IGNORADO" %}
-                            {# No mostrar nada cuando SAP lo ha ignorado #}
-                        {% else %}
-                            <span class="badge bg-danger">
-                                {{ m.sap.tipo_error|sap_meta:"etiqueta" }}
-                            </span>
-                        {% endif %}
-                    {% elif m.unidad_serializada_id %}
-                        <span class="badge bg-warning text-dark">No reportado en SAP</span>
-                    {% else %}
-                        <span class="badge bg-light text-muted border">
-                            Opcional · no reportado
-                        </span>
-                    {% endif %}
-                </td>
-            </tr>
-        {% empty %}
-            <tr><td colspan="8" class="text-center py-3">Esta orden no tiene materiales asignados.</td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
 
-    <h2 class="h5">
-        Inconsistencias de esta orden
-        {% if inconsistencias %}
-            <span class="badge bg-warning text-dark">{{ inconsistencias|length }}</span>
-        {% endif %}
-    </h2>
-    <div class="table-responsive mb-4">
-    <table class="table table-bordered align-middle">
-        <thead class="table-dark">
-            <tr>
-                <th>Tipo</th><th>Material</th><th>Serial</th><th>Cant.</th>
-                <th>¿Se instaló?</th><th>Detalle</th><th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for i in inconsistencias %}
-            <tr class="{% if i.estado == 'PENDIENTE' %}table-warning{% endif %}">
-                <td class="fw-semibold">{{ i.get_tipo_display }}</td>
-                <td>{{ i.producto.nombre_completo|default:"—" }}</td>
-                <td>{{ i.serial_reportado|default:"—" }}</td>
-                <td>{{ i.cantidad }}</td>
-                <td>
-                    {% if i.instalado %}
-                        <span class="badge bg-success">Sí (regularizado)</span>
-                    {% else %}
-                        <span class="badge bg-secondary">No, solo reportado</span>
-                    {% endif %}
-                </td>
-                <td class="small">{{ i.detalle }}</td>
-                <td>
-                    {% if i.estado == 'PENDIENTE' %}
-                        <span class="badge bg-warning text-dark">Pendiente</span>
-                    {% else %}
-                        <span class="badge bg-success">Resuelta</span>
-                        <div class="small text-muted">{{ i.nota_resolucion }}</div>
-                    {% endif %}
-                </td>
-            </tr>
-        {% empty %}
-            <tr>
-                <td>
-    {% if o.n_inc %}
-        <a href="?detalle={{ o.numero_orden|urlencode }}"
-           class="badge bg-warning text-dark text-decoration-none"
-           title="Ver inconsistencias">⚠ {{ o.n_inc }}</a>
-        <form method="post"
-              action="{% url 'operaciones:operacion_reabrir' o.pk %}"
-              class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-sm btn-outline-danger"
-                    onclick="return confirm('Se revertirán TODOS los materiales de la orden {{ o.numero_orden }} a su estado anterior y la orden se eliminará. ¿Continuar?')">
-                ↩ Reactivar
-            </button>
-        </form>
-    {% else %}
-        <span class="text-muted">—</span>
-    {% endif %}
-</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
+    <!-- INCONSISTENCIAS -->
+    <div class="det-card">
 
-    {% elif bloques %}
-        {% for b in bloques %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <strong>{{ b.unidad.numero_serie|default:b.unidad.codigo }}</strong> ·
-                {{ b.unidad.producto.nombre }} ·
-                <span class="badge bg-secondary">{{ b.unidad.get_estado_display }}</span>
+        <div class="det-card-header">
+            <div>
+                <h3>Inconsistencias de la orden</h3>
+                <p>Hallazgos y diferencias identificadas durante la validación.</p>
             </div>
-            <div class="card-body">
-                <h3 class="h6">Asignaciones / instalaciones en Five</h3>
-                <ul>
-                {% for a in b.asignaciones %}
-                    <li>
-                        Orden
-                        {% if a.operacion %}<a href="?detalle={{ a.operacion.numero_orden|urlencode }}">{{ a.operacion.numero_orden }}</a>
-                        (cuenta {{ a.operacion.numero_cuenta_contrato }}){% else %}—{% endif %}
-                        · {{ a.get_estado_display }} · {{ a.tecnico.get_full_name|default:a.tecnico.username }}
-                        · {{ a.fecha_instalacion|date:"d/m/Y"|default:"sin fecha" }}
-                        
-                    </li>
-                {% empty %}<li class="text-muted">Sin asignaciones.</li>{% endfor %}
-                </ul>
-                <h3 class="h6">Reportes de SAP</h3>
-                <ul>
-                {% for r in b.registros %}
-                    <li>Carga #{{ r.carga_id }} ({{ r.carga.fecha|date:"d/m/Y" }}) — orden {{ r.numero_orden }}:
-                        {% if r.estado == "OK" %}<span class="badge bg-success">Coincide</span>
-                        {% elif r.estado == "IGNORADO" %}<span class="badge bg-secondary">Ignorado</span>
-                        {% else %}<span class="badge bg-danger">{{ r.tipo_error }}</span> {{ r.diagnostico }}{% endif %}
-                    </li>
-                {% empty %}<li class="text-muted">SAP nunca lo ha reportado.</li>{% endfor %}
-                </ul>
-            </div>
-        </div>
-        {% endfor %}
 
-    {% elif q %}
-        <div class="alert alert-warning">
-            No se encontró la orden ni el serial <strong>{{ q }}</strong> en Five.
-            {% if candidatas %}
-            <div class="mt-2">¿Quiso decir?
-                {% for o in candidatas %}<a class="me-2" href="?q={{ o.numero_orden }}">{{ o.numero_orden }}</a>{% endfor %}
-            </div>
+            {% if inconsistencias %}
+                <span class="det-contador">
+                    {{ inconsistencias|length }}
+                </span>
             {% endif %}
         </div>
-    {% endif %}
+
+        <div class="det-tabla-scroll">
+            <table class="det-tabla">
+
+                <thead>
+                    <tr>
+                        <th>Tipo de inconsistencia</th>
+                        <th>Material</th>
+                        <th>Serial reportado</th>
+                        <th class="centro">Cantidad</th>
+                        <th>Instalación</th>
+                        <th>Detalle</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for i in inconsistencias %}
+
+                    <tr class="{% if i.estado == 'PENDIENTE' %}det-inc-pendiente{% else %}det-inc-resuelta{% endif %}">
+
+                        <td>
+                            <span class="principal">
+                                {{ i.get_tipo_display }}
+                            </span>
+                        </td>
+
+                        <td>
+                            {{ i.producto.nombre_completo|default:"—" }}
+                        </td>
+
+                        <td>
+                            <span class="det-serial">
+                                {{ i.serial_reportado|default:"—" }}
+                            </span>
+                        </td>
+
+                        <td class="centro">
+                            {{ i.cantidad }}
+                        </td>
+
+                        <td>
+                            {% if i.instalado %}
+                                <span class="det-estado ok">Sí · Regularizado</span>
+                            {% else %}
+                                <span class="det-estado neutro">No instalado</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {{ i.detalle|default:"—" }}
+                        </td>
+
+                        <td>
+                            {% if i.estado == 'PENDIENTE' %}
+                                <span class="det-estado pendiente">
+                                    ⚠ Pendiente
+                                </span>
+                            {% else %}
+                                <span class="det-estado ok">
+                                    ✓ Resuelta
+                                </span>
+
+                                {% if i.nota_resolucion %}
+                                    <span class="secundario">
+                                        {{ i.nota_resolucion }}
+                                    </span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+
+                    </tr>
+
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="det-vacio">
+                            <span class="icono">✓</span>
+                            Esta orden no presenta inconsistencias registradas.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{% endif %}
+
+
 </div>
 {% endblock %}

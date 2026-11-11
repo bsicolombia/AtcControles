@@ -8,603 +8,1254 @@
 <link rel="stylesheet" href="{% static 'css/asignaciones.css' %}">
 
 <style>
-.tabla-consolidada {
-  --w-tec: 230px;
-  --w-con: 110px;
-  --w-prod: 130px;
+/* =========================================================
+   BASE Y VARIABLES
+========================================================= */
+.pagina-asig {
+    --verde-900: #166534;
+    --verde-100: #eaf3ed;
+    --borde: #dfe7e2;
+    --borde-suave: #e8eeea;
+    --fondo-cab: #f0f5f2;
+    --texto: #1e293b;
+    --texto-2: #475569;
+    --texto-3: #64748b;
+    --azul: #2563eb;
+    --verde: #15803d;
+    --naranja: #d97706;
+    --rojo: #dc2626;
 
-  position: relative;
-  max-height: 70vh;
-  max-width: 100%;
-  overflow: auto;
-  isolation: isolate;
-  background: #fff;
-  scrollbar-gutter: stable;
+    /* Grupo 1: ASIGNADOS + DEBE TENER (azul) */
+    --g1-concepto: #dbe8fd;
+    --g1-celda: #f3f7ff;
+    --g1-borde: #2563eb;
+
+    /* Grupo 2: FIVE + SAP + DIFERENCIAS (verde) */
+    --g2-concepto: #d6eedd;
+    --g2-celda: #f2faf5;
+    --g2-borde: #16a34a;
+
+    /* Errores (amarillo) */
+    --err-concepto: #fef3c7;
+    --err-celda: #fffdf0;
+    --err-alerta: #fde68a;
+    --err-texto: #854d0e;
+    --err-borde: #eab308;
+
+    /* Diferencias / alertas (rojo) */
+    --dif-alerta: #fecaca;
+    --dif-borde: #dc2626;
+    --dif-texto: #991b1b;
+
+    font-size: 10px;
 }
 
-/* Ancho exacto = técnico + asignación + (N productos × ancho) */
+/* =========================================================
+   CABECERA
+========================================================= */
+.pagina-asig .cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: var(--fondo-cab);
+    border: 1px solid var(--borde);
+    border-left: 4px solid var(--verde-900);
+    border-radius: 7px;
+}
+
+.pagina-asig .cabecera h1 {
+    margin: 0 0 3px;
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 800;
+    letter-spacing: .2px;
+    color: var(--texto);
+}
+
+.pagina-asig .cabecera p {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--texto-3);
+}
+
+.pagina-asig .cabecera .acciones { flex-shrink: 0; }
+
+.pagina-asig .cabecera .btn {
+    min-height: 29px;
+    padding: 5px 12px;
+    font-size: 10px;
+    border-radius: 5px;
+}
+
+/* =========================================================
+   FILTROS
+========================================================= */
+.barra-filtros {
+    display: grid;
+    grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(135px, 1fr)) auto;
+    gap: 8px;
+    align-items: end;
+    padding: 9px 11px;
+    margin-bottom: 9px;
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 7px;
+}
+
+.barra-filtros .campo {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.barra-filtros label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    color: var(--texto-2);
+    text-transform: uppercase;
+}
+
+.barra-filtros .input {
+    width: 100%;
+    height: 30px;
+    padding: 4px 8px;
+    font-size: 10px;
+    box-sizing: border-box;
+}
+
+.barra-filtros .acciones-filtro { display: flex; gap: 5px; }
+
+.barra-filtros .acciones-filtro .btn {
+    height: 30px;
+    padding: 4px 10px;
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+/* =========================================================
+   RESUMEN
+========================================================= */
+.barra-resumen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 7px;
+}
+
+.pastilla {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    font-size: 9px;
+    color: var(--texto-2);
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 999px;
+}
+
+.pastilla strong { color: var(--texto); font-size: 10px; }
+
+/* =========================================================
+   TABLA CONSOLIDADA - ESTRUCTURA
+========================================================= */
+.tabla-consolidada {
+    --w-tec: 230px;
+    --w-con: 92px;
+    --w-prod: 92px;
+    --w-ivt: 145px;
+    position: relative;
+    width: 100%;
+    max-height: 76vh;
+    overflow: auto;
+    isolation: isolate;
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 7px;
+    scrollbar-gutter: stable;
+}
+
 .tabla-consolidada table {
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: fixed;
-  width: calc(var(--w-tec) + var(--w-con) + var(--n, 1) * var(--w-prod));
-  background: #fff;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    width: calc(var(--w-tec) + var(--w-con) + (var(--n, 1) * var(--w-prod)) + var(--w-ivt));
+    background: #fff;
 }
 
 .tabla-consolidada th,
 .tabla-consolidada td {
-  box-sizing: border-box;
-  border-right: 1px solid #e2e8e5;
-  border-bottom: 1px solid #e2e8e5;
-  padding: 10px;
-  vertical-align: middle;
+    box-sizing: border-box;
+    border-right: 1px solid var(--borde-suave);
+    border-bottom: 1px solid var(--borde-suave);
+    padding: 4px;
+    vertical-align: middle;
 }
 
-/* ---------- ENCABEZADOS ---------- */
+/* ---------- Encabezado ---------- */
 .tabla-consolidada thead th {
-  position: sticky;
-  top: 0;
-  z-index: 15;
-  background: #f1f5f3;
-  box-shadow: inset 0 -1px 0 #cbd5d1, 0 2px 4px rgba(15,23,42,.06);
-  color: #1e293b;
-  text-align: center;
-  vertical-align: top;
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    height: 60px;
+    background: var(--fondo-cab);
+    color: #334155;
+    text-align: center;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: .15px;
+    box-shadow: inset 0 -2px 0 #cfdcd4;
 }
 
 .tabla-consolidada th.col-producto,
 .tabla-consolidada td.valor {
-  width: var(--w-prod);
-  min-width: var(--w-prod);
-  max-width: var(--w-prod);
+    width: var(--w-prod);
+    min-width: var(--w-prod);
+    max-width: var(--w-prod);
 }
 
-/* ---------- COLUMNA TÉCNICO (fija) ---------- */
+.producto-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
+}
+
+.producto-header strong { font-size: 9px; font-weight: 800; color: var(--texto); }
+.producto-header span   { font-size: 8px; color: var(--texto-2); }
+.producto-header small  { font-size: 7px; color: var(--texto-3); }
+
+/* ---------- Columnas fijas ---------- */
 .tabla-consolidada th.col-tecnico,
 .tabla-consolidada td.tecnico-nombre {
-  position: sticky;
-  left: 0;
-  width: var(--w-tec);
-  min-width: var(--w-tec);
-  max-width: var(--w-tec);
-  overflow: hidden;
-  background: #fff;
-  background-clip: padding-box;
-  z-index: 6;
+    position: sticky;
+    left: 0;
+    width: var(--w-tec);
+    min-width: var(--w-tec);
+    max-width: var(--w-tec);
+    background: #fff;
+    z-index: 6;
+    vertical-align: top;
+    padding: 8px;
 }
 
-/* ---------- COLUMNA ASIGNACIÓN (fija) ---------- */
 .tabla-consolidada th.col-concepto,
 .tabla-consolidada td.concepto {
-  position: sticky;
-  left: var(--w-tec);
-  width: var(--w-con);
-  min-width: var(--w-con);
-  max-width: var(--w-con);
-  overflow: hidden;
-  background: #fff;
-  background-clip: padding-box;
-  z-index: 6;
-  box-shadow: 2px 0 4px rgba(15,23,42,.08);
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
-  line-height: 1.4;
-  color: #334155;
+    position: sticky;
+    left: var(--w-tec);
+    width: var(--w-con);
+    min-width: var(--w-con);
+    max-width: var(--w-con);
+    z-index: 6;
+    text-align: center;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #334155;
+    box-shadow: 2px 0 5px rgba(15, 23, 42, .08);
 }
 
-/* Esquinas: encima de todo */
 .tabla-consolidada thead th.col-tecnico,
 .tabla-consolidada thead th.col-concepto {
-  z-index: 30;
-  background: #e8efeb;
+    top: 0;
+    z-index: 35;
+    background: #e3ece7;
 }
 
-/* ---------- CELDAS DE VALORES (debajo de las fijas) ---------- */
+/* =========================================================
+   CELDAS DE VALOR
+========================================================= */
 .tabla-consolidada td.valor {
-  position: relative;
-  z-index: 1;
-  background: #fff;
-  text-align: center;
-  white-space: nowrap;
+    position: relative;
+    z-index: 1;
+    background: #fff;
+    text-align: center;
+    white-space: nowrap;
+    font-size: 10px;
+    color: #334155;
 }
 
-/* ---------- CONTENIDO DEL ENCABEZADO ---------- */
-.tabla-consolidada .producto-header {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  width: 100%; min-width: 0;
-  white-space: normal; overflow-wrap: anywhere; line-height: 1.25;
-}
-.tabla-consolidada .producto-header strong {
-  display: -webkit-box; width: 100%;
-  -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-  overflow: hidden; font-size: 12px; font-weight: 700;
-}
-.tabla-consolidada .producto-header span  { display:block; font-size: 11px; color:#475569; overflow-wrap:anywhere; }
-.tabla-consolidada .producto-header small { display:block; font-size: 10px; color:#64748b; overflow-wrap:anywhere; }
-
-/* ---------- TARJETA DEL TÉCNICO ---------- */
-.tecnico-card { display:flex; flex-direction:column; gap:12px; padding:10px; }
-.tecnico-top { display:flex; align-items:flex-start; gap:10px; }
-.tecnico-datos { display:flex; flex-direction:column; gap:6px; min-width:0; }
-.tecnico-titulo { font-size:14px; line-height:1.4; overflow-wrap:anywhere; color:#1e293b; }
-.chip-cedula { font-size:12px; color:#475569; }
-.tecnico-supervisor { display:flex; flex-direction:column; gap:4px; padding-top:8px; border-top:1px solid #e2e8f0; }
-.tecnico-supervisor .label { font-size:11px; color:#64748b; text-transform:uppercase; font-weight:600; }
-.tecnico-supervisor .valor-sup { font-size:13px; color:#334155; overflow-wrap:anywhere; }
-.tecnico-avatar {
-  display:flex; align-items:center; justify-content:center; flex-shrink:0;
-  width:36px; height:36px; border-radius:50%;
-  background:#e2eee7; color:#166534; font-size:14px; font-weight:700;
+.tabla-consolidada td.valor strong {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--texto);
 }
 
-/* ---------- ENLACES, SAP, SEPARADOR ---------- */
-.tabla-consolidada .enlace-cantidad { display:inline-block; color:#2563eb; text-decoration:none; }
-.tabla-consolidada .enlace-cantidad:hover { color:#1d4ed8; text-decoration:underline; }
-.tabla-consolidada .cero { color:#94a3b8; }
-.tabla-consolidada .sap-resultado { display:flex; align-items:center; justify-content:center; gap:6px; }
-.tabla-consolidada .sap-ok { color:#15803d; }
-.tabla-consolidada .sap-error { color:#dc2626; }
+.tabla-consolidada .enlace-cantidad {
+    display: inline-block;
+    min-width: 22px;
+    color: var(--azul);
+    text-decoration: none;
+}
+.tabla-consolidada .enlace-cantidad:hover { text-decoration: underline; }
+
+.tabla-consolidada .cero { color: #a8b3c0; font-weight: 500; }
+
+/* =========================================================
+   GRUPO 1 · ASIGNADOS + DEBE TENER  (mismo color: azul)
+========================================================= */
+.tabla-consolidada tr.fila-asignados td.concepto,
+.tabla-consolidada tr.fila-debe td.concepto {
+    background: var(--g1-concepto);
+    color: #1e3a8a;
+    border-left: 4px solid var(--g1-borde);
+}
+
+.tabla-consolidada tr.fila-asignados td.valor,
+.tabla-consolidada tr.fila-debe td.valor {
+    background: var(--g1-celda);
+}
+
+/* =========================================================
+   GRUPO 2 · FIVE + SAP + DIFERENCIAS  (mismo color: verde)
+========================================================= */
+.tabla-consolidada tr.fila-five td.concepto,
+.tabla-consolidada tr.fila-sap td.concepto,
+.tabla-consolidada tr.fila-diferencias td.concepto {
+    background: var(--g2-concepto);
+    color: #14532d;
+    border-left: 4px solid var(--g2-borde);
+}
+
+.tabla-consolidada tr.fila-five td.valor,
+.tabla-consolidada tr.fila-sap td.valor,
+.tabla-consolidada tr.fila-diferencias td.valor {
+    background: var(--g2-celda);
+}
+
+/* SAP: resultado */
+.sap-resultado {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9px;
+}
+.sap-resultado.sap-ok span    { color: var(--verde); font-weight: 800; }
+.sap-resultado.sap-error span,
+.sap-resultado.sap-error strong { color: var(--dif-texto); font-weight: 800; }
+
+/* Celda SAP que no coincide con FIVE -> ROJA */
+.tabla-consolidada tr.fila-sap td.valor:has(.sap-error) {
+    background: var(--dif-alerta);
+    box-shadow: inset 0 0 0 1px #f87171;
+}
+
+/* DIFERENCIAS con valor > 0 -> ROJA */
+.tabla-consolidada tr.fila-diferencias td.valor.celda-dif {
+    background: var(--dif-alerta);
+    box-shadow: inset 0 0 0 1px #f87171;
+}
+
+.tabla-consolidada tr.fila-diferencias td.valor.celda-dif strong {
+    color: var(--dif-texto);
+}
+
+/* =========================================================
+   FILAS DE ERRORES (amarillo)
+========================================================= */
+.tabla-consolidada td.concepto.error {
+    font-size: 8px;
+    color: var(--err-texto);
+    background: var(--err-concepto);
+    border-left: 4px solid var(--err-borde);
+}
+
+.tabla-consolidada tr.fila-error td.valor { background: var(--err-celda); }
+
+/* Celda con error (cantidad > 0) -> AMARILLO FUERTE */
+.tabla-consolidada tr.fila-error td.valor.celda-error,
+.tabla-consolidada tr.fila-error td.valor:has(a.enlace-error) {
+    background: var(--err-alerta);
+    box-shadow: inset 0 0 0 1px #facc15;
+}
+
+.tabla-consolidada .enlace-error {
+    display: inline-block;
+    min-width: 22px;
+    color: var(--err-texto);
+    text-decoration: none;
+}
+.tabla-consolidada .enlace-error strong { color: var(--err-texto); font-weight: 800; }
+.tabla-consolidada .enlace-error:hover  { text-decoration: underline; }
+
+.tabla-consolidada tr.fila-error .cero { color: #d6c27a; }
+
+/* =========================================================
+   SEPARADOR ENTRE TÉCNICOS
+========================================================= */
 .tabla-consolidada tr.separador-tecnico td {
-  height:10px; padding:0; background:#edf2ef; border-bottom:1px solid #d8e2dc;
+    height: 7px;
+    padding: 0;
+    background: #e4ece7;
+    border-bottom: 1px solid #cfdcd4;
 }
 
-/* ---------- BOTÓN ---------- */
+/* =========================================================
+   TARJETA DEL TÉCNICO
+========================================================= */
+.tecnico-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.tecnico-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.tecnico-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #e5f1e9, #cfe6d8);
+    border: 1px solid #b9d6c5;
+    color: var(--verde-900);
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.tecnico-datos {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.tecnico-titulo {
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: var(--texto);
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+}
+
+.chip-cedula {
+    align-self: flex-start;
+    padding: 1px 6px;
+    font-size: 8px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--texto-2);
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+}
+
+.tecnico-supervisor {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    background: #f8fafc;
+    border: 1px solid #e8eef3;
+    border-left: 3px solid #94a3b8;
+    border-radius: 5px;
+}
+
+.tecnico-supervisor .label {
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: .4px;
+    color: var(--texto-3);
+    text-transform: uppercase;
+}
+
+.tecnico-supervisor .valor-sup {
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #334155;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- Botones ---------- */
+.tecnico-acciones {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
 .btn-gestionar-nuevo {
-  display:inline-flex; align-items:center; justify-content:center; gap:6px;
-  padding:8px 10px; border:1px solid #cbd5e1; border-radius:7px;
-  background:#fff; color:#334155; font-size:12px; font-weight:600; text-decoration:none;
-  transition: background-color .2s ease, border-color .2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 26px;
+    padding: 4px 8px;
+    border: 1px solid #cfdcd4;
+    border-radius: 5px;
+    background: #f8faf9;
+    color: #334155;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
-.btn-gestionar-nuevo:hover { background:#f1f5f9; border-color:#94a3b8; }
 
-/* ---------- ESTADO VACÍO ---------- */
-.vacio { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:40px 20px; text-align:center; color:#64748b; }
-.vacio-icono { font-size:36px; }
-.vacio strong { font-size:16px; color:#334155; }
-.vacio span { max-width:420px; font-size:13px; line-height:1.5; }
+.btn-gestionar-nuevo:hover {
+    background: var(--verde-100);
+    border-color: #a7c5b2;
+    color: var(--verde-900);
+}
 
-/* ---------- RESPONSIVE: solo cambian las variables ---------- */
+/* Instalar = acción principal (sólido) */
+.tecnico-acciones .btn-gestionar-nuevo:first-child {
+    background: var(--verde-900);
+    border-color: var(--verde-900);
+    color: #fff;
+}
+.tecnico-acciones .btn-gestionar-nuevo:first-child:hover {
+    background: #14532d;
+    border-color: #14532d;
+    box-shadow: 0 1px 4px rgba(22, 101, 52, .35);
+    color: #fff;
+}
+
+/* Devolver = acción secundaria (contorno) */
+.tecnico-acciones .btn-gestionar-nuevo:last-child {
+    background: #fff;
+    border-color: #94a3b8;
+    color: #334155;
+}
+.tecnico-acciones .btn-gestionar-nuevo:last-child:hover {
+    background: #f1f5f9;
+    border-color: #64748b;
+    color: var(--texto);
+}
+
+/* =========================================================
+   COLUMNA IVT (resumen lateral)
+========================================================= */
+.tabla-consolidada th.ivt-header,
+.tabla-consolidada td.ivt-celda {
+    width: var(--w-ivt);
+    min-width: var(--w-ivt);
+    max-width: var(--w-ivt);
+}
+
+.tabla-consolidada th.ivt-header { background: #e8efeb; }
+
+.tabla-consolidada td.ivt-celda {
+    padding: 8px;
+    background: #f8fafc;
+    border-left: 2px solid #cfdcd4;
+    white-space: normal;
+    vertical-align: top;
+}
+
+.ivt-columna { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+
+.ivt-columna-titulo {
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: .4px;
+    color: var(--texto-3);
+    text-align: center;
+}
+
+.ivt-item {
+    display: grid;
+    grid-template-columns: 6px 1fr auto;
+    align-items: center;
+    gap: 5px;
+}
+
+.ivt-item .ivt-label { font-size: 8px; font-weight: 500; color: var(--texto-2); }
+
+.ivt-item strong {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--texto);
+    font-variant-numeric: tabular-nums;
+}
+
+.ivt-indicador { width: 6px; height: 6px; border-radius: 50%; }
+.ivt-indicador.azul    { background: #3b82f6; }
+.ivt-indicador.verde   { background: #22c55e; }
+.ivt-indicador.naranja { background: #f59e0b; }
+.ivt-indicador.rojo    { background: #ef4444; }
+.ivt-indicador.gris    { background: #94a3b8; }
+
+.ivt-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 7px;
+    margin-top: 1px;
+    border: 1px solid #cfe3d6;
+    border-radius: 5px;
+    background: var(--verde-100);
+}
+.ivt-total span   { font-size: 8px; font-weight: 800; color: #334155; }
+.ivt-total strong { font-size: 13px; color: var(--verde-900); }
+
+.ivt-num { text-decoration: none; }
+.ivt-num:hover strong { text-decoration: underline; color: var(--azul); }
+
+.ivt-enlace {
+    display: block;
+    padding: 5px;
+    border: 1px solid #bfdbfe;
+    border-radius: 5px;
+    background: #eff6ff;
+    color: var(--azul);
+    text-decoration: none;
+    text-align: center;
+    font-size: 8px;
+    font-weight: 700;
+    transition: background-color .15s ease;
+}
+.ivt-enlace:hover { background: #dbeafe; }
+
+/* =========================================================
+   SECCIÓN CONTROL IVT
+========================================================= */
+.seccion-ivt { margin-top: 12px; }
+
+.seccion-ivt .cab-ivt {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 12px 4px;
+}
+
+.seccion-ivt .cab-ivt h2 { margin: 0 0 3px; font-size: 13px; font-weight: 800; color: var(--texto); }
+.seccion-ivt .cab-ivt p  { margin: 0; font-size: 9px; color: var(--texto-3); }
+
+.ivt-buscador { display: flex; flex-direction: column; gap: 3px; min-width: 190px; }
+.ivt-buscador label { font-size: 9px; font-weight: 700; color: var(--texto-2); }
+.ivt-buscador input { width: 100%; height: 28px; padding: 4px 8px; font-size: 9px; box-sizing: border-box; }
+
+/* KPI */
+.ivt-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+    gap: 6px;
+    padding: 8px 12px;
+}
+
+.ivt-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left-width: 3px;
+    border-radius: 6px;
+}
+.ivt-kpi span   { font-size: 8px; font-weight: 600; color: var(--texto-3); }
+.ivt-kpi strong { font-size: 17px; line-height: 1; color: var(--texto); font-variant-numeric: tabular-nums; }
+
+.ivt-kpi.k-total { border-left-color: #334155; }
+.ivt-kpi.k-disp  { border-left-color: #94a3b8; }
+.ivt-kpi.k-asig  { border-left-color: #3b82f6; }
+.ivt-kpi.k-inst  { border-left-color: #22c55e; }
+.ivt-kpi.k-perd  { border-left-color: #f59e0b; }
+.ivt-kpi.k-anul  { border-left-color: #ef4444; }
+
+/* =========================================================
+   TABLA IVT
+========================================================= */
+.ivt-scroll {
+    --h-grupo: 25px;
+    max-height: 58vh;
+    overflow: auto;
+    margin: 0 12px 12px;
+    border: 1px solid var(--borde);
+    border-radius: 7px;
+    background: #fff;
+    scrollbar-gutter: stable;
+}
+
+.ivt-tabla {
+    width: 100%;
+    min-width: 850px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 9px;
+}
+
+.ivt-tabla th,
+.ivt-tabla td {
+    padding: 5px 6px;
+    text-align: center;
+    border-right: 1px solid var(--borde-suave);
+    border-bottom: 1px solid var(--borde-suave);
+    box-sizing: border-box;
+}
+
+.ivt-tabla thead th {
+    position: sticky;
+    z-index: 15;
+    background: var(--fondo-cab);
+    color: #334155;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: .1px;
+    white-space: nowrap;
+}
+
+.ivt-tabla thead tr:first-child th { top: 0; height: var(--h-grupo); }
+
+.ivt-tabla thead tr:nth-child(2) th {
+    top: var(--h-grupo);
+    background: #f7faf8;
+    box-shadow: inset 0 -1px 0 #d5e0d9;
+}
+
+.ivt-tabla th.g-asig { background: #e8f0fe; color: #1d4ed8; }
+.ivt-tabla th.g-inst { background: #e6f5ec; color: var(--verde); }
+
+.ivt-tabla .c-tecnico {
+    position: sticky;
+    left: 0;
+    min-width: 160px;
+    text-align: left;
+    background: #fff;
+    z-index: 6;
+    box-shadow: 2px 0 5px rgba(15, 23, 42, .06);
+}
+
+.ivt-tabla thead .c-tecnico { top: 0; z-index: 30; background: #e3ece7; }
+
+.ivt-tabla tbody tr:hover td,
+.ivt-tabla tbody tr:hover td.c-tecnico { background: #f4f9f6; }
+
+.ivt-tabla .nombre  { font-size: 9px; font-weight: 700; color: var(--texto); }
+.ivt-tabla .usuario { display: block; margin-top: 1px; font-size: 8px; color: var(--texto-3); }
+
+.ivt-cant {
+    display: inline-block;
+    min-width: 24px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+.ivt-cant.n-azul    { background: #e8f0fe; color: #1d4ed8; }
+.ivt-cant.n-verde   { background: #e6f5ec; color: var(--verde); }
+.ivt-cant.n-naranja { background: #fef3c7; color: #b45309; }
+.ivt-cant.n-rojo    { background: #fee2e2; color: #b91c1c; }
+.ivt-cant.n-cero    { background: #f1f5f9; color: #94a3b8; }
+.ivt-cant.n-total   { background: #e2e8f0; color: var(--texto); }
+
+.ivt-rango {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 9px;
+    font-weight: 600;
+    color: #334155;
+}
+.ivt-rango.vacio-rango { color: #cbd5e1; font-weight: 400; }
+
+.ivt-tabla tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 8;
+    background: var(--verde-100);
+    font-weight: 800;
+    color: var(--texto);
+    border-top: 2px solid #cfe0d5;
+}
+.ivt-tabla tfoot td.c-tecnico { z-index: 12; text-align: left; }
+
+.ivt-sin-resultados { display: none; }
+
+/* =========================================================
+   ESTADO VACÍO
+========================================================= */
+.vacio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 25px 12px;
+    text-align: center;
+    color: var(--texto-3);
+}
+.vacio-icono { font-size: 25px; }
+.vacio strong { font-size: 12px; color: #334155; }
+.vacio span { max-width: 350px; font-size: 10px; line-height: 1.4; }
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 1100px) {
+    .barra-filtros { grid-template-columns: 1fr 1fr; }
+    .barra-filtros .campo-busqueda,
+    .barra-filtros .acciones-filtro { grid-column: 1 / -1; }
+}
+
 @media (max-width: 768px) {
-  .tabla-consolidada { --w-tec: 190px; --w-con: 100px; --w-prod: 120px; max-height: 65vh; }
-  .tecnico-card { padding: 8px; gap: 10px; }
+    .pagina-asig .cabecera { flex-direction: column; align-items: flex-start; padding: 9px; }
+    .pagina-asig .cabecera h1 { font-size: 12px; }
+    .pagina-asig .cabecera p  { font-size: 9px; }
+
+    .barra-filtros { grid-template-columns: 1fr; gap: 7px; padding: 8px; }
+
+    .tabla-consolidada {
+        --w-tec: 195px;
+        --w-con: 80px;
+        --w-prod: 85px;
+        --w-ivt: 125px;
+        max-height: 65vh;
+    }
+
+    .tabla-consolidada th,
+    .tabla-consolidada td { padding: 3px; }
+
+    .ivt-kpis { grid-template-columns: repeat(2, 1fr); padding: 7px 9px; }
+    .ivt-scroll { margin: 0 8px 10px; }
+    .seccion-ivt .cab-ivt { padding: 9px; }
 }
 </style>
 {% endblock %}
+
+
 {% block contenido %}
+<div class="pagina-asig">
 
-<div class="cabecera">
+    <!-- ============================================================
+         CABECERA
+    ============================================================ -->
+    <div class="cabecera">
+        <div>
+            <h1>ASIGNACION MATERIAL | DIGITACION FIVE VS SAP | DETECTOR DE ERRORES</h1>
+            <p>
+                Control consolidado del material entregado a cada técnico,
+                instalaciones registradas y material que debe conservar.
+            </p>
+        </div>
 
-    <div>
-        <h1>Asignaciones</h1>
-
-        <p>
-            Control consolidado del material entregado a cada técnico,
-            instalaciones registradas y material que debe conservar.
-        </p>
+        <div class="acciones">
+            <a class="btn btn-primario" href="{% url 'almacen:asignacion_crear' %}">
+                + Nueva asignación
+            </a>
+        </div>
     </div>
 
-    <div class="acciones">
-        <a
-            class="btn btn-primario"
-            href="{% url 'almacen:asignacion_crear' %}"
-        >
-            + Nueva asignación
-        </a>
-    </div>
 
-</div>
+    <!-- ============================================================
+         FILTROS
+    ============================================================ -->
+    <form class="barra-filtros" method="get">
 
-
-<!-- ============================================================
-     FILTROS
-============================================================ -->
-<form class="filtros" method="get">
-
-    <!-- Buscar -->
-    <div class="filtro-busqueda">
-        <input
-            class="input buscar"
-            type="search"
-            name="q"
-            value="{{ q }}"
-            placeholder="Buscar técnico, cédula, producto, código, cuenta contrato"
-        >
-    </div>
-
-    <!-- Filtrar por técnico -->
-    <select
-    class="input select-tecnico"
-    name="tecnico"
-    onchange="this.form.submit()"
->
-    <option value="">Ningun Tecnico Seleccionado</option>
-
-    
-    {% for tecnico in tecnicos_lista %}
-        <option
-            value="{{ tecnico.pk }}"
-            {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
-                selected
-            {% endif %}
-        >
-            {{ tecnico.get_full_name|default:tecnico.username|upper }}
-        </option>
-    {% endfor %}
-
-</select>
-
-    <!-- Filtrar por estado -->
-    <select
-        class="input select-estado"
-        name="estado"
-        onchange="this.form.submit()"
-    >
-        <option value="">Todos los estados</option>
-
-        {% for v, l in estados %}
-            <option
-                value="{{ v }}"
-                {% if v == estado_sel %}selected{% endif %}
+        <div class="campo campo-busqueda">
+            <label for="f-q">Búsqueda</label>
+            <input
+                id="f-q"
+                class="input buscar"
+                type="search"
+                name="q"
+                value="{{ q }}"
+                placeholder="Técnico, cédula, producto, código o cuenta contrato"
             >
-                {{ l }}
-            </option>
-        {% endfor %}
-    </select>
+        </div>
 
-    <button class="btn" type="submit">
-        Buscar
-    </button>
+        <div class="campo">
+            <label for="f-tecnico">Técnico</label>
+            <select id="f-tecnico" class="input select-tecnico" name="tecnico" onchange="this.form.submit()">
+                <option value="">Todos los técnicos</option>
+                {% for tecnico in tecnicos_lista %}
+                    <option value="{{ tecnico.pk }}" {% if tecnico_sel == tecnico.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ tecnico.get_full_name|default:tecnico.username|upper }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
 
-    {% if q or estado_sel or tecnico_sel %}
-    <a
-        class="btn btn-limpiar"
-        href="{% url 'almacen:asignaciones' %}"
-    >
-        Limpiar
-    </a>
-{% endif %}
+        <div class="campo">
+            <label for="f-estado">Estado de la asignación</label>
+            <select id="f-estado" class="input select-estado" name="estado" onchange="this.form.submit()">
+                <option value="">Todos los estados</option>
+                {% for valor, etiqueta in estados %}
+                    <option value="{{ valor }}" {% if estado_sel == valor %}selected{% endif %}>
+                        {{ etiqueta }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
 
-</form>
+        <div class="campo">
+            <label for="f-ivt">Estado del IVT</label>
+            <select id="f-ivt" class="input" name="ivt_estado" onchange="this.form.submit()">
+                <option value="">Todos los estados IVT</option>
+                {% for valor, etiqueta in ivt_estados %}
+                    <option value="{{ valor }}" {% if ivt_estado_sel == valor %}selected{% endif %}>
+                        IVT · {{ etiqueta }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
 
+        <div class="acciones-filtro">
+            <button class="btn btn-primario" type="submit">Buscar</button>
 
+            {% if q or estado_sel or tecnico_sel or ivt_estado_sel %}
+                <a class="btn btn-limpiar" href="{% url 'almacen:asignaciones' %}">Limpiar</a>
+            {% endif %}
+        </div>
 
-<!-- ============================================================
-     TABLA CONSOLIDADA
-============================================================ -->
-
-<div class="tarjeta tarjeta-asignaciones">
-
-    {% if tecnicos and productos %}
-
-        <div class="tabla-consolidada">
-
-            <table>
-
-                <!-- ==================================================
-                     CABECERA
-                =================================================== -->
-
-                <thead>
-
-                    <tr>
-
-                        <th class="col-tecnico">
-                            TÉCNICO
-                        </th>
-
-                        <th class="col-concepto">
-                            ASIGNACIÓN
-                        </th>
+    </form>
 
 
-                        {% for producto in productos %}
+    <!-- Contadores de resultado -->
+    <div class="barra-resumen">
+        <span class="pastilla">Técnicos <strong>{{ tecnicos|length }}</strong></span>
+        <span class="pastilla">Productos <strong>{{ productos|length }}</strong></span>
+    </div>
 
-                            <th
-                                class="col-producto"
-                                title="{{ producto.nombre_completo }}"
-                            >
 
+    <!-- ============================================================
+         TABLA CONSOLIDADA
+    ============================================================ -->
+    <div class="tarjeta tarjeta-asignaciones">
+
+        {% if tecnicos %}
+
+            <div class="tabla-consolidada" style="--n: {{ productos|length }}">
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th class="col-tecnico">TÉCNICO</th>
+                            <th class="col-concepto">CONCEPTO</th>
+
+                            {% for producto in productos %}
+                                <th class="col-producto" title="{{ producto.nombre_completo }}">
+                                    <div class="producto-header">
+                                        <strong>{{ producto.nombre }}</strong>
+
+                                        {% if producto.medida %}<span>{{ producto.medida }}</span>{% endif %}
+                                        {% if producto.color %}<span>{{ producto.color }}</span>{% endif %}
+                                        {% if producto.presentacion %}<span>{{ producto.presentacion }}</span>{% endif %}
+
+                                        <small>{{ producto.codigo_producto }}</small>
+                                    </div>
+                                </th>
+                            {% endfor %}
+
+                            <th class="col-producto ivt-header">
                                 <div class="producto-header">
-
-                                    <strong>
-                                        {{ producto.nombre }}
-                                    </strong>
-
-                                    {% if producto.medida %}
-                                        <span>{{ producto.medida }}</span>
-                                    {% endif %}
-
-                                    {% if producto.color %}
-                                        <span>{{ producto.color }}</span>
-                                    {% endif %}
-
-                                    {% if producto.presentacion %}
-                                        <span>{{ producto.presentacion }}</span>
-                                    {% endif %}
-
-                                    <small>
-                                        {{ producto.codigo_producto }}
-                                    </small>
-
+                                    <strong>IVT'S</strong>
+                                    <span>Resumen</span>
                                 </div>
-
                             </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for tecnico_data in tecnicos %}
+                            {# 5 filas fijas (asignados, debe, five, sap, diferencias) + filas de error #}
+
+                            <!-- ASIGNADOS -->
+                            <tr class="fila-asignados">
+
+                                <td class="tecnico-nombre" rowspan="{{ tecnico_data.errores|length|add:5 }}">
+                                    <div class="tecnico-card">
+
+                                        <div class="tecnico-top">
+                                            <div class="tecnico-avatar">
+                                                {{ tecnico_data.tecnico.first_name|default:tecnico_data.tecnico.username|slice:":1"|upper }}
+                                            </div>
+
+                                            <div class="tecnico-datos">
+                                                <strong class="tecnico-titulo">
+                                                    {{ tecnico_data.tecnico.get_full_name|default:tecnico_data.tecnico.username }}
+                                                </strong>
+                                                <span class="chip-cedula">
+                                                    CC {{ tecnico_data.tecnico.cedula|default:"Sin cédula" }}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div class="tecnico-supervisor">
+                                            <span class="label">Supervisor asignado</span>
+                                            <span class="valor-sup">
+                                                {% if tecnico_data.tecnico.supervisor %}
+                                                    {{ tecnico_data.tecnico.supervisor.get_full_name|default:tecnico_data.tecnico.supervisor.username }}
+                                                {% else %}
+                                                    Sin supervisor asignado
+                                                {% endif %}
+                                            </span>
+                                        </div>
+
+                                        <div class="tecnico-acciones">
+                                            <a class="btn-gestionar-nuevo"
+                                               href="{% url 'almacen:tecnico_asignaciones' tecnico_data.tecnico.pk %}">
+                                                Instalar
+                                            </a>
+                                            <a class="btn-gestionar-nuevo"
+                                               href="{% url 'almacen:tecnico_devolver' tecnico_data.tecnico.pk %}">
+                                                Devolver
+                                            </a>
+                                        </div>
+
+                                    </div>
+                                </td>
+
+                                <td class="concepto">ASIGNADOS</td>
+
+                                {% for celda in tecnico_data.filas.ASIGNADOS %}
+                                    <td class="valor asignado">
+                                        {% if celda.url %}
+                                            <a href="{{ celda.url }}" class="enlace-cantidad">
+                                                {% if celda.cantidad > 0 %}<strong>{{ celda.cantidad }}</strong>{% else %}<span class="cero">0</span>{% endif %}
+                                            </a>
+                                        {% else %}
+                                            {% if celda.cantidad > 0 %}<strong>{{ celda.cantidad }}</strong>{% else %}<span class="cero">0</span>{% endif %}
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+
+                                <!-- RESUMEN IVT DEL TÉCNICO -->
+                                <td class="valor ivt-celda" rowspan="{{ tecnico_data.errores|length|add:5 }}">
+                                    <div class="ivt-columna">
+
+                                        <div class="ivt-columna-titulo">RESUMEN IVT</div>
+
+                                        <div class="ivt-item">
+                                            <span class="ivt-indicador azul"></span>
+                                            <span class="ivt-label">Asignados</span>
+                                            {% if tecnico_data.ivt.asignados %}
+                                                <a class="ivt-num" href="{% url 'almacen:ivt_lista' %}?tecnico={{ tecnico_data.tecnico.pk }}&estado=ASIGNADO"><strong>{{ tecnico_data.ivt.asignados }}</strong></a>
+                                            {% else %}<strong>0</strong>{% endif %}
+                                        </div>
+
+                                        <div class="ivt-item">
+                                            <span class="ivt-indicador verde"></span>
+                                            <span class="ivt-label">Instalados</span>
+                                            {% if tecnico_data.ivt.instalados %}
+                                                <a class="ivt-num" href="{% url 'almacen:ivt_lista' %}?tecnico={{ tecnico_data.tecnico.pk }}&estado=INSTALADO"><strong>{{ tecnico_data.ivt.instalados }}</strong></a>
+                                            {% else %}<strong>0</strong>{% endif %}
+                                        </div>
+
+                                        <div class="ivt-item">
+                                            <span class="ivt-indicador naranja"></span>
+                                            <span class="ivt-label">Perdidos</span>
+                                            {% if tecnico_data.ivt.perdidos %}
+                                                <a class="ivt-num" href="{% url 'almacen:ivt_lista' %}?tecnico={{ tecnico_data.tecnico.pk }}&estado=PERDIDO"><strong>{{ tecnico_data.ivt.perdidos }}</strong></a>
+                                            {% else %}<strong>0</strong>{% endif %}
+                                        </div>
+
+                                        <div class="ivt-item">
+                                            <span class="ivt-indicador rojo"></span>
+                                            <span class="ivt-label">Anulados</span>
+                                            {% if tecnico_data.ivt.anulados %}
+                                                <a class="ivt-num" href="{% url 'almacen:ivt_lista' %}?tecnico={{ tecnico_data.tecnico.pk }}&estado=ANULADO"><strong>{{ tecnico_data.ivt.anulados }}</strong></a>
+                                            {% else %}<strong>0</strong>{% endif %}
+                                        </div>
+
+                                        <div class="ivt-total">
+                                            <span>TOTAL IVT</span>
+                                            <strong>{{ tecnico_data.ivt.total }}</strong>
+                                        </div>
+
+                                        <a class="ivt-enlace"
+                                           href="{% url 'almacen:ivt_lista' %}?tecnico={{ tecnico_data.tecnico.pk }}">
+                                            Ver consecutivos →
+                                        </a>
+
+                                    </div>
+                                </td>
+
+                            </tr>
+
+                            <!-- DEBE TENER -->
+                            <tr class="fila-debe">
+                                <td class="concepto">DEBE TENER</td>
+
+                                {% for celda in tecnico_data.filas.DEBE_TENER %}
+                                    <td class="valor debe-valor">
+                                        {% if celda.cantidad > 0 %}<strong>{{ celda.cantidad }}</strong>{% else %}<span class="cero">0</span>{% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+
+                            <!-- FIVE -->
+                            <tr class="fila-five">
+                                <td class="concepto">INSTALADO<br>SEGÚN FIVE</td>
+
+                                {% for celda in tecnico_data.filas.FIVE %}
+                                    <td class="valor">
+                                        {% if celda.url %}
+                                            <a href="{{ celda.url }}" class="enlace-cantidad">
+                                                {% if celda.cantidad > 0 %}<strong>{{ celda.cantidad }}</strong>{% else %}<span class="cero">0</span>{% endif %}
+                                            </a>
+                                        {% else %}
+                                            {% if celda.cantidad > 0 %}<strong>{{ celda.cantidad }}</strong>{% else %}<span class="cero">0</span>{% endif %}
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+
+                            <!-- SAP -->
+                            <tr class="fila-sap">
+                                <td class="concepto">INSTALADOS<br>POR SAP</td>
+
+                                {% for celda in tecnico_data.filas.SAP %}
+                                    <td class="valor">
+                                        <div class="sap-resultado {% if celda.coincide %}sap-ok{% else %}sap-error{% endif %}">
+                                            <strong>{{ celda.cantidad }}</strong>
+                                            {% if celda.coincide %}
+                                                <span title="SAP coincide con FIVE">✓</span>
+                                            {% else %}
+                                                <span title="SAP no coincide con FIVE">✕</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                {% endfor %}
+                            </tr>
+
+                            <!-- DIFERENCIAS -->
+                            <tr class="fila-diferencias">
+                                <td class="concepto">DIFERENCIAS<br>FIVE VS SAP</td>
+
+                                {% for celda in tecnico_data.filas.DIFERENCIAS %}
+                                    <td class="valor {% if celda.cantidad > 0 %}celda-dif{% endif %}">
+                                        {% if celda.cantidad > 0 %}<strong>{{ celda.cantidad }}</strong>{% else %}<span class="cero">0</span>{% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+
+                            <!-- ERRORES -->
+                            {% for err in tecnico_data.errores %}
+                                <tr class="fila-error">
+                                    <td class="concepto error" title="{{ err.etiqueta }}">
+                                        {{ err.corto }}
+                                        {% if err.total %}
+                                            <br><a class="enlace-error" href="{{ err.url_total }}" title="Total del técnico en este error">({{ err.total }})</a>
+                                        {% endif %}
+                                    </td>
+
+                                    {% for celda in err.celdas %}
+                                        <td class="valor {% if celda.cantidad %}celda-error{% endif %}">
+                                            {% if celda.cantidad %}
+                                                <a class="enlace-error" href="{{ celda.url }}"><strong>{{ celda.cantidad }}</strong></a>
+                                            {% else %}
+                                                <span class="cero">0</span>
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+
+                            <!-- SEPARADOR -->
+                            <tr class="separador-tecnico">
+                                <td colspan="100"></td>
+                            </tr>
 
                         {% endfor %}
 
-                    </tr>
+                    </tbody>
 
-                </thead>
+                </table>
 
-
-                <!-- ==================================================
-                     CUERPO
-                =================================================== -->
-
-                <tbody>
-
-                    {% for tecnico_data in tecnicos %}
-
-                        <!-- ==================================================
-                             ASIGNADOS
-                        =================================================== -->
-
-                        <tr class="fila-asignados">
-
-                            <!-- Reemplaza TODO el <td class="tecnico-nombre" rowspan="4"> ... </td> de la fila "fila-asignados" -->
-
-                            <td class="tecnico-nombre" rowspan="4">
-
-                                <div class="tecnico-card">
-
-                                    <!-- Nombre y cédula del técnico -->
-                                    <div class="tecnico-top">
-
-                                        <div class="tecnico-avatar">
-                                            {{ tecnico_data.tecnico.first_name|default:tecnico_data.tecnico.username|slice:":1"|upper }}
-                                        </div>
-
-                                        <div class="tecnico-datos">
-
-                                            <strong class="tecnico-titulo">
-                                                {{ tecnico_data.tecnico.get_full_name|default:tecnico_data.tecnico.username }}
-                                            </strong>
-
-                                            <span class="chip-cedula">
-                                                CC {{ tecnico_data.tecnico.cedula|default:"Sin cédula" }}
-                                            </span>
-
-                                        </div>
-
-                                    </div>
-
-                                    <div class="tecnico-supervisor">
-
-                                        <span class="label">Supervisor asignado</span>
-
-                                        <span class="valor-sup">
-                                            {% if tecnico_data.tecnico.supervisor %}
-                                                {{ tecnico_data.tecnico.supervisor.get_full_name|default:tecnico_data.tecnico.supervisor.username }}
-                                            {% else %}
-                                                Sin supervisor asignado
-                                            {% endif %}
-                                        </span>
-
-                                    </div>
-
-                                    <!-- Botón para gestionar materiales -->
-                                    <a class="btn-gestionar-nuevo"
-                                    href="{% url 'almacen:tecnico_asignaciones' tecnico_data.tecnico.pk %}">
-
-                                        <svg width="16" height="16" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2"
-                                            stroke-linecap="round" stroke-linejoin="round"
-                                            aria-hidden="true">
-                                            <path d="M7 7h13l-3-3M17 17H4l3 3"/>
-                                        </svg>
-
-                                        Instalar
-
-                                    </a>
-                                    <!-- Botón para gestionar materiales -->
-                                    <a class="btn-gestionar-nuevo"
-                                    href="{% url 'almacen:tecnico_devolver' tecnico_data.tecnico.pk %}">
-
-                                        <svg width="16" height="16" viewBox="0 0 24 24"
-                                            fill="none" stroke="currentColor" stroke-width="2"
-                                            stroke-linecap="round" stroke-linejoin="round"
-                                            aria-hidden="true">
-                                            <path d="M7 7h13l-3-3M17 17H4l3 3"/>
-                                        </svg>
-
-                                        Devolver
-
-                                    </a>
-
-                                </div>
-
-                            </td>
-
-
-
-                            <td class="concepto asignados">
-                                ASIGNADOS
-                            </td>
-
-
-                            {% for celda in tecnico_data.filas.ASIGNADOS %}
-
-                                <td class="valor asignado">
-
-                                    {% if celda.url %}
-                                        <a href="{{ celda.url }}" class="enlace-cantidad">
-                                            {% if celda.cantidad > 0 %}
-                                                <strong>{{ celda.cantidad }}</strong>
-                                            {% else %}
-                                                <span class="cero">0</span>
-                                            {% endif %}
-                                        </a>
-                                    {% else %}
-                                        {% if celda.cantidad > 0 %}
-                                            <strong>{{ celda.cantidad }}</strong>
-                                        {% else %}
-                                            <span class="cero">0</span>
-                                        {% endif %}
-                                    {% endif %}
-
-                                </td>
-
-                            {% endfor %}
-
-                        </tr>
-
-
-                        <!-- ==================================================
-                             FIVE
-                        =================================================== -->
-
-                        <tr class="fila-five">
-                            <td class="concepto five">
-                                INSTALADO<br>
-                                SEGÚN FIVE
-                            </td>
-
-                            {% for celda in tecnico_data.filas.FIVE %}
-                                <td class="valor">
-                                    {% if celda.url %}
-                                        <a href="{{ celda.url }}"
-                                        class="enlace-cantidad">
-                                            {% if celda.cantidad > 0 %}
-                                                <strong>{{ celda.cantidad }}</strong>
-                                            {% else %}
-                                                <span class="cero">0</span>
-                                            {% endif %}
-                                        </a>
-                                    {% else %}
-                                        {% if celda.cantidad > 0 %}
-                                            <strong>{{ celda.cantidad }}</strong>
-                                        {% else %}
-                                            <span class="cero">0</span>
-                                        {% endif %}
-                                    {% endif %}
-                                </td>
-                            {% endfor %}
-                        </tr>
-                        <!-- ==================================================
-                            SAP
-                        =================================================== -->
-
-                        <tr class="fila-sap">
-
-                            <td class="concepto sap">
-                                INSTALADOS<br>
-                                POR SAP
-                            </td>
-
-                            {% for celda in tecnico_data.filas.SAP %}
-
-                                <td class="valor">
-
-                                    <div class="sap-resultado
-                                        {% if celda.coincide %}
-                                            sap-ok
-                                        {% else %}
-                                            sap-error
-                                        {% endif %}">
-
-                                        <strong>{{ celda.cantidad }}</strong>
-
-                                        {% if celda.coincide %}
-                                            <span title="SAP coincide con FIVE">✓</span>
-                                        {% else %}
-                                            <span title="SAP no coincide con FIVE">✕</span>
-                                        {% endif %}
-
-                                    </div>
-
-                                </td>
-
-                            {% endfor %}
-
-                        </tr>
-
-
-
-                        <!-- ==================================================
-                             DEBE TENER
-                        =================================================== -->
-
-                        <tr class="fila-debe">
-                            <td class="concepto debe">
-                                DEBE TENER
-                            </td>
-
-                            {% for celda in tecnico_data.filas.DEBE_TENER %}
-                                <td class="valor debe-valor">
-                                    {% if celda.url %}
-                                        <a href="{{ celda.url }}"
-                                        class="enlace-cantidad">
-                                            {% if celda.cantidad > 0 %}
-                                                <strong>{{ celda.cantidad }}</strong>
-                                            {% else %}
-                                                <span class="cero">0</span>
-                                            {% endif %}
-                                        </a>
-                                    {% else %}
-                                        {% if celda.cantidad > 0 %}
-                                            <strong>{{ celda.cantidad }}</strong>
-                                        {% else %}
-                                            <span class="cero">0</span>
-                                        {% endif %}
-                                    {% endif %}
-                                </td>
-                            {% endfor %}
-                        </tr>
-
-
-                        <!-- ==================================================
-                             SEPARADOR
-                        =================================================== -->
-
-                        <tr class="separador-tecnico">
-
-                            <td
-                                colspan="100"
-                            ></td>
-
-                        </tr>
-
-                    {% endfor %}
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-
-    {% else %}
-
-        <div class="vacio">
-
-            <div class="vacio-icono">
-                📦
             </div>
 
-            <strong>
-                No hay asignaciones
-            </strong>
+        {% else %}
 
-            <span>
-                Asigne material o una unidad a un técnico
-                para comenzar a controlar sus existencias.
-            </span>
+            <div class="vacio">
+                <div class="vacio-icono">📦</div>
+                <strong>No hay asignaciones</strong>
+                <span>
+                    Asigne material o una unidad a un técnico
+                    para comenzar a controlar sus existencias.
+                </span>
+            </div>
 
-        </div>
+        {% endif %}
 
-    {% endif %}
+    </div>
+
 
 </div>
 
+<script>
+(function () {
+    var tabla = document.getElementById('ivtTabla');
+    if (!tabla) return;
+
+    var filas = Array.prototype.slice.call(tabla.querySelectorAll('tbody tr'));
+    var buscador = document.getElementById('ivtBuscar');
+    var visibles = document.getElementById('ivtVisibles');
+    var sinResultados = document.getElementById('ivtSinResultados');
+    var contenedor = tabla.parentNode;
+
+    function poner(id, valor) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = valor;
+    }
+
+    function recalcular() {
+        var texto = (buscador && buscador.value ? buscador.value : '').toLowerCase().trim();
+        var s = { asig: 0, inst: 0, perd: 0, anul: 0, total: 0 };
+        var n = 0;
+
+        filas.forEach(function (f) {
+            var coincide = !texto || f.getAttribute('data-buscar').toLowerCase().indexOf(texto) !== -1;
+            f.style.display = coincide ? '' : 'none';
+            if (!coincide) return;
+            n++;
+            Object.keys(s).forEach(function (k) {
+                s[k] += parseInt(f.getAttribute('data-' + k), 10) || 0;
+            });
+        });
+
+        poner('kpiAsig', s.asig);
+        poner('kpiInst', s.inst);
+        poner('kpiPerd', s.perd);
+        poner('kpiAnul', s.anul);
+
+        poner('totAsig', s.asig);
+        poner('totInst', s.inst);
+        poner('totPerd', s.perd);
+        poner('totAnul', s.anul);
+        poner('totTotal', s.total);
+
+        if (visibles) visibles.textContent = n;
+        contenedor.style.display = n ? '' : 'none';
+        if (sinResultados) sinResultados.style.display = n ? 'none' : 'flex';
+    }
+
+    if (buscador) buscador.addEventListener('input', recalcular);
+    recalcular();
+})();
+</script>
 {% endblock %}

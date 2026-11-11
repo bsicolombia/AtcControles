@@ -1,0 +1,815 @@
+{% extends "base.html" %}
+{% block titulo %}Control de IVT{% endblock %}
+
+{% block extra_css %}
+<style>
+/* =========================================================
+   BASE Y VARIABLES
+========================================================= */
+.pagina-ivt {
+    --borde: #dfe7e2;
+    --borde-suave: #e8eeea;
+    --fondo-cab: #f0f5f2;
+    --texto: #1e293b;
+    --texto-2: #475569;
+    --texto-3: #64748b;
+    --verde-900: #166534;
+    --verde-100: #eaf3ed;
+    --verde: #15803d;
+    --azul: #2563eb;
+    font-size: 10px;
+}
+
+/* =========================================================
+   CABECERA
+========================================================= */
+.ivt-cab {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: var(--fondo-cab);
+    border: 1px solid var(--borde);
+    border-left: 4px solid var(--verde-900);
+    border-radius: 7px;
+}
+.ivt-cab h1 { margin: 0 0 3px; font-size: 14px; font-weight: 800; letter-spacing: .2px; color: var(--texto); }
+.ivt-cab p  { margin: 0; font-size: 10px; line-height: 1.4; color: var(--texto-3); }
+.ivt-cab .acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* =========================================================
+   BOTONES
+========================================================= */
+.btn-i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--verde-900);
+    border-radius: 5px;
+    background: var(--verde-900);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+.btn-i:hover { background: #14532d; border-color: #14532d; color: #fff; }
+.btn-i.sec  { background: #fff; color: var(--verde-900); }
+.btn-i.sec:hover { background: var(--verde-100); color: var(--verde-900); }
+.btn-i.gris { background: #fff; color: #334155; border-color: #cbd5e1; }
+.btn-i.gris:hover { background: #f1f5f9; color: #334155; }
+.btn-i.oscuro { background: #1e293b; border-color: #1e293b; }
+.btn-i.oscuro:hover { background: #0f172a; }
+.btn-i[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* =========================================================
+   MENSAJES
+========================================================= */
+.ivt-msg {
+    padding: 7px 12px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    border: 1px solid;
+    font-size: 10px;
+}
+.ivt-msg.success { background: #e6f5ec; border-color: #b7e0c4; color: #15803d; }
+.ivt-msg.error, .ivt-msg.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
+.ivt-msg.warning { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+.ivt-msg.info    { background: #e8f0fe; border-color: #bfdbfe; color: #1d4ed8; }
+
+/* =========================================================
+   CONTADORES POR ESTADO
+========================================================= */
+.ivt-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.ivt-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #94a3b8;
+    border-radius: 6px;
+    color: var(--texto-3);
+    font-size: 9px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color .15s ease;
+}
+.ivt-chip strong { font-size: 17px; line-height: 1; color: var(--texto); font-variant-numeric: tabular-nums; }
+.ivt-chip:hover  { background: #f1f5f9; }
+.ivt-chip.activo { background: #fff; outline: 2px solid var(--verde-900); outline-offset: 1px; }
+
+.ivt-chip.e-DISPONIBLE { border-left-color: #94a3b8; }
+.ivt-chip.e-ASIGNADO   { border-left-color: #3b82f6; }
+.ivt-chip.e-INSTALADO  { border-left-color: #22c55e; }
+.ivt-chip.e-ANULADO    { border-left-color: #ef4444; }
+.ivt-chip.e-PERDIDO    { border-left-color: #f59e0b; }
+
+/* =========================================================
+   TARJETAS
+========================================================= */
+.ivt-card {
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 7px;
+    margin-bottom: 10px;
+}
+.ivt-card-cab {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 12px 4px;
+}
+.ivt-card-cab h2 { margin: 0 0 2px; font-size: 13px; font-weight: 800; color: var(--texto); }
+.ivt-card-cab p  { margin: 0; font-size: 9px; color: var(--texto-3); }
+
+.ivt-buscador { display: flex; flex-direction: column; gap: 3px; min-width: 190px; }
+.ivt-buscador label { font-size: 9px; font-weight: 700; color: var(--texto-2); text-transform: uppercase; letter-spacing: .2px; }
+.ivt-buscador input {
+    width: 100%;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    font-size: 10px;
+}
+
+/* =========================================================
+   FILTROS (una sola fila compacta)
+========================================================= */
+.ivt-filtros {
+    display: grid;
+    grid-template-columns: 1.1fr 1.7fr .7fr .7fr 1.4fr auto auto;
+    gap: 8px;
+    align-items: end;
+    padding: 9px 12px;
+}
+.ivt-filtros .campo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ivt-filtros label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .2px;
+    color: var(--texto-2);
+    text-transform: uppercase;
+}
+
+.ivt-filtros input[type="text"],
+.ivt-filtros input[type="search"],
+.ivt-filtros select,
+.ivt-acciones select,
+.ivt-acciones input[type="text"] {
+    width: 100%;
+    height: 30px;
+    box-sizing: border-box;
+    padding: 0 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #fff;
+    font-size: 10px;
+    color: var(--texto);
+}
+.ivt-filtros input:focus,
+.ivt-filtros select:focus,
+.ivt-acciones select:focus,
+.ivt-acciones input:focus,
+.ivt-buscador input:focus { outline: 2px solid #a7c5b2; border-color: var(--verde-900); }
+
+.check-fisico {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--texto);
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.check-fisico input { width: 13px; height: 13px; margin: 0; }
+
+.f-botones { display: flex; gap: 5px; }
+
+/* =========================================================
+   BARRA DE ACCIONES MASIVAS
+========================================================= */
+.ivt-acciones {
+    display: grid;
+    grid-template-columns: minmax(200px, 1fr) minmax(220px, 2fr) auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    border-top: 1px solid var(--borde-suave);
+    background: #fafcfb;
+}
+.sel-contador { font-size: 10px; color: var(--texto-2); white-space: nowrap; }
+.sel-contador strong { font-size: 12px; color: var(--texto); }
+
+/* =========================================================
+   CONTADOR DE RESULTADOS
+========================================================= */
+.ivt-contador {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 8px 12px 6px;
+}
+.pastilla {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    font-size: 9px;
+    color: var(--texto-2);
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 999px;
+}
+.pastilla strong { color: var(--texto); font-size: 10px; }
+
+/* =========================================================
+   TABLAS (encabezado fijo + scroll)
+========================================================= */
+.ivt-scroll {
+    max-height: 62vh;
+    overflow: auto;
+    margin: 0 12px 12px;
+    border: 1px solid var(--borde);
+    border-radius: 7px;
+    background: #fff;
+    scrollbar-gutter: stable;
+}
+
+.pend-scroll {
+    max-height: 260px;
+    overflow: auto;
+    margin: 6px 12px 12px;
+    border: 1px solid var(--borde);
+    border-radius: 7px;
+    background: #fff;
+    scrollbar-gutter: stable;
+}
+
+.tabla-i {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 10px;
+}
+.tabla-i.ancha { min-width: 1000px; table-layout: fixed; }
+
+.tabla-i th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 30px;
+    padding: 5px 8px;
+    background: var(--fondo-cab);
+    color: #334155;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .3px;
+    text-align: left;
+    white-space: nowrap;
+    border-right: 1px solid var(--borde-suave);
+    box-shadow: inset 0 -2px 0 #cfdcd4;
+}
+
+.tabla-i td {
+    padding: 5px 8px;
+    border-right: 1px solid var(--borde-suave);
+    border-bottom: 1px solid var(--borde-suave);
+    vertical-align: middle;
+    color: #334155;
+    overflow-wrap: anywhere;
+}
+
+.tabla-i tbody tr:hover td { background: #f4f9f6; }
+.tabla-i tbody tr.marcada td { background: #eef6f1; }
+
+.tabla-i .centro,
+.tabla-i th.centro { text-align: center; }
+
+.tabla-i .c-chk { width: 34px; text-align: center; }
+.tabla-i .c-chk input { width: 13px; height: 13px; margin: 0; cursor: pointer; }
+
+.c-ivt     { width: 85px; }
+.c-estado  { width: 160px; }
+.c-tecnico { width: 190px; }
+.c-orden   { width: 120px; }
+.c-fecha   { width: 95px; }
+.c-remis   { width: 165px; }
+
+.codigo-ivt {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .3px;
+    color: var(--texto);
+}
+tr.anulado .codigo-ivt { text-decoration: line-through; color: #94a3b8; }
+
+.tabla-i a.enlace { color: var(--azul); text-decoration: none; font-weight: 600; }
+.tabla-i a.enlace:hover { text-decoration: underline; }
+
+/* Etiquetas de estado */
+.etq {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.etq-DISPONIBLE { background: #f1f5f9; color: #475569; }
+.etq-ASIGNADO   { background: #e8f0fe; color: #1d4ed8; }
+.etq-INSTALADO  { background: #e6f5ec; color: #15803d; }
+.etq-ANULADO    { background: #fee2e2; color: #b91c1c; }
+.etq-PERDIDO    { background: #fef3c7; color: #b45309; }
+.etq-fisico     { background: #b91c1c; color: #fff; margin-left: 4px; }
+
+/* =========================================================
+   RESUMEN IVT POR TÉCNICO
+========================================================= */
+.res-nombre { font-size: 10px; font-weight: 700; color: var(--texto); }
+.res-usuario { display: block; margin-top: 1px; font-size: 8px; color: var(--texto-3); }
+
+.tabla-res th.g-asig { background: #e8f0fe; color: #1d4ed8; }
+.tabla-res th.g-inst { background: #e6f5ec; color: var(--verde); }
+.tabla-res th.g-perd { background: #fef3c7; color: #b45309; }
+.tabla-res th.g-anul { background: #fee2e2; color: #b91c1c; }
+
+.tabla-res .c-nombre {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    min-width: 170px;
+    background: #fff;
+    box-shadow: 2px 0 5px rgba(15, 23, 42, .06);
+}
+.tabla-res thead .c-nombre { z-index: 30; background: #e3ece7; }
+.tabla-res tbody tr:hover td.c-nombre { background: #f4f9f6; }
+
+.cant {
+    display: inline-block;
+    min-width: 26px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    text-decoration: none;
+}
+a.cant:hover { filter: brightness(.95); text-decoration: underline; }
+.cant.n-azul    { background: #e8f0fe; color: #1d4ed8; }
+.cant.n-verde   { background: #e6f5ec; color: var(--verde); }
+.cant.n-naranja { background: #fef3c7; color: #b45309; }
+.cant.n-rojo    { background: #fee2e2; color: #b91c1c; }
+.cant.n-cero    { background: #f1f5f9; color: #94a3b8; }
+.cant.n-total   { background: #e2e8f0; color: var(--texto); }
+
+.tabla-i tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 8;
+    padding: 6px 8px;
+    background: var(--verde-100);
+    font-weight: 800;
+    color: var(--texto);
+    border-top: 2px solid #cfe0d5;
+}
+.tabla-res tfoot td.c-nombre { z-index: 12; background: var(--verde-100); }
+
+.btn-mini {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    padding: 2px 9px;
+    border: 1px solid #cfdcd4;
+    border-radius: 5px;
+    background: #f8faf9;
+    color: #334155;
+    font-size: 9px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+.btn-mini:hover { background: var(--verde-100); border-color: #a7c5b2; color: var(--verde-900); }
+
+.sin-datos { padding: 24px 12px !important; text-align: center; color: var(--texto-3); }
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 1100px) {
+    .ivt-filtros { grid-template-columns: repeat(4, 1fr); }
+    .ivt-filtros .f-q,
+    .ivt-filtros .f-botones { grid-column: 1 / -1; }
+    .ivt-acciones { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 768px) {
+    .ivt-cab { flex-direction: column; align-items: flex-start; padding: 9px; }
+    .ivt-filtros { grid-template-columns: 1fr 1fr; padding: 8px; }
+    .ivt-acciones { grid-template-columns: 1fr; }
+    .ivt-scroll, .pend-scroll { margin-left: 8px; margin-right: 8px; }
+}
+</style>
+{% endblock %}
+
+
+{% block contenido %}
+<div class="pagina-ivt">
+
+    <!-- ============ CABECERA ============ -->
+    <div class="ivt-cab">
+        <div>
+            <h1>CONTROL DE IVT</h1>
+            <p>Consecutivos IVT por estado, técnico y rango, con acciones masivas sobre lo seleccionado.</p>
+        </div>
+
+        <div class="acciones">
+            <a class="btn-i" href="{% url 'almacen:ingreso_crear' %}">+ Ingreso de IVT</a>
+            <a class="btn-i sec" href="{% url 'almacen:asignacion_crear' %}">Asignar a técnico</a>
+        </div>
+    </div>
+
+    {% for m in messages %}
+        <div class="ivt-msg {{ m.tags }}">{{ m }}</div>
+    {% endfor %}
+
+
+    <!-- ============ CONTADORES POR ESTADO ============ -->
+    <div class="ivt-resumen">
+        {% for valor, etiqueta, n in resumen %}
+            <a href="?estado={{ valor }}" class="ivt-chip e-{{ valor }} {% if estado_sel == valor %}activo{% endif %}">
+                <span>{{ etiqueta }}</span>
+                <strong>{{ n }}</strong>
+            </a>
+        {% endfor %}
+    </div>
+
+
+    <!-- ============ RESUMEN IVT POR TÉCNICO ============ -->
+    {% if por_tecnico %}
+    <div class="ivt-card">
+        <div class="ivt-card-cab">
+            <div>
+                <h2>Resumen IVT por técnico</h2>
+                <p>Asignados, instalados, perdidos y anulados de cada técnico, con su total.</p>
+            </div>
+
+            <div class="ivt-buscador">
+                <label for="resBuscar">Buscar técnico</label>
+                <input id="resBuscar" type="search" placeholder="Nombre o usuario" autocomplete="off">
+            </div>
+        </div>
+
+        <div class="pend-scroll">
+            <table class="tabla-i tabla-res" id="tablaRes">
+                <thead>
+                    <tr>
+                        <th class="c-nombre">TÉCNICO</th>
+                        <th class="centro g-asig">ASIGNADOS (SIN USAR)</th>
+                        <th class="centro g-inst">INSTALADOS</th>
+                        <th class="centro g-perd">PERDIDOS</th>
+                        <th class="centro g-anul">ANULADOS</th>
+                        <th class="centro">TOTAL IVT</th>
+                        <th class="centro">DETALLE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in por_tecnico %}
+                        <tr data-buscar="{{ t.tecnico__first_name }} {{ t.tecnico__last_name }} {{ t.tecnico__username }}"
+                            data-asig="{{ t.asignados|default:0 }}"
+                            data-inst="{{ t.instalados|default:0 }}"
+                            data-perd="{{ t.perdidos|default:0 }}"
+                            data-anul="{{ t.anulados|default:0 }}"
+                            data-total="{{ t.total|default:0 }}">
+
+                            <td class="c-nombre">
+                                {% if t.tecnico__first_name %}
+                                    <span class="res-nombre">{{ t.tecnico__first_name }} {{ t.tecnico__last_name }}</span>
+                                    <span class="res-usuario">{{ t.tecnico__username }}</span>
+                                {% else %}
+                                    <span class="res-nombre">{{ t.tecnico__username }}</span>
+                                {% endif %}
+                            </td>
+
+                            <td class="centro">
+                                {% if t.asignados %}
+                                    <a class="cant n-azul" href="?estado=ASIGNADO&tecnico={{ t.tecnico_id }}">{{ t.asignados }}</a>
+                                {% else %}<span class="cant n-cero">0</span>{% endif %}
+                            </td>
+
+                            <td class="centro">
+                                {% if t.instalados %}
+                                    <a class="cant n-verde" href="?estado=INSTALADO&tecnico={{ t.tecnico_id }}">{{ t.instalados }}</a>
+                                {% else %}<span class="cant n-cero">0</span>{% endif %}
+                            </td>
+
+                            <td class="centro">
+                                {% if t.perdidos %}
+                                    <a class="cant n-naranja" href="?estado=PERDIDO&tecnico={{ t.tecnico_id }}">{{ t.perdidos }}</a>
+                                {% else %}<span class="cant n-cero">0</span>{% endif %}
+                            </td>
+
+                            <td class="centro">
+                                {% if t.anulados %}
+                                    <a class="cant n-rojo" href="?estado=ANULADO&tecnico={{ t.tecnico_id }}">{{ t.anulados }}</a>
+                                {% else %}<span class="cant n-cero">0</span>{% endif %}
+                            </td>
+
+                            <td class="centro"><span class="cant n-total">{{ t.total|default:0 }}</span></td>
+
+                            <td class="centro">
+                                <a class="btn-mini" href="?tecnico={{ t.tecnico_id }}">Ver IVT</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td class="c-nombre">TOTAL</td>
+                        <td class="centro" id="totAsig">0</td>
+                        <td class="centro" id="totInst">0</td>
+                        <td class="centro" id="totPerd">0</td>
+                        <td class="centro" id="totAnul">0</td>
+                        <td class="centro" id="totTotal">0</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="vacio-res sin-datos" id="resSinResultados" style="display:none;">
+            Ningún técnico coincide con la búsqueda.
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- ============ LISTADO ============ -->
+    <div class="ivt-card">
+
+        <!-- Filtros -->
+        <form method="get" class="ivt-filtros">
+
+            <div class="campo f-estado">
+                <label for="f-estado">Estado</label>
+                <select id="f-estado" name="estado">
+                    <option value="">Todos los estados</option>
+                    {% for v, l in estados %}
+                        <option value="{{ v }}" {% if estado_sel == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="campo f-tecnico">
+                <label for="f-tecnico">Técnico</label>
+                <select id="f-tecnico" name="tecnico">
+                    <option value="">Todos los técnicos</option>
+                    {% for t in tecnicos_lista %}
+                        <option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ t.get_full_name|default:t.username }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="campo f-desde">
+                <label for="f-desde">IVT desde</label>
+                <input id="f-desde" type="text" name="desde" value="{{ desde }}" placeholder="00001" inputmode="numeric">
+            </div>
+
+            <div class="campo f-hasta">
+                <label for="f-hasta">IVT hasta</label>
+                <input id="f-hasta" type="text" name="hasta" value="{{ hasta }}" placeholder="00100" inputmode="numeric">
+            </div>
+
+            <div class="campo f-q">
+                <label for="f-q">Orden o remisión</label>
+                <input id="f-q" type="search" name="q" value="{{ q }}" placeholder="Número de orden o remisión">
+            </div>
+
+            <div class="campo f-fisico">
+                <label>&nbsp;</label>
+                <label class="check-fisico" for="fisico">
+                    <input type="checkbox" name="fisico" value="1" id="fisico" {% if fisico_sel == "1" %}checked{% endif %}>
+                    Físico perdido
+                </label>
+            </div>
+
+            <div class="f-botones">
+                <button class="btn-i" type="submit">Filtrar</button>
+                <a class="btn-i gris" href="{% url 'almacen:ivt_lista' %}">Limpiar</a>
+            </div>
+
+        </form>
+
+        <!-- Acciones masivas + tabla (mismo formulario) -->
+        <form method="post" action="{% url 'almacen:ivt_cambiar_estado' %}" id="formAcciones">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+            <div class="ivt-acciones">
+                <select name="accion" id="accion" required>
+                    <option value="">Acción para lo seleccionado…</option>
+                    <option value="ANULADO">Marcar ANULADO (tachado)</option>
+                    <option value="PERDIDO">Marcar PERDIDO</option>
+                    <option value="FISICO_PERDIDO">Instalado con físico perdido</option>
+                    <option value="DISPONIBLE">Devolver a almacén (disponible)</option>
+                    <option value="ASIGNADO">Recuperado (volver a asignado)</option>
+                </select>
+
+                <input type="text" name="motivo" placeholder="Motivo (obligatorio)" required>
+
+                <span class="sel-contador"><strong id="selCantidad">0</strong> seleccionados</span>
+
+                <button class="btn-i oscuro" id="btnAplicar" type="submit" disabled>Aplicar</button>
+            </div>
+
+            <!-- CONTADOR DE RESULTADOS -->
+            <div class="ivt-contador">
+                <span class="pastilla">
+                    Total de IVT encontrados:
+                    <strong>{% if page_obj.paginator %}{{ page_obj.paginator.count }}{% else %}{{ page_obj|length }}{% endif %}</strong>
+                </span>
+
+                <span class="pastilla">
+                    Seleccionados:
+                    <strong id="contadorSeleccionados">0</strong>
+                </span>
+
+                <span class="pastilla">
+                    Estado:
+                    <strong>{% if estado_sel %}{{ estado_sel }}{% else %}Todos los estados{% endif %}</strong>
+                </span>
+            </div>
+
+            <!-- Tabla con scroll y encabezado fijo -->
+            <div class="ivt-scroll">
+                <table class="tabla-i ancha">
+                    <thead>
+                        <tr>
+                            <th class="c-chk"><input type="checkbox" id="todos" title="Seleccionar todos los de esta página"></th>
+                            <th class="c-ivt">IVT</th>
+                            <th class="c-estado">ESTADO</th>
+                            <th class="c-tecnico">TÉCNICO</th>
+                            <th class="c-orden">ORDEN</th>
+                            <th class="c-fecha">ASIGNADO</th>
+                            <th class="c-fecha">INSTALADO</th>
+                            <th class="c-remis">REMISIÓN / CAJA</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                    {% for i in page_obj %}
+                        <tr class="{% if i.estado == 'ANULADO' %}anulado{% endif %}">
+                            <td class="c-chk"><input type="checkbox" name="ids" value="{{ i.pk }}" class="chk"></td>
+                            <td><span class="codigo-ivt">{{ i.codigo }}</span></td>
+                            <td>
+                                <span class="etq etq-{{ i.estado }}">{{ i.get_estado_display }}</span>
+                                {% if i.fisico_perdido %}<span class="etq etq-fisico">Físico perdido</span>{% endif %}
+                            </td>
+                            <td>{% if i.tecnico %}{{ i.tecnico.get_full_name|default:i.tecnico.username }}{% else %}—{% endif %}</td>
+                            <td>
+                                {% if i.operacion %}
+                                    <a class="enlace" href="{% url 'operaciones:consulta_orden' %}?detalle={{ i.operacion.numero_orden|urlencode }}">{{ i.operacion.numero_orden }}</a>
+                                {% else %}—{% endif %}
+                            </td>
+                            <td>{{ i.fecha_asignacion|date:"d/m/Y"|default:"—" }}</td>
+                            <td>{{ i.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
+                            <td>{{ i.caja.remision.numero_remision|default:"—" }} · caja {{ i.caja.numero_caja }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td class="sin-datos" colspan="8">No hay IVT con esos filtros.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+(function () {
+    // ---- Selección masiva ----
+    var todos = document.getElementById("todos");
+    var checks = Array.prototype.slice.call(document.querySelectorAll(".chk"));
+    var cantidad = document.getElementById("selCantidad");
+    var boton = document.getElementById("btnAplicar");
+    var form = document.getElementById("formAcciones");
+
+    function actualizar() {
+        var n = 0;
+
+        checks.forEach(function (c) {
+            if (c.checked) n++;
+            c.closest("tr").classList.toggle("marcada", c.checked);
+        });
+
+        if (cantidad) cantidad.textContent = n;
+
+        var contadorSeleccionados = document.getElementById("contadorSeleccionados");
+        if (contadorSeleccionados) contadorSeleccionados.textContent = n;
+
+        if (boton) boton.disabled = n === 0;
+
+        if (todos) {
+            todos.checked = n > 0 && n === checks.length;
+            todos.indeterminate = n > 0 && n < checks.length;
+        }
+    }
+
+    if (todos) {
+        todos.addEventListener("change", function () {
+            var v = this.checked;
+            checks.forEach(function (c) { c.checked = v; });
+            actualizar();
+        });
+    }
+    checks.forEach(function (c) { c.addEventListener("change", actualizar); });
+
+    if (form) {
+        form.addEventListener("submit", function (e) {
+            var n = checks.filter(function (c) { return c.checked; }).length;
+            if (!n) { e.preventDefault(); return; }
+            if (!confirm("¿Aplicar la acción a los " + n + " IVT seleccionados?")) e.preventDefault();
+        });
+    }
+    actualizar();
+
+    // ---- Resumen IVT por técnico: buscador + totales ----
+    var tabla = document.getElementById("tablaRes");
+    if (!tabla) return;
+
+    var filas = Array.prototype.slice.call(tabla.querySelectorAll("tbody tr"));
+    var buscador = document.getElementById("resBuscar");
+    var sinRes = document.getElementById("resSinResultados");
+    var contenedor = tabla.parentNode;
+
+    function poner(id, valor) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = valor;
+    }
+
+    function recalcular() {
+        var texto = (buscador && buscador.value ? buscador.value : "").toLowerCase().trim();
+        var s = { asig: 0, inst: 0, perd: 0, anul: 0, total: 0 };
+        var n = 0;
+
+        filas.forEach(function (f) {
+            var ok = !texto || f.getAttribute("data-buscar").toLowerCase().indexOf(texto) !== -1;
+            f.style.display = ok ? "" : "none";
+            if (!ok) return;
+            n++;
+            Object.keys(s).forEach(function (k) {
+                s[k] += parseInt(f.getAttribute("data-" + k), 10) || 0;
+            });
+        });
+
+        poner("totAsig", s.asig);
+        poner("totInst", s.inst);
+        poner("totPerd", s.perd);
+        poner("totAnul", s.anul);
+        poner("totTotal", s.total);
+
+        contenedor.style.display = n ? "" : "none";
+        if (sinRes) sinRes.style.display = n ? "none" : "block";
+    }
+
+    if (buscador) buscador.addEventListener("input", recalcular);
+    recalcular();
+})();
+</script>
+{% endblock %}

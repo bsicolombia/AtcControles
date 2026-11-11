@@ -43,5 +43,10 @@ urlpatterns = [
     path("api/validar-serial-instalacion/", views.ValidarSerialInstalacionJson.as_view(), name="api_validar_serial_instalacion"),
     path("inconsistencias/", views.InconsistenciaListView.as_view(), name="inconsistencias"),
     path("inconsistencias/<int:pk>/resolver/", views.InconsistenciaResolverView.as_view(), name="inconsistencia_resolver"),
-
+    
+    path("ivt/", views.IVTListView.as_view(), name="ivt_lista"),
+    path("ivt/ingreso/", views.IngresoIVTView.as_view(), name="ivt_ingreso"),
+    path("ivt/asignar/", views.AsignarIVTView.as_view(), name="ivt_asignar"),
+    path("ivt/cambiar-estado/", views.IVTCambiarEstadoView.as_view(), name="ivt_cambiar_estado"),
+    path("api/validar-ivt/", views.ValidarIVTJson.as_view(), name="api_validar_ivt"),
 ]

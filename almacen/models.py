@@ -644,55 +644,39 @@ class EntregaMaterial(models.Model):
             for item in self.items.all()
         )
 
-
 class EntregaItem(models.Model):
 
     class EstadoRetorno(models.TextChoices):
         DISPONIBLE = "DISPONIBLE", "Disponible"
         DANADO = "DANADO", "Dañado"
+        ANULADO = "ANULADO", "Anulado"      # solo IVT
+        PERDIDO = "PERDIDO", "Perdido"      # solo IVT
 
     entrega = models.ForeignKey(
-        EntregaMaterial,
-        on_delete=models.CASCADE,
-        related_name="items",
+        EntregaMaterial, on_delete=models.CASCADE, related_name="items",
     )
 
+    # Null cuando la línea es de IVT
     producto = models.ForeignKey(
-        "almacen.Producto",
-        on_delete=models.PROTECT,
+        "almacen.Producto", null=True, blank=True, on_delete=models.PROTECT,
     )
+
+    # Rango de IVT (solo líneas de IVT)
+    ivt_inicial = models.PositiveIntegerField(null=True, blank=True)
+    ivt_final = models.PositiveIntegerField(null=True, blank=True)
 
     unidad = models.ForeignKey(
-        "almacen.UnidadSerializada",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
+        "almacen.UnidadSerializada", null=True, blank=True, on_delete=models.PROTECT,
     )
-
-    # Asignación concreta que originó la devolución.
-    # En entregas puede quedar vacío.
     asignacion = models.ForeignKey(
-        "almacen.Asignacion",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
+        "almacen.Asignacion", null=True, blank=True, on_delete=models.PROTECT,
         related_name="items_devolucion",
     )
-
-    serial = models.CharField(
-        max_length=100,
-        blank=True,
-    )
-
+    serial = models.CharField(max_length=100, blank=True)
     cantidad = models.PositiveIntegerField(default=1)
-
     estado_retorno = models.CharField(
-        max_length=15,
-        choices=EstadoRetorno.choices,
-        null=True,
-        blank=True,
+        max_length=15, choices=EstadoRetorno.choices, null=True, blank=True,
     )
-
     observacion = models.TextField(blank=True)
 
     class Meta:
@@ -700,8 +684,33 @@ class EntregaItem(models.Model):
         verbose_name_plural = "Materiales de entrega o devolución"
 
     def __str__(self):
-        return f"{self.producto} - {self.cantidad}"
+        return f"{self.nombre_material} - {self.cantidad}"
 
+    # ---- helpers para que PDF/Excel/plantillas traten IVT como un material ----
+    @property
+    def es_ivt(self):
+        return self.ivt_inicial is not None
+
+    @property
+    def nombre_material(self):
+        return "IVT (consecutivos)" if self.es_ivt else self.producto.nombre_completo
+
+    @property
+    def codigo_material(self):
+        return "IVT" if self.es_ivt else (self.producto.codigo_producto or "")
+
+    @property
+    def texto_ivt(self):
+        """'00100-00149' (+ estado si es devolución)."""
+        if not self.es_ivt:
+            return ""
+        if self.ivt_inicial == self.ivt_final:
+            rango = f"{self.ivt_inicial:05d}"
+        else:
+            rango = f"{self.ivt_inicial:05d}-{self.ivt_final:05d}"
+        if self.estado_retorno:
+            rango += f" ({self.get_estado_retorno_display()})"
+        return rango
 class Inconsistencia(models.Model):
 
     class Tipo(models.TextChoices):
@@ -784,3 +793,77 @@ class Inconsistencia(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_display()} · {self.serial_reportado or self.producto}"
+    
+class CajaIVT(models.Model):
+    remision = models.ForeignKey(
+        RemisionIngreso, null=True, blank=True,
+        on_delete=models.PROTECT, related_name="cajas_ivt",
+    )
+    numero_caja = models.PositiveSmallIntegerField(default=1)
+    consecutivo_inicial = models.PositiveIntegerField()
+    consecutivo_final = models.PositiveIntegerField()
+    cantidad = models.PositiveIntegerField()
+    fecha_ingreso = models.DateField()
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                related_name="cajas_ivt_registradas")
+    observacion = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["consecutivo_inicial"]
+
+    def __str__(self):
+        return f"Caja {self.numero_caja} · {self.consecutivo_inicial:05d}-{self.consecutivo_final:05d}"
+
+
+class IVT(models.Model):
+
+    class Estado(models.TextChoices):
+        DISPONIBLE = "DISPONIBLE", "Disponible (almacén)"
+        ASIGNADO = "ASIGNADO", "Asignado (pendiente)"
+        INSTALADO = "INSTALADO", "Instalado"
+        ANULADO = "ANULADO", "Anulado"
+        PERDIDO = "PERDIDO", "Perdido"
+
+    numero = models.PositiveIntegerField(unique=True)
+    caja = models.ForeignKey(CajaIVT, on_delete=models.PROTECT, related_name="ivts")
+    estado = models.CharField(max_length=12, choices=Estado.choices,
+                              default=Estado.DISPONIBLE, db_index=True)
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                on_delete=models.PROTECT, related_name="ivts")
+    operacion = models.ForeignKey("operaciones.Operacion", null=True, blank=True,
+                                  on_delete=models.SET_NULL, related_name="ivts")
+    fecha_asignacion = models.DateField(null=True, blank=True)
+    fecha_instalacion = models.DateField(null=True, blank=True)
+    # Instalado, pero el técnico perdió el papel físico
+    fisico_perdido = models.BooleanField(default=False)
+    fecha_cambio_estado = models.DateTimeField(null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "IVT"
+        verbose_name_plural = "IVT"
+        indexes = [models.Index(fields=["estado", "tecnico"])]
+
+    def __str__(self):
+        return self.codigo
+
+    @property
+    def codigo(self):
+        return f"{self.numero:05d}"
+
+
+class MovimientoIVT(models.Model):
+    ivt = models.ForeignKey(IVT, on_delete=models.CASCADE, related_name="movimientos")
+    estado_anterior = models.CharField(max_length=12, blank=True)
+    estado_nuevo = models.CharField(max_length=12)
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                on_delete=models.SET_NULL, related_name="+")
+    operacion = models.ForeignKey("operaciones.Operacion", null=True, blank=True,
+                                  on_delete=models.SET_NULL, related_name="+")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                related_name="+")
+    fecha = models.DateTimeField(auto_now_add=True)
+    observacion = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-fecha", "-id"]

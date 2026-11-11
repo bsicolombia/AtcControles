@@ -471,6 +471,61 @@ Devolver material · {{ tecnico.get_full_name|default:tecnico.username }}
 
         {% endif %}
 
+        {% if ivt_rangos or ivt_filas %}
+        <div class="card" style="border-left:5px solid #b45309">
+
+            <h3>🧾 IVT (consecutivos)</h3>
+
+            <p class="ayuda">
+                Asignados al técnico:
+                {% for r in ivt_rangos %}
+                    <strong>{{ r.texto }}</strong> ({{ r.cantidad }}){% if not forloop.last %} · {% endif %}
+                {% empty %}
+                    ninguno
+                {% endfor %}.
+                Indique el rango que devuelve y cómo regresa. Puede agregar varias filas
+                (por ejemplo, unos disponibles y otros perdidos).
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Desde</th><th>Hasta</th><th>Cantidad</th>
+                        <th>Estado al regresar</th><th></th>
+                    </tr>
+                </thead>
+                <tbody id="ivt-filas">
+                    {% for f in ivt_filas %}
+                    <tr>
+                        <td><input type="number" min="1" name="ivt_ini" value="{{ f.ini }}"></td>
+                        <td><input type="number" min="1" name="ivt_fin" value="{{ f.fin }}"></td>
+                        <td class="ivt-cant">—</td>
+                        <td>
+                            <select name="ivt_estado">
+                                <option value="DISPONIBLE" {% if f.estado == "DISPONIBLE" %}selected{% endif %}>Disponible (vuelve al almacén)</option>
+                                <option value="ANULADO" {% if f.estado == "ANULADO" %}selected{% endif %}>Anulado</option>
+                                <option value="PERDIDO" {% if f.estado == "PERDIDO" %}selected{% endif %}>Perdido</option>
+                            </select>
+                        </td>
+                        <td><button type="button" class="btn sec ivt-quitar">×</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {% for e in error_ivt %}
+                <small class="error-celda">{{ e }}</small>
+            {% endfor %}
+
+            <div class="acciones">
+                <button type="button" class="btn sec" id="btn-add-ivt">+ Agregar rango</button>
+            </div>
+
+        </div>
+        {% endif %}
+
+        
+
 
         <div class="card">
 

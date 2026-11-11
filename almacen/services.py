@@ -12,6 +12,9 @@ from .models import (
     Producto,
     UnidadSerializada,
     RemisionIngreso,
+    MovimientoIVT,
+    IVT,
+    CajaIVT,
 )
 T = Inconsistencia.Tipo
 REGULARIZAR_AUTOMATICO = False
@@ -1303,34 +1306,47 @@ def _revertir_cantidad(*, asignacion, cantidad, usuario, motivo):
         cantidad=cantidad, usuario=usuario,
         observacion=f"{motivo} {cantidad} regresaron al técnico {a.tecnico}.")
 
-
 @transaction.atomic
 def sincronizar_materiales_operacion(*, operacion, payload, usuario):
     """Deja los materiales de la operación iguales al payload, aplicando solo diferencias."""
     tecnico = operacion.tecnico
     if not tecnico:
         raise ErrorInventario("La operación no tiene un técnico asignado.")
-
+ 
     fecha = operacion.fecha_ejecucion or operacion.fecha_operacion
     motivo = f"Edición de la orden {operacion.numero_orden}."
-
-    # Las novedades que solo se reportaron se reevalúan: las que siguen
-    # siendo válidas se vuelven a crear más abajo.
+ 
+    # (a) Las novedades que solo se reportaron se regeneran más abajo:
+    #     se borran para no dejar una copia "resuelta" por cada edición.
     Inconsistencia.objects.filter(
-        operacion=operacion, estado=Inconsistencia.Estado.PENDIENTE, instalado=False,
-    ).update(estado=Inconsistencia.Estado.RESUELTA, resuelto_por=usuario,
-             fecha_resolucion=timezone.now(),
-             nota_resolucion="Reevaluada al editar la orden.")
-
+        operacion=operacion,
+        estado=Inconsistencia.Estado.PENDIENTE,
+        instalado=False,
+    ).delete()
+ 
     actuales = list(Asignacion.objects.select_for_update()
                     .filter(operacion=operacion, estado=EstadoA.INSTALADA)
                     .order_by("-pk"))
-    por_unidad = {a.unidad_serializada_id: a for a in actuales if a.unidad_serializada_id}
+ 
+    # (b) Depurar filas duplicadas de una misma unidad
+    por_unidad = {}
+    for a in actuales:
+        if not a.unidad_serializada_id:
+            continue
+        if a.unidad_serializada_id in por_unidad:
+            a.estado = EstadoA.DEVUELTA
+            a.observaciones = _sumar_observacion(
+                a.observaciones, "Fila duplicada depurada al editar la orden.")
+            a.save(update_fields=["estado", "observaciones", "fecha_modificacion"])
+        else:
+            por_unidad[a.unidad_serializada_id] = a
+    actuales = [a for a in actuales if a.estado == EstadoA.INSTALADA]
+ 
     por_producto = {}
     for a in actuales:
         if not a.unidad_serializada_id:
             por_producto.setdefault(a.producto_id, []).append(a)
-
+ 
     # ----- lo que se pide ahora -----
     deseado_cant, deseado_serial = {}, []
     for item in payload:
@@ -1341,7 +1357,7 @@ def sincronizar_materiales_operacion(*, operacion, payload, usuario):
         producto = Producto.objects.filter(pk=pid).first()
         if not producto:
             raise ErrorInventario(f"No existe el producto con ID {pid}.")
-
+ 
         if producto.es_serializado:
             vistos = set()
             for s in item.get("seriales") or []:
@@ -1356,9 +1372,9 @@ def sincronizar_materiales_operacion(*, operacion, payload, usuario):
             cant = int(item.get("cantidad") or 0)
             if cant > 0:
                 deseado_cant[pid] = deseado_cant.get(pid, 0) + cant
-
+ 
     novedades = []
-
+ 
     # ----- SERIALIZADOS -----
     conservar, por_instalar = set(), []
     for pid, serial in deseado_serial:
@@ -1369,28 +1385,28 @@ def sincronizar_materiales_operacion(*, operacion, payload, usuario):
             conservar.add(unidad.pk)
         else:
             por_instalar.append((pid, serial))
-
+ 
     for uid, a in por_unidad.items():            # primero se quita lo que sobra
         if uid not in conservar:
             _revertir_serial(asignacion=a, usuario=usuario, motivo=motivo)
-
+ 
     for pid, serial in por_instalar:             # luego se instala lo nuevo
         n = instalar_serial(serial=serial, producto_id=pid, tecnico=tecnico,
                             usuario=usuario, operacion=operacion, fecha=fecha)
         if n:
             novedades.append(n)
-
+ 
     # ----- POR CANTIDAD -----
     reg_ids = set(Inconsistencia.objects.filter(
         operacion=operacion, instalado=True, asignacion_regularizada__isnull=False,
     ).values_list("asignacion_regularizada_id", flat=True))
-
+ 
     for pid in set(deseado_cant) | set(por_producto):
         asigs = sorted(por_producto.get(pid, []),
                        key=lambda a: (a.pk not in reg_ids, -a.pk))   # primero las regularizadas
         actual = sum(a.cantidad for a in asigs)
         deseado = deseado_cant.get(pid, 0)
-
+ 
         if deseado < actual:
             resto = actual - deseado
             for a in asigs:
@@ -1404,12 +1420,12 @@ def sincronizar_materiales_operacion(*, operacion, payload, usuario):
                     _revertir_cantidad(asignacion=a, cantidad=tomar,
                                        usuario=usuario, motivo=motivo)
                 resto -= tomar
-
+ 
         elif deseado > actual:
             novedades.extend(instalar_cantidad(
                 producto=Producto.objects.get(pk=pid), cantidad=deseado - actual,
                 tecnico=tecnico, usuario=usuario, operacion=operacion, fecha=fecha))
-
+ 
     return novedades
 
 @transaction.atomic
@@ -1880,27 +1896,37 @@ def instalar_cantidad(
 
     return novedades
 
-@transaction.atomic
 def reabrir_operacion(*, operacion, usuario):
     """
-    Revierte todos los materiales de la orden a su estado anterior
+    Revierte todos los materiales y el IVT de la orden a su estado anterior
     y elimina la orden para poder registrarla de nuevo.
     """
     from operaciones.models import RegistroSAP
-
+ 
     operacion = Operacion.objects.select_for_update().get(pk=operacion.pk)
     numero = operacion.numero_orden
-
+ 
     if RegistroSAP.objects.filter(operacion=operacion).exists():
         raise ErrorInventario(
             f"La orden {numero} ya tiene registros de SAP asociados y no se puede "
             "eliminar. Corrija la conciliación primero."
         )
-
+ 
     # 1) Revierte todo lo instalado (payload vacío = no queda nada)
     sincronizar_materiales_operacion(operacion=operacion, payload=[], usuario=usuario)
-
-    # 2) Cierra las inconsistencias que queden y deja el número de orden anotado
+ 
+    # 2) NUEVO: el IVT de la orden vuelve a ASIGNADO (mismo técnico)
+    liberar_ivt_operacion(
+        operacion=operacion,
+        usuario=usuario,
+        motivo="Orden reabierta",
+    )
+    if IVT.objects.filter(operacion=operacion, estado=EstadoI.INSTALADO).exists():
+        raise ErrorInventario(
+            f"No se pudo liberar el IVT de la orden {numero}; no se eliminó nada."
+        )
+ 
+    # 3) Cierra las inconsistencias que queden y deja el número de orden anotado
     for n in Inconsistencia.objects.select_for_update().filter(operacion=operacion):
         n.detalle = f"[Orden {numero} reabierta y eliminada] {n.detalle}"
         if n.estado == Inconsistencia.Estado.PENDIENTE:
@@ -1910,12 +1936,339 @@ def reabrir_operacion(*, operacion, usuario):
             n.nota_resolucion = f"Orden {numero} reabierta: materiales revertidos."
         n.operacion = None
         n.save()
-
-    # 3) Las asignaciones devueltas conservaban la orden: se desligan
+ 
+    # 4) Las asignaciones devueltas conservaban la orden: se desligan
     Asignacion.objects.filter(operacion=operacion).update(operacion=None)
-
-    # 4) Elimina el soporte y la orden
+ 
+    # 5) Elimina el soporte y la orden
     if operacion.archivo_soporte:
         operacion.archivo_soporte.delete(save=False)
     operacion.delete()
     return numero
+# ============================================================
+# IVT (INFORME DE VISITA TÉCNICA)
+# ============================================================
+
+EstadoI = IVT.Estado
+MAX_IVT_POR_CAJA = 100_000
+
+TRANSICIONES_IVT = {
+    EstadoI.DISPONIBLE: (EstadoI.ANULADO, EstadoI.PERDIDO),
+    EstadoI.ASIGNADO: (EstadoI.DISPONIBLE, EstadoI.ANULADO, EstadoI.PERDIDO),
+    EstadoI.PERDIDO: (EstadoI.ASIGNADO, EstadoI.DISPONIBLE),   # apareció
+}
+
+
+def fmt_ivt(numero):
+    return f"{int(numero):05d}"
+
+
+def _mov_ivt(ivt, anterior, usuario, obs="", operacion=None):
+    return MovimientoIVT(
+        ivt=ivt, estado_anterior=anterior, estado_nuevo=ivt.estado,
+        tecnico=ivt.tecnico, operacion=operacion or ivt.operacion,
+        usuario=usuario, observacion=obs,
+    )
+
+
+# ---------------- ingreso por cajas ----------------
+
+@transaction.atomic
+def registrar_ingreso_ivt(*, cajas, remision, usuario, fecha_ingreso, observacion=""):
+    """cajas = [(consecutivo_inicial, cantidad), ...]. Devuelve las CajaIVT creadas."""
+    if not cajas:
+        raise ErrorInventario("Agregue al menos una caja.")
+
+    rangos = []
+    for i, (ini, cant) in enumerate(cajas, 1):
+        if ini < 1 or cant < 1:
+            raise ErrorInventario(f"Caja {i}: inicial y cantidad deben ser mayores que cero.")
+        if cant > MAX_IVT_POR_CAJA:
+            raise ErrorInventario(f"Caja {i}: máximo {MAX_IVT_POR_CAJA} IVT por caja.")
+        rangos.append((ini, ini + cant - 1))
+
+    ordenados = sorted(rangos)
+    for (_, f1), (i2, _) in zip(ordenados, ordenados[1:]):
+        if i2 <= f1:
+            raise ErrorInventario("Los consecutivos de las cajas se cruzan entre sí.")
+
+    for ini, fin in rangos:
+        ya = IVT.objects.filter(numero__range=(ini, fin)).order_by("numero").first()
+        if ya:
+            raise ErrorInventario(
+                f"El rango {fmt_ivt(ini)}-{fmt_ivt(fin)} ya tiene IVT registrados "
+                f"(por ejemplo el {ya.codigo})."
+            )
+
+    base = CajaIVT.objects.filter(remision=remision).count() if remision else 0
+    creadas = []
+    for pos, (ini, fin) in enumerate(rangos, 1):
+        caja = CajaIVT.objects.create(
+            remision=remision, numero_caja=base + pos,
+            consecutivo_inicial=ini, consecutivo_final=fin, cantidad=fin - ini + 1,
+            fecha_ingreso=fecha_ingreso, usuario=usuario, observacion=observacion,
+        )
+        IVT.objects.bulk_create(
+            [IVT(numero=n, caja=caja) for n in range(ini, fin + 1)],
+            batch_size=1000,
+        )
+        creadas.append(caja)
+    return creadas
+
+
+# ---------------- asignación por rango ----------------
+
+@transaction.atomic
+def asignar_ivt_rango(*, tecnico, inicial, final, usuario, fecha, observacion=""):
+    if inicial < 1 or final < inicial:
+        raise ErrorInventario("El consecutivo final debe ser mayor o igual al inicial.")
+
+    total = final - inicial + 1
+    rango = IVT.objects.filter(numero__range=(inicial, final))
+
+    # Diagnóstico claro ANTES de modificar nada
+    if rango.filter(estado=EstadoI.DISPONIBLE).count() != total:
+        partes = []
+        faltan = total - rango.count()
+        if faltan:
+            partes.append(f"{faltan} número(s) del rango no existen en el sistema")
+        no_disp = list(
+            rango.exclude(estado=EstadoI.DISPONIBLE)
+            .order_by("numero").values_list("numero", "estado")[:5]
+        )
+        if no_disp:
+            ejemplos = ", ".join(f"{fmt_ivt(n)} ({EstadoI(e).label})" for n, e in no_disp)
+            partes.append(f"hay IVT que no están disponibles: {ejemplos}")
+        raise ErrorInventario(
+            f"No se puede asignar {fmt_ivt(inicial)}-{fmt_ivt(final)}: " + "; ".join(partes) + "."
+        )
+
+    ahora = timezone.now()
+    # El filtro por estado hace la operación segura frente a concurrencia
+    actualizados = rango.filter(estado=EstadoI.DISPONIBLE).update(
+        estado=EstadoI.ASIGNADO, tecnico=tecnico,
+        fecha_asignacion=fecha, fecha_cambio_estado=ahora,
+    )
+    if actualizados != total:
+        raise ErrorInventario("Otro usuario modificó esos IVT al mismo tiempo. Intente de nuevo.")
+
+    ids = list(rango.values_list("pk", flat=True))
+    obs = f"Asignado a {tecnico} (rango {fmt_ivt(inicial)}-{fmt_ivt(final)}). {observacion}".strip()
+    MovimientoIVT.objects.bulk_create(
+        [MovimientoIVT(ivt_id=pk, estado_anterior=EstadoI.DISPONIBLE,
+                       estado_nuevo=EstadoI.ASIGNADO, tecnico=tecnico,
+                       usuario=usuario, observacion=obs) for pk in ids],
+        batch_size=1000,
+    )
+    return total
+
+
+# ---------------- anular / perdido / devolver (masivo) ----------------
+
+@transaction.atomic
+def cambiar_estado_ivt(*, ids, nuevo_estado, usuario, motivo):
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ErrorInventario("Escriba el motivo del cambio.")
+    if nuevo_estado not in EstadoI.values:
+        raise ErrorInventario("Acción no válida.")
+
+    ivts = list(IVT.objects.select_for_update().filter(pk__in=ids))
+    if not ivts:
+        raise ErrorInventario("Seleccione al menos un IVT.")
+
+    ahora = timezone.now()
+    movs = []
+    for ivt in ivts:
+        if nuevo_estado not in TRANSICIONES_IVT.get(ivt.estado, ()):
+            raise ErrorInventario(
+                f"IVT {ivt.codigo}: no se puede pasar de «{ivt.get_estado_display()}» "
+                f"a «{EstadoI(nuevo_estado).label}»."
+            )
+        if nuevo_estado == EstadoI.ASIGNADO and not ivt.tecnico_id:
+            raise ErrorInventario(f"IVT {ivt.codigo}: no tiene técnico a quien reasignarlo.")
+
+        anterior = ivt.estado
+        ivt.estado = nuevo_estado
+        if nuevo_estado == EstadoI.DISPONIBLE:
+            ivt.tecnico = None
+            ivt.fecha_asignacion = None
+        ivt.fecha_cambio_estado = ahora
+        ivt.observaciones = _sumar_observacion(
+            ivt.observaciones, f"{EstadoI(nuevo_estado).label}: {motivo}")
+        movs.append(_mov_ivt(ivt, anterior, usuario, motivo))
+
+    IVT.objects.bulk_update(
+        ivts, ["estado", "tecnico", "fecha_asignacion", "fecha_cambio_estado", "observaciones"],
+        batch_size=1000)
+    MovimientoIVT.objects.bulk_create(movs, batch_size=1000)
+    return len(ivts)
+
+
+@transaction.atomic
+def marcar_ivt_fisico_perdido(*, ids, usuario, motivo):
+    """IVT ya instalado cuyo papel físico se extravió: sigue ligado a su orden."""
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ErrorInventario("Escriba el motivo.")
+    ivts = list(IVT.objects.select_for_update().filter(pk__in=ids))
+    if not ivts:
+        raise ErrorInventario("Seleccione al menos un IVT.")
+    movs = []
+    for ivt in ivts:
+        if ivt.estado != EstadoI.INSTALADO:
+            raise ErrorInventario(f"IVT {ivt.codigo}: solo un IVT instalado puede marcarse con físico perdido.")
+        ivt.fisico_perdido = True
+        ivt.observaciones = _sumar_observacion(ivt.observaciones, f"Físico extraviado: {motivo}")
+        movs.append(_mov_ivt(ivt, ivt.estado, usuario, f"Físico extraviado: {motivo}"))
+    IVT.objects.bulk_update(ivts, ["fisico_perdido", "observaciones"])
+    MovimientoIVT.objects.bulk_create(movs)
+    return len(ivts)
+
+
+# ---------------- relación con la instalación ----------------
+
+def validar_ivt_para_operacion(*, numero, tecnico, operacion=None, bloquear=False):
+    try:
+        numero = int(str(numero).strip())
+    except (TypeError, ValueError):
+        raise ErrorInventario("El IVT debe ser un número.")
+
+    qs = IVT.objects.select_for_update() if bloquear else IVT.objects.select_related("tecnico")
+    ivt = qs.filter(numero=numero).first()
+    codigo = fmt_ivt(numero)
+
+    if not ivt:
+        raise ErrorInventario(f"El IVT {codigo} no existe. Verifique el consecutivo.")
+    if ivt.estado == EstadoI.INSTALADO:
+        if operacion is not None and ivt.operacion_id == operacion.pk:
+            return ivt
+        orden = ivt.operacion.numero_orden if ivt.operacion_id else "sin orden"
+        raise ErrorInventario(f"El IVT {codigo} ya fue usado ({orden}).")
+    if ivt.estado != EstadoI.ASIGNADO:
+        raise ErrorInventario(
+            f"El IVT {codigo} está «{ivt.get_estado_display()}»; "
+            "solo se puede usar uno asignado al técnico.")
+    if tecnico is not None and ivt.tecnico_id != tecnico.id:
+        raise ErrorInventario(f"El IVT {codigo} está asignado a {ivt.tecnico}, no a {tecnico}.")
+    return ivt
+
+
+@transaction.atomic
+def liberar_ivt_operacion(*, operacion, usuario, motivo):
+    """Los IVT instalados en la orden vuelven a Asignado (mismo técnico)."""
+    ahora = timezone.now()
+    for ivt in IVT.objects.select_for_update().filter(
+            operacion=operacion, estado=EstadoI.INSTALADO):
+        ivt.estado = EstadoI.ASIGNADO
+        ivt.operacion = None
+        ivt.fecha_instalacion = None
+        ivt.fisico_perdido = False
+        ivt.fecha_cambio_estado = ahora
+        ivt.save(update_fields=["estado", "operacion", "fecha_instalacion",
+                                "fisico_perdido", "fecha_cambio_estado"])
+        MovimientoIVT.objects.create(
+            ivt=ivt, estado_anterior=EstadoI.INSTALADO, estado_nuevo=EstadoI.ASIGNADO,
+            tecnico=ivt.tecnico, operacion=operacion, usuario=usuario,
+            observacion=f"{motivo} (orden {operacion.numero_orden})")
+
+
+@transaction.atomic
+def vincular_ivt(*, numero, operacion, tecnico, usuario):
+    ivt = validar_ivt_para_operacion(
+        numero=numero, tecnico=tecnico, operacion=operacion, bloquear=True)
+    if ivt.estado == EstadoI.INSTALADO:      # ya estaba en esta orden
+        return ivt
+
+    # Una orden = un IVT: si tenía otro, vuelve a Asignado
+    liberar_ivt_operacion(
+        operacion=operacion, usuario=usuario,
+        motivo=f"Reemplazado por el IVT {ivt.codigo}")
+
+    ivt.estado = EstadoI.INSTALADO
+    ivt.operacion = operacion
+    ivt.fecha_instalacion = operacion.fecha_ejecucion or operacion.fecha_operacion
+    ivt.fecha_cambio_estado = timezone.now()
+    ivt.save(update_fields=["estado", "operacion", "fecha_instalacion", "fecha_cambio_estado"])
+    MovimientoIVT.objects.create(
+        ivt=ivt, estado_anterior=EstadoI.ASIGNADO, estado_nuevo=EstadoI.INSTALADO,
+        tecnico=ivt.tecnico, operacion=operacion, usuario=usuario,
+        observacion=f"Instalado en la orden {operacion.numero_orden}")
+    return ivt
+
+def rangos_ivt(*, tecnico, estado=None):
+    """Rangos consecutivos de IVT que tiene el técnico (por defecto, asignados)."""
+    estado = estado or EstadoI.ASIGNADO
+    numeros = (
+        IVT.objects.filter(tecnico=tecnico, estado=estado)
+        .order_by("numero").values_list("numero", flat=True)
+    )
+    rangos, ini, prev = [], None, None
+    for n in numeros:
+        if ini is None:
+            ini = prev = n
+        elif n == prev + 1:
+            prev = n
+        else:
+            rangos.append((ini, prev))
+            ini = prev = n
+    if ini is not None:
+        rangos.append((ini, prev))
+
+    return [
+        {
+            "inicial": a, "final": b, "cantidad": b - a + 1,
+            "texto": f"{fmt_ivt(a)} - {fmt_ivt(b)}" if a != b else fmt_ivt(a),
+        }
+        for a, b in rangos
+    ]
+
+
+@transaction.atomic
+def devolver_ivt_rango(*, tecnico, inicial, final, usuario, estado_retorno, observacion):
+    """
+    Devuelve un rango de IVT que el técnico tiene ASIGNADO.
+    estado_retorno: DISPONIBLE (vuelve al almacén), ANULADO o PERDIDO.
+    Si UN solo número del rango no es del técnico o no está asignado, no se mueve nada.
+    """
+    observacion = (observacion or "").strip()
+    if not observacion:
+        raise ErrorInventario("La observación es obligatoria para devolver IVT.")
+    if estado_retorno not in (EstadoI.DISPONIBLE, EstadoI.ANULADO, EstadoI.PERDIDO):
+        raise ErrorInventario("Estado de devolución de IVT no válido.")
+    if inicial < 1 or final < inicial:
+        raise ErrorInventario("El consecutivo final debe ser mayor o igual al inicial.")
+
+    total = final - inicial + 1
+    ids = list(
+        IVT.objects.select_for_update()
+        .filter(numero__range=(inicial, final),
+                estado=EstadoI.ASIGNADO, tecnico=tecnico)
+        .values_list("pk", flat=True)
+    )
+
+    if len(ids) != total:
+        partes = []
+        existentes = IVT.objects.filter(numero__range=(inicial, final)).count()
+        if existentes != total:
+            partes.append(f"{total - existentes} número(s) no existen en el sistema")
+        otros = (
+            IVT.objects.filter(numero__range=(inicial, final))
+            .exclude(estado=EstadoI.ASIGNADO, tecnico=tecnico)
+            .select_related("tecnico").order_by("numero")[:5]
+        )
+        if otros:
+            ejemplos = ", ".join(
+                f"{o.codigo} ({o.get_estado_display()}"
+                f"{', de ' + str(o.tecnico) if o.tecnico_id and o.tecnico_id != tecnico.id else ''})"
+                for o in otros
+            )
+            partes.append(f"no están asignados a {tecnico}: {ejemplos}")
+        raise ErrorInventario(
+            f"No se puede devolver {fmt_ivt(inicial)}-{fmt_ivt(final)}: " + "; ".join(partes) + "."
+        )
+
+    cambiar_estado_ivt(
+        ids=ids, nuevo_estado=estado_retorno, usuario=usuario, motivo=observacion,
+    )
+    return total

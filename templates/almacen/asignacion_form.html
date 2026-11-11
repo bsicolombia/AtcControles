@@ -4,100 +4,252 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 
 <script>
-(function () {
-  var prod = document.getElementById("id_producto");
-  var unidad = document.getElementById("id_unidad");
-  var tecnico = document.getElementById("id_tecnico");
-  var campoU = document.getElementById("campo-unidad");
-  var cant = document.getElementById("id_cantidad");
-  var url = "{% url 'almacen:api_unidades' %}";
-  var previa = unidad.value;
+document.addEventListener("DOMContentLoaded", function () {
 
-  // Aviso de stock: se crea UNA sola vez, fuera de cargar()
-  var aviso = document.createElement("div");
-  aviso.style.cssText = "margin-top:6px;font-size:13px;font-weight:600;";
-  cant.parentNode.appendChild(aviso);
+    var prod = document.getElementById("id_producto");
+    var unidad = document.getElementById("id_unidad");
+    var tecnico = document.getElementById("id_tecnico");
+    var campoU = document.getElementById("campo-unidad");
+    var cant = document.getElementById("id_cantidad");
 
-  function mostrarStock(stock, serializado) {
-    var txt = serializado ? "unidad(es) disponible(s)" : "disponible(s) en almacén";
-    aviso.textContent = "Stock: " + stock + " " + txt;
-    aviso.style.color = stock > 0 ? "#2d6a4f" : "#b42318";
-  }
+    var url = "{% url 'almacen:api_unidades' %}";
 
-  function validarCantidad(stock) {
-    var pedido = parseInt(cant.value, 10);
-    if (!Number.isNaN(pedido) && pedido > stock) {
-      aviso.textContent = "Solo hay " + stock + " disponible(s) y está pidiendo " + pedido + ".";
-      aviso.style.color = "#b42318";
-    }
-  }
-
-  var tsTecnico = new TomSelect(tecnico, {
-    placeholder: "Escriba para buscar un técnico...",
-    maxOptions: 200
-  });
-  var tsUnidad = new TomSelect(unidad, {
-    placeholder: "Escriba para buscar un código...",
-    maxOptions: 500
-  });
-  var tsProd = new TomSelect(prod, {
-    placeholder: "Escriba para buscar un producto...",
-    maxOptions: 200
-  });
-
-  function cargar() {
-    var valor = tsProd.getValue();
-    if (!valor) {
-      campoU.style.display = "none";
-      aviso.textContent = "";
-      return;
+    if (!prod || !unidad || !cant || !campoU) {
+        console.error("No se encontraron todos los campos necesarios.");
+        return;
     }
 
-    fetch(url + "?producto=" + valor)
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        var ayuda = campoU.querySelector(".ayuda");
-        var stockActual = d.stock;
+    var previa = unidad.value;
+    var stockActual = 0;
+    var productoSerializado = false;
 
-        if (d.serializado) {
-          campoU.style.display = "";
-          cant.value = 1;
-          cant.readOnly = true;
-          cant.oninput = null;
+    // Aviso de stock
+    var aviso = document.createElement("div");
 
-          tsUnidad.clear(true);
-          tsUnidad.clearOptions();
-          d.unidades.forEach(function (u) {
-            tsUnidad.addOption({ value: String(u.id), text: u.texto });
-          });
-          tsUnidad.refreshOptions(false);
+    aviso.style.cssText =
+        "margin-top:6px;font-size:13px;font-weight:600;";
 
-          if (previa) tsUnidad.setValue(previa, true);
+    cant.parentNode.appendChild(aviso);
 
-          if (!d.unidades.length && ayuda) {
-            ayuda.textContent = "No hay unidades disponibles de este producto.";
-          }
-        } else {
-          campoU.style.display = "none";
-          tsUnidad.clear(true);
-          cant.readOnly = false;
-          cant.max = stockActual;
-          cant.oninput = function () {
-            mostrarStock(stockActual, false);
-            validarCantidad(stockActual);
-          };
+    function mostrarStock(stock, serializado) {
+
+        var txt = serializado
+            ? "unidad(es) disponible(s)"
+            : "disponible(s) en almacén";
+
+        aviso.textContent = "Stock: " + stock + " " + txt;
+
+        aviso.style.color = stock > 0
+            ? "#2d6a4f"
+            : "#b42318";
+    }
+
+    function validarCantidad() {
+
+        var pedido = parseInt(cant.value, 10);
+
+        if (Number.isNaN(pedido) || pedido < 1) {
+            cant.setCustomValidity("");
+            return;
         }
 
-        mostrarStock(stockActual, d.serializado);
-      });
-  }
+        if (pedido > stockActual) {
 
-  tsProd.on("change", function () {
-    previa = "";
+            cant.setCustomValidity(
+                "La cantidad supera el stock disponible (" +
+                stockActual + ")."
+            );
+
+            aviso.textContent =
+                "Solo hay " + stockActual +
+                " disponibles y está solicitando " + pedido + ".";
+
+            aviso.style.color = "#b42318";
+
+        } else {
+
+            cant.setCustomValidity("");
+            mostrarStock(stockActual, false);
+        }
+    }
+
+    // Inicializar Tom Select
+    var tsTecnico = tecnico
+        ? new TomSelect(tecnico, {
+            placeholder: "Escriba para buscar un técnico...",
+            maxOptions: 200
+        })
+        : null;
+
+    var tsUnidad = new TomSelect(unidad, {
+        placeholder: "Escriba para buscar un código...",
+        maxOptions: 500
+    });
+
+    var tsProd = new TomSelect(prod, {
+        placeholder: "Escriba para buscar un producto...",
+        maxOptions: 200
+    });
+
+    // Estado inicial
+    campoU.style.display = "none";
+    cant.readOnly = false;
+    cant.disabled = false;
+    cant.removeAttribute("max");
+
+    // Cargar información del producto
+    function cargar() {
+
+        var valor = tsProd.getValue();
+
+        if (!valor) {
+
+            campoU.style.display = "none";
+
+            cant.value = "";
+            cant.readOnly = false;
+            cant.disabled = false;
+            cant.removeAttribute("max");
+
+            aviso.textContent = "";
+
+            tsUnidad.clear(true);
+            tsUnidad.clearOptions();
+            tsUnidad.refreshOptions(false);
+
+            return;
+        }
+
+        fetch(url + "?producto=" + encodeURIComponent(valor))
+            .then(function (r) {
+
+                if (!r.ok) {
+                    throw new Error("Error consultando el stock");
+                }
+
+                return r.json();
+            })
+            .then(function (d) {
+
+                stockActual = Number(d.stock) || 0;
+                productoSerializado = Boolean(d.serializado);
+
+                if (productoSerializado) {
+
+                    // PRODUCTO SERIALIZADO
+                    campoU.style.display = "";
+
+                    cant.value = 1;
+                    cant.readOnly = true;
+                    cant.disabled = false;
+                    cant.removeAttribute("max");
+
+                    cant.setCustomValidity("");
+
+                    tsUnidad.clear(true);
+                    tsUnidad.clearOptions();
+
+                    (d.unidades || []).forEach(function (u) {
+
+                        tsUnidad.addOption({
+                            value: String(u.id),
+                            text: u.texto
+                        });
+
+                    });
+
+                    tsUnidad.refreshOptions(false);
+
+                    if (
+                        previa &&
+                        d.unidades.some(function(u) {
+                            return String(u.id) === String(previa);
+                        })
+                    ) {
+                        tsUnidad.setValue(previa, true);
+                    }
+
+                    var ayuda = campoU.querySelector(".ayuda");
+
+                    if (ayuda) {
+
+                        ayuda.textContent = d.unidades.length
+                            ? "Seleccione la unidad que desea retirar."
+                            : "No hay unidades disponibles de este producto.";
+                    }
+
+                } else {
+
+                    // PRODUCTO NORMAL
+                    campoU.style.display = "none";
+
+                    tsUnidad.clear(true);
+                    tsUnidad.clearOptions();
+                    tsUnidad.refreshOptions(false);
+
+                    cant.readOnly = false;
+                    cant.disabled = false;
+
+                    cant.min = 1;
+                    cant.max = stockActual;
+
+                    cant.value = "";
+
+                    cant.setCustomValidity("");
+
+                }
+
+                mostrarStock(stockActual, productoSerializado);
+
+            })
+            .catch(function(error) {
+
+                console.error("Error al consultar producto:", error);
+
+                campoU.style.display = "none";
+
+                cant.readOnly = false;
+                cant.disabled = false;
+                cant.removeAttribute("max");
+
+                aviso.textContent =
+                    "No fue posible consultar el stock.";
+
+                aviso.style.color = "#b42318";
+
+            });
+    }
+
+    // Cambio de producto
+    tsProd.on("change", function () {
+
+        previa = "";
+
+        cargar();
+
+    });
+
+    // Validar cantidad manual
+    cant.addEventListener("input", function() {
+
+        if (!productoSerializado) {
+            validarCantidad();
+        }
+
+    });
+
+    // Cambio de unidad serializada
+    tsUnidad.on("change", function() {
+
+        if (productoSerializado) {
+            cant.value = 1;
+        }
+
+    });
+
+    // Carga inicial
     cargar();
-  });
 
-  cargar();
-})();
+});
 </script>
 {% endblock %}

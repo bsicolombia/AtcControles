@@ -7,24 +7,171 @@
 <link rel="stylesheet" href="{% static 'css/inventario.css' %}">
 
 <style>
+/* =========================================================
+   INVENTARIO - DISEÑO COMPACTO GENERAL
+========================================================= */
+
+* {
+    box-sizing: border-box;
+}
 
 /* =========================================================
-   INVENTARIO GENERAL - DISEÑO COMPACTO
+   CABECERA
+========================================================= */
+
+.cabecera {
+    margin-bottom: 7px;
+}
+
+.cabecera h1 {
+    font-size: 17px;
+    margin-bottom: 2px;
+}
+
+.cabecera p {
+    font-size: 10px;
+    margin-bottom: 0;
+}
+
+.cabecera .btn {
+    padding: 5px 8px;
+    font-size: 9px;
+}
+
+/* =========================================================
+   FILTROS
+========================================================= */
+
+.filtros-inventario {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 7px;
+}
+
+.filtros-inventario .buscar-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 180px;
+    min-width: 130px;
+}
+
+.filtros-inventario .buscar-wrap svg {
+    position: absolute;
+    left: 7px;
+    width: 12px;
+    height: 12px;
+    color: #64748b;
+    pointer-events: none;
+}
+
+.filtros-inventario .buscar-wrap input {
+    width: 100%;
+    padding-left: 25px;
+}
+
+.filtros-inventario input,
+.filtros-inventario select {
+    height: 27px;
+    min-height: 27px;
+    padding: 3px 6px;
+    font-size: 10px;
+    border-radius: 4px;
+}
+
+.filtros-inventario select {
+    flex: 0 1 165px;
+    min-width: 125px;
+    max-width: 190px;
+}
+
+.filtro-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-height: 27px;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.filtro-check input {
+    width: 12px;
+    height: 12px;
+    accent-color: #166534;
+}
+
+.filtros-inventario .btn {
+    padding: 5px 8px;
+    font-size: 9px;
+    border-radius: 4px;
+}
+
+/* =========================================================
+   CONTADORES
+========================================================= */
+
+.resumen-contadores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.contador-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 8px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+}
+
+.contador-card span {
+    color: #64748b;
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.contador-card strong {
+    color: #166534;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.contador-card.alerta strong {
+    color: #dc2626;
+}
+
+/* =========================================================
+   TARJETAS
+========================================================= */
+
+.tarjeta,
+.tarjeta-asignaciones {
+    padding: 5px;
+    border-radius: 5px;
+}
+
+/* =========================================================
+   TABLA GENERAL
 ========================================================= */
 
 .tabla-wrap {
     position: relative;
     width: 100%;
-    max-height: 68vh;
+    max-height: 72vh;
     overflow: auto;
     background: #fff;
-    border-radius: 6px;
+    border-radius: 4px;
     scrollbar-gutter: stable;
 }
 
 .tabla-wrap table {
     width: 100%;
-    min-width: 1050px;
+    min-width: 850px;
     border-collapse: separate;
     border-spacing: 0;
     background: #fff;
@@ -32,8 +179,7 @@
 
 .tabla-wrap th,
 .tabla-wrap td {
-    box-sizing: border-box;
-    padding: 6px 8px;
+    padding: 3px 4px;
     border-right: 1px solid #e2e8e5;
     border-bottom: 1px solid #e2e8e5;
     vertical-align: middle;
@@ -43,13 +189,19 @@
     position: sticky;
     top: 0;
     z-index: 5;
+    padding: 5px 4px;
     background: #f1f5f3 !important;
     color: #334155;
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 700;
     text-align: left;
     white-space: nowrap;
     box-shadow: 0 1px 0 #cbd5d1;
+}
+
+.tabla-wrap tbody td {
+    font-size: 9px;
+    line-height: 1.2;
 }
 
 .tabla-wrap tbody tr:hover td {
@@ -61,48 +213,50 @@
 }
 
 .tabla-general {
-    font-size: 11px;
+    font-size: 9px;
 }
-.tabla-general .dato-danado {
-    color: #dc2626;
-    font-size: 12px;
-    font-weight: 800;
-}
+
 .tabla-general td.codigo {
-    min-width: 90px;
+    min-width: 65px;
     color: #475569;
     white-space: nowrap;
-    font-size: 10px;
+    font-size: 8px;
 }
 
 .tabla-general td.col-producto {
-    min-width: 175px;
-    max-width: 240px;
+    min-width: 115px;
+    max-width: 155px;
     overflow-wrap: anywhere;
 }
 
 .tabla-general td.col-producto strong {
     color: #1e293b;
-    line-height: 1.3;
-    font-size: 11px;
+    font-size: 9px;
+    line-height: 1.2;
 }
 
 .tabla-general .suave {
-    margin-top: 2px;
+    margin-top: 1px;
     color: #64748b;
-    font-size: 9px;
+    font-size: 8px;
 }
 
 .tabla-general .num {
+    min-width: 43px;
     text-align: center;
     white-space: nowrap;
-    min-width: 65px;
-    font-size: 10px;
+    font-size: 8px;
 }
 
 .tabla-general .dato-principal {
     color: #166534;
-    font-size: 12px;
+    font-size: 10px;
+}
+
+.tabla-general .dato-danado {
+    color: #dc2626;
+    font-size: 10px;
+    font-weight: 800;
 }
 
 .tabla-general .cero,
@@ -111,77 +265,9 @@
 }
 
 .tabla-general .col-acciones {
-    min-width: 75px;
+    min-width: 53px;
     text-align: center;
     white-space: nowrap;
-}
-
-/* =========================================================
-   FILTROS COMPACTOS
-========================================================= */
-
-.filtros-inventario {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 7px;
-    margin-bottom: 10px;
-}
-
-.filtros-inventario .buscar-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-    flex: 1 1 220px;
-    min-width: 160px;
-}
-
-.filtros-inventario .buscar-wrap svg {
-    position: absolute;
-    left: 9px;
-    width: 14px;
-    height: 14px;
-    color: #64748b;
-    pointer-events: none;
-}
-
-.filtros-inventario .buscar-wrap input {
-    width: 100%;
-    padding-left: 30px;
-}
-
-.filtros-inventario input,
-.filtros-inventario select {
-    height: 32px;
-    min-height: 32px;
-    padding-top: 5px;
-    padding-bottom: 5px;
-    font-size: 11px;
-}
-
-.filtros-inventario select {
-    flex: 0 1 210px;
-    min-width: 160px;
-    max-width: 260px;
-}
-
-.filtro-check {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    min-height: 32px;
-    color: #475569;
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-.filtro-check input {
-    accent-color: #166534;
-}
-
-.filtros-inventario .btn {
-    padding: 6px 10px;
-    font-size: 10px;
 }
 
 /* =========================================================
@@ -207,12 +293,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 2px;
+    font-size: 9px;
     font-weight: 700;
 }
 
 .tabla-general .estado-comparacion span {
-    font-size: 11px;
+    font-size: 9px;
 }
 
 .tabla-general .estado-comparacion.sap-ok {
@@ -241,13 +328,15 @@
 
 .tabla-general .dato-inventario {
     display: block;
-    margin-bottom: 4px;
-    font-size: 12px;
+    margin-bottom: 2px;
+    font-size: 10px;
 }
 
 .btn-chico {
-    padding: 4px 7px;
-    font-size: 9px;
+    padding: 2px 5px;
+    font-size: 8px;
+    line-height: 1.3;
+    border-radius: 3px;
 }
 
 /* =========================================================
@@ -257,7 +346,7 @@
 .tabla-consolidada {
     position: relative;
     width: 100%;
-    max-height: 70vh;
+    max-height: 72vh;
     overflow: auto;
     isolation: isolate;
     background: #fff;
@@ -274,8 +363,7 @@
 
 .tabla-consolidada th,
 .tabla-consolidada td {
-    box-sizing: border-box;
-    padding: 5px 6px;
+    padding: 2px 3px;
     border-right: 1px solid #e2e8e5;
     border-bottom: 1px solid #e2e8e5;
     vertical-align: middle;
@@ -285,24 +373,23 @@
     position: sticky;
     top: 0;
     z-index: 10;
+    padding: 4px 3px;
     background: #f1f5f3 !important;
-    background-image: none !important;
     color: #1e293b;
     text-align: center;
     vertical-align: top;
-    font-size: 10px;
-    box-shadow:
-        inset 0 -1px 0 #cbd5d1,
-        0 2px 4px rgba(15, 23, 42, .06);
+    font-size: 8px;
+    box-shadow: inset 0 -1px 0 #cbd5d1,
+                0 2px 3px rgba(15, 23, 42, .05);
 }
 
-/* Columnas de productos */
+/* COLUMNAS DE PRODUCTOS */
 
 .tabla-consolidada th.col-producto,
 .tabla-consolidada td.valor {
-    width: 100px;
-    min-width: 100px;
-    max-width: 100px;
+    width: 68px;
+    min-width: 68px;
+    max-width: 68px;
 }
 
 .tabla-consolidada th.col-producto {
@@ -313,10 +400,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     width: 100%;
     min-width: 0;
-    line-height: 1.2;
+    line-height: 1.1;
     white-space: normal;
     overflow-wrap: anywhere;
 }
@@ -330,62 +417,61 @@
     overflow-wrap: anywhere;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 700;
 }
 
 .tabla-consolidada .producto-header span {
     max-width: 100%;
     color: #475569;
-    font-size: 9px;
+    font-size: 7px;
     overflow-wrap: anywhere;
 }
 
 .tabla-consolidada .producto-header small {
     max-width: 100%;
     color: #64748b;
-    font-size: 8px;
+    font-size: 7px;
     overflow-wrap: anywhere;
 }
 
-/* Columna fija técnico */
+/* COLUMNA TÉCNICO FIJA */
 
 .tabla-consolidada .col-tecnico,
 .tabla-consolidada td.tecnico-nombre {
     position: sticky;
     left: 0;
-    width: 175px;
-    min-width: 175px;
-    max-width: 175px;
+    width: 125px;
+    min-width: 125px;
+    max-width: 125px;
     background: #fff !important;
     background-image: none !important;
     z-index: 5;
 }
 
-/* Columna fija concepto */
+/* COLUMNA CONCEPTO FIJA */
 
 .tabla-consolidada .col-concepto,
 .tabla-consolidada td.concepto {
     position: sticky;
-    left: 175px;
-    width: 85px;
-    min-width: 85px;
-    max-width: 85px;
+    left: 125px;
+    width: 62px;
+    min-width: 62px;
+    max-width: 62px;
     background: #fff !important;
     background-image: none !important;
     z-index: 5;
 }
 
-/* Esquinas superiores */
+/* ESQUINAS SUPERIORES */
 
 .tabla-consolidada thead th.col-tecnico,
 .tabla-consolidada thead th.col-concepto {
     top: 0;
     z-index: 20;
     background: #e8efeb !important;
-    box-shadow:
-        inset 0 -1px 0 #cbd5d1,
-        1px 1px 3px rgba(15, 23, 42, .08);
+    box-shadow: inset 0 -1px 0 #cbd5d1,
+                1px 1px 3px rgba(15, 23, 42, .08);
 }
 
 .tabla-consolidada tbody td {
@@ -401,14 +487,14 @@
 .tabla-consolidada td.valor {
     text-align: center;
     white-space: nowrap;
-    font-size: 11px;
+    font-size: 9px;
 }
 
 .tabla-consolidada .concepto {
     color: #334155;
-    font-size: 9px;
+    font-size: 7px;
     font-weight: 700;
-    line-height: 1.3;
+    line-height: 1.2;
     text-align: center;
 }
 
@@ -427,8 +513,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 3px;
-    font-size: 10px;
+    gap: 2px;
+    font-size: 8px;
 }
 
 .tabla-consolidada .sap-ok {
@@ -446,33 +532,33 @@
 .tecnico-card {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 6px;
+    gap: 4px;
+    padding: 3px;
 }
 
 .tecnico-top {
     display: flex;
     align-items: flex-start;
-    gap: 7px;
+    gap: 4px;
 }
 
 .tecnico-datos {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
 }
 
 .tecnico-titulo {
     color: #1e293b;
-    font-size: 11px;
-    line-height: 1.3;
+    font-size: 8px;
+    line-height: 1.2;
     overflow-wrap: anywhere;
 }
 
 .chip-cedula {
     color: #475569;
-    font-size: 9px;
+    font-size: 7px;
     overflow-wrap: anywhere;
 }
 
@@ -481,154 +567,89 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 27px;
-    height: 27px;
+    width: 19px;
+    height: 19px;
     border-radius: 50%;
     background: #e2eee7;
     color: #166534;
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 700;
 }
 
 .tecnico-supervisor {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding-top: 5px;
+    gap: 2px;
+    padding-top: 3px;
     border-top: 1px solid #e2e8f0;
 }
 
 .tecnico-supervisor .label {
     color: #64748b;
-    font-size: 9px;
+    font-size: 7px;
     font-weight: 600;
     text-transform: uppercase;
 }
 
 .tecnico-supervisor .valor-sup {
     color: #334155;
-    font-size: 10px;
+    font-size: 8px;
     overflow-wrap: anywhere;
 }
 
-/* Separadores */
+/* SEPARADORES */
 
 .tabla-consolidada tr.separador-tecnico td {
-    height: 6px;
+    height: 3px;
     padding: 0;
     border-bottom: 1px solid #d8e2dc;
     background: #edf2ef !important;
 }
 
-/* Estados vacíos */
+/* =========================================================
+   ESTADOS VACÍOS
+========================================================= */
 
 .tecnico-vacio,
 .vacio {
-    padding: 25px 15px;
+    padding: 18px 10px;
     text-align: center;
     color: #64748b;
-    font-size: 11px;
+    font-size: 9px;
 }
 
 .tecnico-vacio strong,
 .vacio strong {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
     color: #334155;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .tecnico-vacio p {
     margin: 0;
-    font-size: 10px;
+    font-size: 9px;
 }
 
 .vacio-icono {
-    margin-bottom: 7px;
-    font-size: 28px;
-}
-
-/* =========================================================
-   CABECERA Y TARJETAS
-========================================================= */
-
-.cabecera {
-    margin-bottom: 12px;
-}
-
-.cabecera h1 {
-    font-size: 21px;
     margin-bottom: 4px;
-}
-
-.cabecera p {
-    font-size: 11px;
-    margin-bottom: 0;
-}
-
-.cabecera .btn {
-    padding: 7px 11px;
-    font-size: 11px;
-}
-
-.tarjeta,
-.tarjeta-asignaciones {
-    padding: 10px;
-    border-radius: 7px;
-}
-
-.resumen-contadores {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 9px;
-    margin-bottom: 12px;
-}
-
-.contador-card {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 12px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 7px;
-}
-
-.contador-card span {
-    color: #64748b;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.contador-card strong {
-    color: #166534;
-    font-size: 21px;
-    font-weight: 800;
-}
-
-.contador-card.alerta strong {
-    color: #dc2626;
-}
-
-@media(max-width: 480px) {
-    .resumen-contadores {
-        grid-template-columns: repeat(2, 1fr);
-    }
+    font-size: 22px;
 }
 
 /* =========================================================
    RESPONSIVE
 ========================================================= */
 
-@media (max-width: 768px) {
-    .tabla-wrap {
-        max-height: 65vh;
-    }
+@media(max-width: 768px) {
 
     .filtros-inventario .buscar-wrap,
     .filtros-inventario select {
         flex: 1 1 100%;
         max-width: none;
+    }
+
+    .tabla-wrap {
+        max-height: 65vh;
     }
 
     .tabla-consolidada {
@@ -637,43 +658,85 @@
 
     .tabla-consolidada .col-tecnico,
     .tabla-consolidada td.tecnico-nombre {
-        width: 150px;
-        min-width: 150px;
-        max-width: 150px;
+        width: 115px;
+        min-width: 115px;
+        max-width: 115px;
     }
 
     .tabla-consolidada .col-concepto,
     .tabla-consolidada td.concepto {
-        left: 150px;
-        width: 75px;
-        min-width: 75px;
-        max-width: 75px;
+        left: 115px;
+        width: 58px;
+        min-width: 58px;
+        max-width: 58px;
     }
 
     .tabla-consolidada th.col-producto,
     .tabla-consolidada td.valor {
-        width: 90px;
-        min-width: 90px;
-        max-width: 90px;
-    }
-
-    .tecnico-card {
-        gap: 6px;
-        padding: 4px;
+        width: 62px;
+        min-width: 62px;
+        max-width: 62px;
     }
 }
 
-@media (max-width: 480px) {
+@media(max-width: 480px) {
+
+    .cabecera h1 {
+        font-size: 16px;
+    }
+
+    .resumen-contadores {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .tabla-wrap table {
-        min-width: 1000px;
+        min-width: 820px;
     }
 
     .tabla-general td.col-producto {
-        min-width: 150px;
+        min-width: 110px;
     }
+}
 
-    .cabecera h1 {
-        font-size: 18px;
+/* =====================================================
+   REDUCIR ESPACIO SUPERIOR DE TODA LA PÁGINA
+===================================================== */
+
+.cabecera {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.cabecera h1 {
+    margin-top: 0;
+}
+
+.filtros-inventario {
+    margin-top: -3px;
+    margin-bottom: 5px;
+}
+
+.resumen-contadores {
+    margin-top: 0;
+    margin-bottom: 6px;
+}
+
+.tarjeta,
+.tarjeta-asignaciones {
+    margin-top: 0;
+}
+
+/* Reducir espacio superior del contenido */
+main,
+.contenido,
+.container {
+    padding-top: 3px;
+}
+
+/* Móviles */
+@media(max-width: 768px) {
+    .cabecera {
+        margin-top: -6px;
     }
 }
 
@@ -922,7 +985,7 @@
                                 </td>
 
                                 <td class="concepto asignados">
-                                    ASIGNADOS
+                                    ASIGNADOS (SIN USAR)
                                 </td>
 
                                 {% for celda in tecnico_data.filas.ASIGNADOS %}

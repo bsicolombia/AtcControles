@@ -7,6 +7,9 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
+from django.utils.dateparse import parse_date
+from .resumen import MESES, url_con, resumen_ejecucion
+from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect
 from almacen import services as services_inventario
 from django.db import transaction
@@ -415,6 +418,17 @@ class ConciliacionSAPView(
         )
 
         return ctx
+# =====================================================================
+# En operaciones/views.py:
+#   1) Agregue estos imports arriba (los demás ya los tiene):
+#
+#       from django.utils import timezone
+#       from django.utils.dateparse import parse_date
+#       from .resumen import MESES, url_con, resumen_ejecucion
+#
+#   2) Reemplace TODA la clase ConsultaOrdenView por esta.
+# =====================================================================
+
 
 class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_ALMACEN
@@ -425,8 +439,28 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
     def _n(valor):
         return str(valor or "").strip().upper()
 
+    # ---------- filtros comunes (listado + resumen) ----------
+    @staticmethod
+    def _filtrar(qs, q, estado, tipo, tecnico, anomalia):
+        """Búsqueda, estado, tipo, técnico y anomalía. NO toca fechas."""
+        if q:
+            qs = qs.filter(
+                Q(numero_orden__icontains=q)
+                | Q(numero_cuenta_contrato__icontains=q)
+            )
+        if estado:
+            qs = qs.filter(estado=estado)
+        if tipo:
+            qs = qs.filter(tipo_operacion=tipo)
+        if tecnico.isdigit():
+            qs = qs.filter(tecnico_id=int(tecnico))
+        if anomalia.isdigit():
+            qs = qs.filter(anomalia_id=int(anomalia))
+        return qs
+
     # ---------- detalle de una orden ----------
     def _detalle(self, ctx, operacion):
+        OK = RegistroSAP.Estado.OK
         IGN = RegistroSAP.Estado.IGNORADO
 
         registros = list(
@@ -435,30 +469,23 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
                 Q(numero_orden=operacion.numero_orden)
                 | Q(operacion=operacion)
             )
-            .exclude(estado=RegistroSAP.Estado.IGNORADO)
+            .exclude(estado=IGN)
             .select_related(
-                "carga",
-                "producto",
-                "operacion",
-                "tecnico",
-                "unidad_serializada",
+                "carga", "producto", "operacion", "tecnico", "unidad_serializada",
             )
             .order_by("-carga__fecha", "-fila", "-pk")
             .distinct()
         )
 
-        OK = RegistroSAP.Estado.OK
         por_serie, por_unidad, por_producto = {}, {}, {}
 
         def guardar(indice, clave, r):
-            """Un OK siempre gana; entre iguales gana el más reciente (primero en la lista)."""
+            """Un OK siempre gana; entre iguales gana el más reciente."""
             actual = indice.get(clave)
             if actual is None or (actual.estado != OK and r.estado == OK):
                 indice[clave] = r
 
-        for r in registros:                 # ya vienen del más nuevo al más viejo
-            if r.estado == IGN:             # los ignorados nunca cuentan
-                continue
+        for r in registros:                 # del más nuevo al más viejo
             if r.numero_serie:
                 guardar(por_serie, self._n(r.numero_serie), r)
             if r.codigo_unidad:
@@ -466,9 +493,9 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             if r.codigo_producto:
                 guardar(por_producto, self._n(r.codigo_producto), r)
 
-        # En _detalle: borra la línea .prefetch_related("evidencias")
         materiales = list(
             operacion.materiales
+            .exclude(estado=Asignacion.Estado.DEVUELTA)
             .select_related("producto", "unidad_serializada", "tecnico")
             .order_by("producto__nombre", "pk")
         )
@@ -476,16 +503,16 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
         for m in materiales:
             u = m.unidad_serializada if m.unidad_serializada_id else None
 
-            if u and u.numero_serie:                       # medidor: serie / código
+            if u and u.numero_serie:                       # medidor
                 m.identificador_consulta = f"{u.numero_serie} / {u.codigo}"
                 m.tipo_identificador = "Serie / código de unidad"
                 m.sap = (por_serie.get(self._n(u.numero_serie))
                          or por_unidad.get(self._n(u.codigo)))
-            elif u:                                        # regulador, válvula: código de unidad
+            elif u:                                        # regulador, válvula
                 m.identificador_consulta = u.codigo
                 m.tipo_identificador = "Código de unidad"
                 m.sap = por_unidad.get(self._n(u.codigo))
-            else:                                          # por cantidad: código de producto
+            else:                                          # por cantidad
                 m.identificador_consulta = m.producto.codigo_producto
                 m.tipo_identificador = "Código de producto"
                 m.sap = por_producto.get(self._n(m.producto.codigo_producto))
@@ -515,41 +542,73 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
                 filtro |= Q(numero_serie=u.numero_serie)
             bloques.append({
                 "unidad": u,
-                # En _bloques: borra .prefetch_related("evidencias")
-                "asignaciones": (u.asignaciones.select_related("operacion", "tecnico")
-                                .order_by("-id")),
+                "asignaciones": (u.asignaciones
+                                 .select_related("operacion", "tecnico")
+                                 .order_by("-id")),
                 "registros": (RegistroSAP.objects.filter(filtro)
                               .select_related("carga").order_by("-carga__fecha")),
             })
         return bloques
 
+    # ---------- contexto ----------
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
+        hoy = timezone.localdate()
+
         q = g.get("q", "").strip()
         estado = g.get("estado", "").strip()
         tipo = g.get("tipo", "").strip()
         tecnico = g.get("tecnico", "").strip()
-        detalle = g.get("detalle", "").strip()
-        
         anomalia = g.get("anomalia", "").strip()
+        detalle = g.get("detalle", "").strip()
 
-        ctx.update(
-            anomalia_sel=anomalia,
-            anomalias=Anomalia.objects.filter(activa=True),
+        anio_param = g.get("anio", "").strip()
+        mes_param = g.get("mes", "").strip()
+        fecha_param = g.get("fecha", "").strip()
+
+        # parse_date lanza ValueError con fechas imposibles (2026-02-31)
+        try:
+            fecha_dt = parse_date(fecha_param) if fecha_param else None
+        except ValueError:
+            fecha_dt = None
+
+        # --- Año y mes efectivos del resumen ---
+        anio = (int(anio_param)
+                if anio_param.isdigit() and 1900 <= int(anio_param) <= 2100
+                else hoy.year)
+        mes = (int(mes_param)
+               if mes_param.isdigit() and 1 <= int(mes_param) <= 12
+               else None)
+        if fecha_dt:                      # si eligió un día, el resumen se ubica en su mes
+            anio = fecha_dt.year
+            mes = fecha_dt.month
+
+        # --- Años disponibles (chips del resumen y select del filtro) ---
+        anios_db = sorted(
+            {d.year for d in Operacion.objects.dates("fecha_operacion", "year")},
+            reverse=True,
         )
-        
-        op = Operacion.objects.select_related("tecnico", "anomalia").filter(
-            numero_orden=detalle).first()
-        
-        qs = Operacion.objects.select_related("tecnico", "anomalia").order_by(
-            "-fecha_operacion", "-pk")
-        
-        if anomalia.isdigit():
-            qs = qs.filter(anomalia_id=int(anomalia))
+        if anio not in anios_db:
+            anios_db.insert(0, anio)
+        anios = [
+            {"valor": a, "activo": a == anio,
+             "url": url_con(g, anio=a, mes=None, fecha=None)}
+            for a in anios_db
+        ]
 
         ctx.update(
-            q=q, estado_sel=estado, tipo_sel=tipo, tecnico_sel=tecnico,
+            q=q,
+            estado_sel=estado,
+            tipo_sel=tipo,
+            tecnico_sel=tecnico,
+            anomalia_sel=anomalia,
+            anio_sel=anio_param,
+            mes_sel=str(mes) if mes else "",
+            fecha_sel=fecha_dt.isoformat() if fecha_dt else "",
+            anios=anios,
+            meses=MESES,
+            anomalias=Anomalia.objects.filter(activa=True),
             estados_orden=Operacion.Estado.choices,
             tipos_operacion=Operacion.TipoOperacion.choices,
             tecnicos=User.objects.filter(is_active=True, rol="TECNICO")
@@ -561,47 +620,89 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
         if not detalle and q and Operacion.objects.filter(numero_orden=q).exists():
             detalle = q
 
+        # ---------------- Detalle de una orden ----------------
         if detalle:
             ctx["mostrar_listado"] = False
-            op = Operacion.objects.select_related("tecnico").filter(
-                numero_orden=detalle).first()
+            op = (Operacion.objects.select_related("tecnico", "anomalia")
+                  .filter(numero_orden=detalle).first())
             if op:
                 self._detalle(ctx, op)
             else:
                 ctx["error_detalle"] = f"No se encontró la orden {detalle}."
             return ctx
 
-        # Serie o código de unidad exactos
+        # ---------------- Serie o código de unidad exactos ----------------
         if q:
             bloques = self._bloques(q)
             if bloques:
                 ctx.update(bloques=bloques, mostrar_listado=False)
                 return ctx
 
-        # Listado
-        qs = (
-            Operacion.objects.select_related("tecnico")
-            .annotate(
-                n_inc=Count(
-                    "inconsistencias",
-                    filter=Q(inconsistencias__estado="PENDIENTE"),
-                    distinct=True,
-                )
-            )
-            .order_by("-fecha_operacion", "-pk")
+        # ---------------- Resumen + listado ----------------
+        # 1) Base: filtros normales, SIN fechas y SIN annotate
+        base = self._filtrar(
+            Operacion.objects.select_related("tecnico", "anomalia"),
+            q, estado, tipo, tecnico, anomalia,
         )
-        if q:
-            qs = qs.filter(Q(numero_orden__icontains=q) | Q(numero_cuenta_contrato__icontains=q))
-        if estado:
-            qs = qs.filter(estado=estado)
-        if tipo:
-            qs = qs.filter(tipo_operacion=tipo)
+
+        # 2) Resumen por técnico (año -> mes -> día)
+        ctx["resumen"] = resumen_ejecucion(base, g, anio, mes)
+
+        # 3) Filtros de fecha sobre el LISTADO
+        qs = base
+        if fecha_dt:
+            qs = qs.filter(fecha_operacion=fecha_dt)
+        else:
+            if anio_param.isdigit() or mes:
+                qs = qs.filter(fecha_operacion__year=anio)
+            if mes:
+                qs = qs.filter(fecha_operacion__month=mes)
+
+        # 4) Ahora sí, el annotate de inconsistencias
+        qs = qs.annotate(
+            n_inc=Count(
+                "inconsistencias",
+                filter=Q(inconsistencias__estado="PENDIENTE"),
+                distinct=True,
+            )
+        ).order_by("-fecha_operacion", "-pk")
+
+        # 5) Migas de pan (cada una quita su filtro)
+        migas = []
+        if anio_param.isdigit() or mes or fecha_dt:
+            migas.append({"label": f"Año {anio}",
+                          "quitar": url_con(g, anio=None, mes=None, fecha=None)})
+        if mes:
+            migas.append({"label": dict(MESES)[mes],
+                          "quitar": url_con(g, mes=None, fecha=None)})
+        if fecha_dt:
+            migas.append({"label": fecha_dt.strftime("%d/%m/%Y"),
+                          "quitar": url_con(g, fecha=None)})
         if tecnico.isdigit():
-            qs = qs.filter(tecnico_id=int(tecnico))
+            tec = User.objects.filter(pk=int(tecnico)).first()
+            if tec:
+                migas.append({"label": tec.get_full_name() or tec.username,
+                              "quitar": url_con(g, tecnico=None)})
+
+        # 6) Paginación (el querystring conserva todos los filtros)
+        params = g.copy()
+        params.pop("page", None)
+        params.pop("detalle", None)
 
         paginator = Paginator(qs, self.por_pagina)
-        ctx.update(page_obj=paginator.get_page(g.get("page")),
-                   total_ordenes=paginator.count)
+        ctx.update(
+            page_obj=paginator.get_page(g.get("page")),
+            total_ordenes=paginator.count,
+            migas=migas,
+            querystring=params.urlencode(),
+        )
+
+        # Sugerencias si la búsqueda no trajo nada
+        if q and paginator.count == 0:
+            ctx["candidatas"] = Operacion.objects.filter(
+                numero_orden__startswith=q[:6]
+            ).order_by("numero_orden")[:5]
+
         return ctx
     
 class SoporteOperacionView(RolRequeridoMixin, View):
@@ -750,6 +851,20 @@ class OperacionUpdateView(
 
                 # Guardar los datos generales.
                 self.object = form.save()
+                
+                if form.cleaned_data["estado"] in Operacion.ESTADOS_QUE_INSTALAN:
+                    services_inventario.vincular_ivt(
+                        numero=form.cleaned_data["numero_ivt"],
+                        operacion=self.object,
+                        tecnico=self.object.tecnico,
+                        usuario=self.request.user,
+                    )
+                else:
+                    services_inventario.liberar_ivt_operacion(
+                        operacion=self.object,
+                        usuario=self.request.user,
+                        motivo="La orden dejó de estar ejecutada",
+                    )
                 
                 logging.warning(
                     "EDITANDO OPERACION %s | PAYLOAD: %s",
