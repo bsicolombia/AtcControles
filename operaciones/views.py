@@ -418,16 +418,6 @@ class ConciliacionSAPView(
         )
 
         return ctx
-# =====================================================================
-# En operaciones/views.py:
-#   1) Agregue estos imports arriba (los demás ya los tiene):
-#
-#       from django.utils import timezone
-#       from django.utils.dateparse import parse_date
-#       from .resumen import MESES, url_con, resumen_ejecucion
-#
-#   2) Reemplace TODA la clase ConsultaOrdenView por esta.
-# =====================================================================
 
 
 class ConsultaOrdenView(RolRequeridoMixin, TemplateView):

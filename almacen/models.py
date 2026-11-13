@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 import os
+from django.db.models import Q  
 
 def ruta_remision(instance, filename):
     # Extrae la extensión del archivo original (ej: .jpg, .png, .pdf)
@@ -475,7 +476,17 @@ class Asignacion(models.Model):
         verbose_name = "Asignación"
         verbose_name_plural = "Asignaciones"
         ordering = ["-fecha_asignacion", "-id"]
-
+        constraints = [
+            # Una unidad serializada solo puede tener UNA asignación activa
+            models.UniqueConstraint(
+                fields=["unidad_serializada"],
+                condition=Q(
+                    unidad_serializada__isnull=False,
+                    estado__in=["ASIGNADA", "INSTALADA"],
+                ),
+                name="uniq_asignacion_activa_por_unidad",
+            ),
+        ]
     def __str__(self):
         return f"{self.producto.nombre} -> {self.tecnico}"
 
@@ -843,6 +854,14 @@ class IVT(models.Model):
         verbose_name = "IVT"
         verbose_name_plural = "IVT"
         indexes = [models.Index(fields=["estado", "tecnico"])]
+        constraints = [
+            # Una orden = un IVT instalado
+            models.UniqueConstraint(
+                fields=["operacion"],
+                condition=Q(estado="INSTALADO", operacion__isnull=False),
+                name="uniq_ivt_instalado_por_operacion",
+            ),
+        ]
 
     def __str__(self):
         return self.codigo
