@@ -1397,7 +1397,7 @@ def _obtener_contexto_asignaciones(request):
     # =========================================================
 
     productos = sorted(
-        productos_dict.values(),
+        (p for p in productos_dict.values() if p is not None),
         key=lambda p: (p.nombre or "", p.medida or ""),
     )
 
@@ -3119,8 +3119,7 @@ class EntregaPdfView(RolRequeridoMixin, View):
             ("TOPPADDING", (0, 0), (-1, -1), 5),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ]))
-
+        ])) 
         # Materiales.
         if es_devolucion:
             filas = [[
@@ -3133,11 +3132,22 @@ class EntregaPdfView(RolRequeridoMixin, View):
             ]]
 
         for i, it in enumerate(e.items.all(), 1):
+
+            producto = it.producto
+
+            # Proteger referencias a productos inexistentes.
+            if producto:
+                codigo = producto.codigo_producto or ""
+                nombre = producto.nombre_completo or "Sin nombre"
+            else:
+                codigo = ""
+                nombre = "PRODUCTO NO DISPONIBLE"
+
             fila = [
                 str(i),
-                escape(str(it.producto.codigo_producto or "")),
+                escape(str(codigo)),
                 Paragraph(
-                    escape(str(it.producto.nombre_completo)),
+                    escape(str(nombre)),
                     normal,
                 ),
                 escape(str(it.serial or "—")),
@@ -3152,17 +3162,27 @@ class EntregaPdfView(RolRequeridoMixin, View):
             filas.append(fila)
 
         if es_devolucion:
-            filas.append(["", "", "", "TOTAL", str(e.total_cantidad), ""])
+            filas.append([
+                "", "", "", "TOTAL",
+                str(e.total_cantidad), ""
+            ])
+
             anchos = [
                 0.7 * cm, 2.2 * cm, 5.0 * cm,
                 3.8 * cm, 1.2 * cm, 3.0 * cm,
             ]
+
         else:
-            filas.append(["", "", "", "TOTAL", str(e.total_cantidad)])
+            filas.append([
+                "", "", "", "TOTAL",
+                str(e.total_cantidad)
+            ])
+
             anchos = [
                 0.8 * cm, 2.7 * cm, 6.0 * cm,
                 4.5 * cm, 1.8 * cm,
             ]
+
 
         tabla = Table(filas, colWidths=anchos, repeatRows=1)
 
@@ -3474,6 +3494,10 @@ def _matriz_entregas(request):
         cantidades = {}
 
         for item in documento.items.all():
+
+            if item.producto is None:
+                continue
+
             columnas.setdefault(item.producto_id, item.producto)
 
             cantidades[item.producto_id] = (
@@ -3487,8 +3511,8 @@ def _matriz_entregas(request):
         })
 
     cols = sorted(
-        columnas.values(),
-        key=lambda p: (p.nombre, p.medida or ""),
+        (p for p in columnas.values() if p is not None),
+        key=lambda p: (p.nombre or "", p.medida or ""),
     )
 
     for fila in filas:

@@ -1895,7 +1895,7 @@ def instalar_cantidad(
         )
 
     return novedades
-
+@transaction.atomic
 def reabrir_operacion(*, operacion, usuario):
     """
     Revierte todos los materiales y el IVT de la orden a su estado anterior

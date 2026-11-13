@@ -113,19 +113,21 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": os.environ.get("DB_NAME", "atc_controles"),
-        "USER": os.environ.get("DB_USER", "atc_user"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "3307"),
+        "NAME": "atc_controles",
+        "USER": "atc_user",
+        "PASSWORD": "12345678d",
+        "HOST": "127.0.0.1",
+        "PORT": "3307",
         "OPTIONS": {
             "charset": "utf8mb4",
         },
     }
 }
+
 
 
 # Password validation
