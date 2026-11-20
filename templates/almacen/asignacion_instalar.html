@@ -162,8 +162,16 @@
         <div id="caja-prod" class="hidden" style="margin-bottom:8px">
         <label for="sel-prod-serial">¿Qué material es? (el serial no existe en el sistema)</label>
         <select id="sel-prod-serial">
-            <option value="">Seleccione…</option>
-            {% for p in productos_serializados %}<option value="{{ p.pk }}">{{ p.nombre_completo }}</option>{% endfor %}
+            {% for p in productos_serializados %}
+            <option
+                value="{{ p.pk }}"
+                data-categoria-id="{{ p.categoria_id }}"
+                data-categoria-nombre="{{ p.categoria.nombre }}"
+                data-max-orden="{{ p.categoria.max_por_orden|default_if_none:'' }}"
+            >
+                {{ p.nombre_completo }}
+            </option>
+            {% endfor %}
         </select>
         </div>
 
@@ -198,11 +206,16 @@
     </div>
 
         <div class="foot">
-      <a href="{% url 'operaciones:consulta_orden' %}" class="btn sec">Cancelar</a>
-      <span>
-        <span id="n-inc"></span><b id="total-gen">0</b> pieza(s) &nbsp;
-        <button class="btn" id="btn-guardar" type="submit">Guardar cambios</button>
-      </span>
+    <a href="{{ cancelar_url }}" class="btn sec">Cancelar</a>
+
+        <span>
+            <span id="n-inc"></span>
+            <b id="total-gen">0</b> pieza(s)
+            &nbsp;
+            <button class="btn" id="btn-guardar" type="submit">
+                Guardar cambios
+            </button>
+        </span>
     </div>
   </form>
 </div>
@@ -438,6 +451,62 @@
 
     var estadoSel = $("id_estado");
 
+var anomaliaSel = $("id_anomalia");
+
+function filtrarAnomalias() {
+    if (!estadoSel || !anomaliaSel) return;
+
+    var estado = estadoSel.value;
+
+    var ejecutada = [
+        "EJECUTADA",
+        "EJECUTADA_SUSPENDIDA"
+    ].indexOf(estado) !== -1;
+
+    var noEjecutada = estado === "NO_EJECUTADA";
+
+    var seleccionActual = anomaliaSel.value;
+
+    var opciones = Array.from(anomaliaSel.options);
+    var seleccionValida = false;
+
+    opciones.forEach(function(opcion, index) {
+        if (!opcion.value) {
+            opcion.hidden = false;
+            opcion.disabled = false;
+            return;
+        }
+
+        var aplicaEjecutada =
+            opcion.dataset.ejecutada === "1";
+
+        var aplicaNoEjecutada =
+            opcion.dataset.noEjecutada === "1";
+
+        var aplica =
+            ejecutada
+                ? aplicaEjecutada
+                : noEjecutada
+                    ? aplicaNoEjecutada
+                    : false;
+
+        opcion.hidden = !aplica;
+        opcion.disabled = !aplica;
+
+        if (
+            opcion.value === seleccionActual &&
+            aplica
+        ) {
+            seleccionValida = true;
+        }
+    });
+
+    if (!seleccionValida) {
+        anomaliaSel.value = "";
+    }
+}
+
+
     function evaluarEstado() {
         if (!estadoSel) return;
 
@@ -460,8 +529,15 @@
     }
 
     if (estadoSel) {
-        estadoSel.addEventListener("change", evaluarEstado);
-    }
+    estadoSel.addEventListener("change", function() {
+        evaluarEstado();
+        filtrarAnomalias();
+    });
+}
+
+if (anomaliaSel) {
+    filtrarAnomalias();
+}
 
     /* ============================================================
        MATERIALES POR CANTIDAD
@@ -615,10 +691,108 @@
         serialPendiente = "";
     }
 
+    /* ============================================================
+    VALIDAR MÁXIMO DE SERIALIZADOS POR CATEGORÍA
+    ============================================================ */
+
+    function obtenerReglaCategoria(pid) {
+        var selector = $("sel-prod-serial");
+
+        if (!selector) return null;
+
+        var opcion = Array.from(selector.options).find(function(op) {
+            return String(op.value) === String(pid);
+        });
+
+        if (!opcion) return null;
+
+        var categoriaId = opcion.getAttribute("data-categoria-id");
+        var categoriaNombre = opcion.getAttribute("data-categoria-nombre");
+        var maximo = opcion.getAttribute("data-max-orden");
+
+        if (!categoriaId || !categoriaNombre) {
+            return null;
+        }
+
+        maximo = parseInt(maximo, 10);
+
+        if (isNaN(maximo)) {
+            maximo = 1;
+        }
+
+        return {
+            id: String(categoriaId),
+            nombre: categoriaNombre,
+            maximo: maximo
+        };
+    }
+
+
+    function validarMaximoCategoria(pid) {
+        var regla = obtenerReglaCategoria(pid);
+
+        if (!regla) {
+            return {
+                valido: false,
+                mensaje: "✗ No se pudo identificar la categoría o el límite de este material. Verifique la configuración del producto."
+            };
+        }
+
+        // Si no hay límite configurado, por defecto solo se permite 1.
+        var maximo = regla.maximo > 0 ? regla.maximo : 1;
+
+        var cantidadActual = 0;
+
+        for (var i = 0; i < lineas.length; i++) {
+            var l = lineas[i];
+
+            if (!l.serializado) continue;
+
+            var otraRegla = obtenerReglaCategoria(l.producto);
+
+            if (!otraRegla) {
+                continue;
+            }
+
+            if (String(otraRegla.id) === String(regla.id)) {
+                cantidadActual += l.unidades.length;
+            }
+        }
+
+        if (cantidadActual >= maximo) {
+            return {
+                valido: false,
+                mensaje:
+                    "✗ Categoría '" + regla.nombre +
+                    "': ya tiene " + cantidadActual +
+                    " material(es) agregado(s) en esta ODS. " +
+                    "El máximo permitido es " + maximo + "."
+            };
+        }
+
+        return {
+            valido: true
+        };
+    }
+
     function agregarUnidad(pid, nombre, unidad) {
+
+        // VALIDACIÓN INMEDIATA POR CATEGORÍA
+        var validacion = validarMaximoCategoria(pid);
+
+        if (!validacion.valido) {
+
+            msg(validacion.mensaje, "err");
+
+            $("in-serial").select();
+
+            return false;
+        }
+
         var l = enLinea(pid, true);
 
         if (!l) {
+
             l = {
                 producto: pid,
                 nombre: nombre,
@@ -638,6 +812,8 @@
         ocultarCajaProd();
 
         render();
+
+        return true;
     }
 
     function validarSerial() {
@@ -673,14 +849,16 @@
                 return;
             }
 
-            agregarUnidad(
+            if (!agregarUnidad(
                 u.producto,
                 u.nombre,
                 {
                     id: u.id,
                     serial: u.serial
                 }
-            );
+            )) {
+                return;
+            }
 
             msg(
                 "✓ " + u.serial + " · " + u.nombre +
@@ -707,7 +885,7 @@
 
             var nom = prodSel.options[prodSel.selectedIndex].text;
 
-            agregarUnidad(
+            if (!agregarUnidad(
                 prodSel.value,
                 nom,
                 {
@@ -717,12 +895,9 @@
                     instala: false,
                     aviso: "El serial no existe en el sistema."
                 }
-            );
-
-            msg(
-                "⚠ Se reportará como serial inexistente (no se instala).",
-                "warn"
-            );
+            )) {
+                return;
+            }
 
             return;
         }
@@ -770,14 +945,16 @@
                 }
 
                 if (d.tipo === "OK") {
-                    agregarUnidad(
+                    if (!agregarUnidad(
                         d.producto,
                         d.nombre,
                         {
                             id: d.id,
                             serial: d.serial
                         }
-                    );
+                    )) {
+                        return;
+                    }
 
                     msg(
                         "✓ " + d.serial +
@@ -788,7 +965,7 @@
                     return;
                 }
 
-                agregarUnidad(
+                if (!agregarUnidad(
                     d.producto,
                     d.nombre,
                     {
@@ -798,7 +975,9 @@
                         instala: d.instala,
                         aviso: d.mensaje
                     }
-                );
+                )) {
+                    return;
+                }
 
                 msg(
                     "⚠ " + d.serial +

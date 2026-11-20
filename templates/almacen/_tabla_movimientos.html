@@ -50,30 +50,27 @@
       </span>
     </td>
 
-    <!-- PRODUCTO Y UNIDAD -->
-    <td>
-      {% if m.producto %}
-        <strong>{{ m.producto.nombre_completo }}</strong>
-        <span class="dato-secundario">
-          {{ m.producto.codigo_producto }}
-        </span>
-      {% endif %}
+<!-- PRODUCTO Y UNIDAD -->
+<td>
+  {% if m.producto %}
+    <strong>{{ m.producto.nombre_completo }}</strong>
+    <span class="dato-secundario">
+      {{ m.producto.codigo_producto }}
+    </span>
+  {% endif %}
 
-      {% if m.unidad_serializada %}
-        <a
-          class="unidad-enlace"
-          href="{% url 'almacen:unidad_detalle' m.unidad_serializada.pk %}"
-        >
-          {{ m.unidad_serializada.codigo }}
-        </a>
+  {% if m.unidad_serializada %}
+    <span class="unidad-enlace">
+      {{ m.unidad_serializada.codigo }}
+    </span>
 
-        {% if m.unidad_serializada.numero_serie %}
-          <span class="dato-secundario">
-            Serie: {{ m.unidad_serializada.numero_serie }}
-          </span>
-        {% endif %}
-      {% endif %}
-    </td>
+    {% if m.unidad_serializada.numero_serie %}
+      <span class="dato-secundario">
+        Serie: {{ m.unidad_serializada.numero_serie }}
+      </span>
+    {% endif %}
+  {% endif %}
+</td>
 
     <!-- CANTIDAD -->
     <td class="cantidad-mov">

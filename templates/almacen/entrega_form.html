@@ -1156,6 +1156,16 @@
 
   render();
 
+  /* SELECCIONAR IVT AUTOMÁTICAMENTE */
+
+  {% if seleccionar_ivt %}
+  tsProd.setValue("IVT", true);
+
+  setTimeout(function () {
+      $("in-ivt-ini").focus();
+  }, 300);
+  {% endif %}
+
 })();
 
 </script>

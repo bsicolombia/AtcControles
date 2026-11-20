@@ -788,24 +788,24 @@ main,
         >
     </div>
 
-    <select
-        class="input"
-        name="tecnico"
-        onchange="this.form.submit()"
-    >
-        <option value="">Ningún técnico seleccionado</option>
+<select
+    class="input"
+    name="tecnico"
+    onchange="this.form.submit()"
+>
+    <option value="">Todos los técnicos</option>
 
-        {% for tecnico in tecnicos_lista %}
-            <option
-                value="{{ tecnico.pk }}"
-                {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
-                    selected
-                {% endif %}
-            >
-                {{ tecnico.get_full_name|default:tecnico.username|upper }}
-            </option>
-        {% endfor %}
-    </select>
+    {% for tecnico in tecnicos_lista %}
+        <option
+            value="{{ tecnico.pk }}"
+            {% if tecnico_sel == tecnico.pk|stringformat:"s" %}
+                selected
+            {% endif %}
+        >
+            {{ tecnico.get_full_name|default:tecnico.username|upper }}
+        </option>
+    {% endfor %}
+</select>
     
 <select
     class="input"
@@ -1279,7 +1279,6 @@ main,
 
         {% endif %}
 
-        {% include "_paginacion.html" %}
 
     </div>
 

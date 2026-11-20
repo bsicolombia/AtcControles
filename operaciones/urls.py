@@ -15,4 +15,6 @@ urlpatterns = [
     path("soporte/<int:pk>/", views.SoporteOperacionView.as_view(), name="soporte"),
     path("operacion/<int:pk>/editar/",views.OperacionUpdateView.as_view(),name="editar_instalacion",),
     path("operacion/<int:pk>/reabrir/", views.OperacionReabrirView.as_view(), name="operacion_reabrir"),
+   path("validar-password-accion/",views.validar_password_accion,name="validar_password_accion"
+),
 ]

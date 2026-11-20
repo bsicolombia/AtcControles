@@ -302,13 +302,6 @@
       >
         Volver
       </a>
-
-      <a
-        class="btn btn-primario"
-        href="{% url 'almacen:unidad_editar' object.pk %}"
-      >
-        Editar unidad
-      </a>
     </div>
   </header>
 
@@ -507,23 +500,6 @@
 
     {% include "almacen/_tabla_movimientos.html" with movimientos=movimientos %}
   </section>
-
-  <!-- ACCIONES FINALES -->
-  <div class="ud-footer">
-    <a
-      class="btn"
-      href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/almacen/unidades/' }}"
-    >
-      Volver al inventario
-    </a>
-
-    <a
-      class="btn btn-primario"
-      href="{% url 'almacen:unidad_editar' object.pk %}"
-    >
-      Editar unidad
-    </a>
-  </div>
 
 </div>
 

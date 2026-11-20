@@ -21,9 +21,14 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
+from django.views.decorators.cache import never_cache
+from django.utils.decorators import method_decorator
+from django.shortcuts import  render
 from django.utils.dateparse import parse_date
 from .models import (Asignacion, Categoria, Inconsistencia, Inventario,
                      MovimientoInventario, Producto, UnidadSerializada,IVT)
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.db.models import Count
 from usuarios.roles import DIGITADOR, tiene_rol
 from django.db.models import Prefetch
@@ -88,9 +93,10 @@ ETIQUETAS_ERRORES = {
 def tecnicos_queryset():
     return (
         User.objects
-        .filter(rol="TECNICO")
+        .filter(groups__name="TECNICO")
         .select_related("supervisor")
         .order_by("first_name", "last_name", "username")
+        .distinct()
     )
     
 def _unidades_conciliadas_sap():
@@ -106,7 +112,7 @@ def _unidades_conciliadas_sap():
 class BuscarMixin:
     """Búsqueda ?q=; código exacto y otros campos parciales."""
 
-    paginate_by = 20
+    paginate_by = None
     campos_busqueda = ()
 
     def filtrar(self, qs):
@@ -592,20 +598,22 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["comparacion_sel"] = self.request.GET.get(
+        request = self.request
+
+        ctx["comparacion_sel"] = request.GET.get(
             "comparacion", ""
         ).strip()
 
-        tecnico_sel = self.request.GET.get(
-            "tecnico", ""
-        ).strip()
+        tecnico_sel = request.GET.get("tecnico", "").strip()
 
+        # Mantener únicamente usuarios pertenecientes al grupo TECNICO
         ctx["tecnicos_lista"] = tecnicos_queryset()
+
         ctx["tecnico_sel"] = tecnico_sel
 
         if tecnico_sel.isdigit():
             ctx.update(
-                _obtener_contexto_asignaciones(self.request)
+                _obtener_contexto_asignaciones(request)
             )
 
         else:
@@ -618,53 +626,9 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
 
                 inventario.five = five.get(producto_id, 0)
                 inventario.sap = sap.get(producto_id, 0)
-
                 inventario.asignado_estado = asignado.get(
                     producto_id, 0
                 )
-
-        # ==================================================
-        # CONTADORES DEL INVENTARIO CON FILTROS ACTIVOS
-        # ==================================================
-
-        qs = self.get_queryset()
-
-        # Si get_queryset devuelve una lista por comparación,
-        # también podemos contar sus elementos.
-        ctx["total_productos"] = len(qs)
-
-        ctx["total_existencias"] = sum(
-            i.cantidad_actual or 0 for i in qs
-        )
-        ctx["total_danado"] = sum(
-            i.cantidad_danada or 0 for i in qs
-        )
-
-        ctx["total_recibido"] = sum(
-            i.total or 0 for i in qs
-        )
-
-        ctx["total_minimo"] = sum(
-            i.cantidad_minima or 0 for i in qs
-        )
-
-        ctx["total_stock_bajo"] = sum(
-            1 for i in qs
-            if i.cantidad_minima > 0
-            and i.cantidad_actual <= i.cantidad_minima
-        )
-
-        ctx["total_five"] = sum(
-            five.get(i.producto_id, 0) for i in qs
-        ) if not tecnico_sel.isdigit() else 0
-
-        ctx["total_sap"] = sum(
-            sap.get(i.producto_id, 0) for i in qs
-        ) if not tecnico_sel.isdigit() else 0
-
-        ctx["total_asignado"] = sum(
-            asignado.get(i.producto_id, 0) for i in qs
-        ) if not tecnico_sel.isdigit() else 0
 
         return ctx
 
@@ -1561,11 +1525,6 @@ def _obtener_contexto_asignaciones(request):
 
         "q": q,
         "tecnico_sel": tecnico_sel,
-
-        "tecnicos_lista": User.objects.filter(is_active=True).order_by(
-            "first_name", "last_name"
-        ),
-
         "ivt_por_tecnico": ivt_por_tecnico,
         "ivt_disponibles": ivt_disponibles,
         "ivt_total": ivt_total,
@@ -1587,7 +1546,7 @@ class AsignacionListView(RolRequeridoMixin, TemplateView):
 # ============================================================
 # ASIGNACIONES · CREAR
 # ============================================================
-
+@method_decorator(never_cache, name="dispatch")
 class AsignacionCreateView(FormPageMixin, RolRequeridoMixin, FormView):
     roles_permitidos = ROLES_ALMACEN
     form_class = AsignacionForm
@@ -1673,7 +1632,7 @@ class AsignacionUpdateView(
 
 
 import json  # arriba del archivo
-
+@method_decorator(never_cache, name="dispatch")
 class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_DIGITADOR
     template_name = "almacen/asignacion_instalar.html"
@@ -1703,6 +1662,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     "serial": u.numero_serie or u.codigo,
                     "codigo": u.codigo,
                     "producto": a.producto_id,
+                    "categoria": a.producto.categoria_id,
                     "nombre": a.producto.nombre_completo,
                 })
             else:
@@ -1751,6 +1711,24 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
             payload_previo = []
         except ValueError:
             payload_previo = []
+            
+        cancelar_url = (
+            self.request.GET.get("next")
+            or self.request.POST.get("next")
+            or self.request.META.get("HTTP_REFERER")
+        )
+
+        if not cancelar_url or not url_has_allowed_host_and_scheme(
+            cancelar_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            cancelar_url = reverse(
+                "almacen:tecnico_asignaciones",
+                kwargs={"pk": self.tecnico.pk},
+            )
+
+        ctx["cancelar_url"] = cancelar_url
 
         ctx["tecnico"] = self.tecnico
         ctx["pend_cantidad"] = pend_cantidad
@@ -1844,7 +1822,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 # ============================================================
 # INSTALAR · UNA SOLA ASIGNACIÓN
 # ============================================================
-
+@method_decorator(never_cache, name="dispatch")
 class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
     roles_permitidos = ROLES_DIGITADOR
     form_class = InstalacionForm
@@ -1856,7 +1834,8 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
     def dispatch(self, request, *args, **kwargs):
         self.asignacion = get_object_or_404(
             Asignacion.objects.select_related(
-                "tecnico", "producto", "unidad_serializada"
+                "tecnico", "producto", "producto__categoria",
+                "unidad_serializada",
             ),
             pk=kwargs["pk"],
         )
@@ -1892,12 +1871,27 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
 
         ctx["asignacion"] = a
         ctx["subtitulo"] = f"{detalle} · asignado a {a.tecnico}"
-        ctx["cancel_url"] = self.get_success_url()
+
+        cancelar_url = (
+            self.request.GET.get("next")
+            or self.request.POST.get("next")
+            or self.request.META.get("HTTP_REFERER")
+        )
+
+        if not cancelar_url or not url_has_allowed_host_and_scheme(
+            cancelar_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            cancelar_url = self.get_success_url()
+
+        ctx["cancelar_url"] = cancelar_url
         return ctx
 
     def form_valid(self, form):
         d = form.cleaned_data
         cantidad = d.get("cantidad")
+        tecnico = self.asignacion.tecnico          # antes: self.tecnico (no existia)
 
         try:
             with transaction.atomic():
@@ -1905,9 +1899,14 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
                     numero_orden=d["numero_orden"],
                     cuenta_contrato=d["numero_cuenta_contrato"],
                     tipo=d["tipo_operacion"],
-                    tecnico=self.tecnico,
+                    tecnico=tecnico,
                     usuario=self.request.user,
                     fecha=d["fecha_instalacion"],
+                    # Eran obligatorios y faltaban (TypeError).
+                    # Ajusta los nombres a los campos reales de tu InstalacionForm.
+                    estado=d.get("estado") or Operacion.Estado.EFECTIVA,
+                    anomalia=d.get("anomalia") or "",
+                    observaciones=d.get("observaciones") or "",
                 )
                 services.instalar(
                     asignacion=self.asignacion,
@@ -1915,11 +1914,13 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
                     cantidad=cantidad,
                     fecha_instalacion=d["fecha_instalacion"],
                     operacion=op,
-                    observaciones=d["observaciones"],
+                    observaciones=d.get("observaciones") or "",
                 )
         except services.ErrorInventario as e:
-            messages.error(self.request, str(e))
-            return redirect("almacen:asignaciones")
+            # Se queda en el formulario y muestra el motivo
+            # (ej. "Duplicado: la orden X ya tiene instalado un medidor ...")
+            form.add_error(None, str(e))
+            return self.form_invalid(form)
 
         if cantidad:
             self.asignacion.refresh_from_db()
@@ -1937,66 +1938,143 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
 
 import json
 
-from django.shortcuts import get_object_or_404, render, redirect
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+def _payload_desde_bd(operacion):
+    """Lo que hoy esta instalado en la orden, en el formato del formulario."""
+    asignaciones = (
+        Asignacion.objects
+        .filter(operacion=operacion, estado=Asignacion.Estado.INSTALADA)  # antes incluia devueltas
+        .select_related("producto", "unidad_serializada")
+        .order_by("pk")
+    )
 
-from operaciones.models import Operacion
-from almacen.models import Asignacion
+    seriales = {}      # producto_id -> item
+    cantidades = {}    # producto_id -> item
+
+    for a in asignaciones:
+        if a.unidad_serializada_id:
+            u = a.unidad_serializada
+            item = seriales.setdefault(a.producto_id, {
+                "producto": a.producto_id,
+                "categoria": a.producto.categoria_id,
+                "nombre": a.producto.nombre_completo,
+                "serializado": True,
+                "cantidad": 0,
+                "unidades": [],
+            })
+            item["unidades"].append({
+                "id": u.id,
+                "serial": u.numero_serie or u.codigo,
+            })
+        else:
+            item = cantidades.setdefault(a.producto_id, {
+                "producto": a.producto_id,
+                "nombre": a.producto.nombre_completo,
+                "serializado": False,
+                "cantidad": 0,
+                "unidades": [],
+            })
+            item["cantidad"] += a.cantidad
+
+    return list(seriales.values()) + list(cantidades.values())
 
 
-@login_required
+def _leer_payload(request):
+    """
+    Lee el JSON enviado por el formulario y lo normaliza al formato que
+    espera services.sincronizar_materiales_operacion:
+        [{"producto_id": int, "seriales": [str], "cantidad": int}]
+    Acepta tanto "producto"/"unidades" como "producto_id"/"seriales".
+    """
+    crudo = request.POST.get("payload") or request.POST.get("materiales") or "[]"
+    try:
+        datos = json.loads(crudo)
+    except (TypeError, ValueError):
+        raise services.ErrorInventario("Los materiales enviados no son válidos.")
+
+    if not isinstance(datos, list):
+        raise services.ErrorInventario("Los materiales enviados no son válidos.")
+
+    normalizado = []
+    for item in datos:
+        if not isinstance(item, dict):
+            raise services.ErrorInventario("Los materiales enviados no son válidos.")
+
+        seriales = item.get("seriales")
+        if seriales is None:
+            seriales = [
+                (u.get("serial") if isinstance(u, dict) else u)
+                for u in (item.get("unidades") or [])
+            ]
+
+        normalizado.append({
+            "producto_id": item.get("producto_id", item.get("producto")),
+            "seriales": seriales,
+            "cantidad": item.get("cantidad") or 0,
+        })
+    return normalizado
+
+@login_required   # idealmente tambien RolRequeridoMixin / decorador de roles
 def editar_instalacion(request, pk):
-
     operacion = get_object_or_404(
-        Operacion,
+        Operacion.objects.select_related("tecnico"),
         pk=pk,
         tipo_operacion=Operacion.TipoOperacion.INSTALACION,
     )
 
-    asignaciones = (
-        Asignacion.objects
-        .filter(operacion=operacion)
-        .select_related("producto", "unidad_serializada")
-    )
-
-    payload_previo = []
-
-    for a in asignaciones:
-
-        if a.unidad_serializada_id:
-            unidad = a.unidad_serializada
-
-            payload_previo.append({
-                "producto": a.producto_id,
-                "nombre": a.producto.nombre_completo,
-                "serializado": True,
-                "cantidad": 0,
-                "unidades": [{
-                    "id": unidad.id,
-                    "serial": unidad.numero_serie or unidad.codigo,
-                }],
-            })
-
-        else:
-            payload_previo.append({
-                "producto": a.producto_id,
-                "nombre": a.producto.nombre_completo,
-                "serializado": False,
-                "cantidad": a.cantidad_instalada,
-                "unidades": [],
-            })
-
-    # Aquí debes reutilizar la lógica que ya tienes
-    # para construir pend_cantidad, pend_seriales,
-    # estados_instalan y tipos_inconsistencia.
+    payload_previo = _payload_desde_bd(operacion)
 
     if request.method == "POST":
+        try:
+            payload = _leer_payload(request)
 
-        # Aquí se debe procesar el payload y actualizar
-        # las asignaciones y movimientos existentes.
-        pass
+            with transaction.atomic():
+                novedades = services.sincronizar_materiales_operacion(
+                    operacion=operacion,
+                    payload=payload,
+                    usuario=request.user,
+                )
 
+                # IVT opcional: una orden = un IVT
+                ivt_numero = (request.POST.get("ivt") or "").strip()
+                if ivt_numero:
+                    services.vincular_ivt(
+                        numero=ivt_numero,
+                        operacion=operacion,
+                        tecnico=operacion.tecnico,
+                        usuario=request.user,
+                    )
+
+        except services.ErrorInventario as e:
+            # Nada se guardo (rollback). Se muestra el error y se
+            # conserva lo que el usuario habia escrito.
+            messages.error(request, str(e))
+            try:
+                payload_previo = [
+                    {
+                        "producto": p["producto_id"],
+                        "nombre": "",
+                        "serializado": bool(p["seriales"]),
+                        "cantidad": p["cantidad"],
+                        "unidades": [{"id": None, "serial": s} for s in p["seriales"]],
+                    }
+                    for p in _leer_payload(request)
+                ]
+            except services.ErrorInventario:
+                pass
+        else:
+            if novedades:
+                messages.warning(
+                    request,
+                    f"Orden actualizada con {len(novedades)} novedad(es) "
+                    "pendiente(s) de revisar.",
+                )
+            else:
+                messages.success(request, "Instalación actualizada.")
+            return redirect("operaciones:detalle", pk=operacion.pk)   # ajusta a tu URL
+
+    # TODO: aqui reutiliza tu logica existente para construir
+    # pend_cantidad, pend_seriales, estados_instalan y tipos_inconsistencia
+    # y agregalos al context.
     context = {
         "operacion": operacion,
         "tecnico": operacion.tecnico,
@@ -2004,11 +2082,8 @@ def editar_instalacion(request, pk):
         "modo_edicion": True,
     }
 
-    return render(
-        request,
-        "operaciones/registrar_operacion.html",
-        context,
-    )
+    return render(request, "operaciones/registrar_operacion.html", context)
+
 # ============================================================
 # DEVOLVER ASIGNACIÓN
 # ============================================================
@@ -2662,6 +2737,7 @@ class ValidarSerialInstalacionJson(RolRequeridoMixin, View):
             "id": unidad.pk if unidad else None,
             "serial": (unidad.numero_serie or unidad.codigo) if unidad else serial,
             "producto": unidad.producto_id if unidad else None,
+            "categoria": unidad.producto.categoria_id if unidad else None,   # <- NUEVO
             "nombre": unidad.producto.nombre_completo if unidad else "",
         })
 
@@ -2807,16 +2883,27 @@ class EntregaCreateView(RolRequeridoMixin, TemplateView):
     template_name = "almacen/entrega_form.html"
 
     def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["form"] = kwargs.get("form") or EntregaForm()
-        ctx["productos"] = Producto.objects.filter(estado=True).order_by("nombre", "medida")
-        ctx["payload_previo"] = kwargs.get("payload", [])
-        ctx["payload_ivt_previo"] = kwargs.get("payload_ivt", [])
+        super_ctx = super().get_context_data(**kwargs)
+
+        super_ctx["form"] = kwargs.get("form") or EntregaForm()
+        super_ctx["productos"] = Producto.objects.filter(
+            estado=True
+        ).order_by("nombre", "medida")
+
+        super_ctx["payload_previo"] = kwargs.get("payload", [])
+        super_ctx["payload_ivt_previo"] = kwargs.get("payload_ivt", [])
 
         disp = IVT.objects.filter(estado=IVT.Estado.DISPONIBLE)
-        ctx["ivt_disponibles"] = disp.count()
-        ctx["ivt_primero"] = disp.aggregate(m=Min("numero"))["m"] or ""
-        return ctx
+
+        super_ctx["ivt_disponibles"] = disp.count()
+        super_ctx["ivt_primero"] = disp.aggregate(m=Min("numero"))["m"] or ""
+        super_ctx["ivt_rangos_disp"] = services.rangos_ivt_disponibles()
+
+        super_ctx["seleccionar_ivt"] = (
+            self.request.GET.get("tipo") == "ivt"
+        )
+
+        return super_ctx
     
     def _resolver_ivt(self, rangos):
         resueltos, errores = [], []
@@ -2946,7 +3033,12 @@ class EntregaCreateView(RolRequeridoMixin, TemplateView):
             messages.error(request, str(e))
             return volver()
 
-        messages.success(request, f"Entrega {entrega.codigo} registrada.")
+        rangos_txt = ", ".join(f"{i:05d}-{f:05d}" for i, f in ivt_resueltos)
+        messages.success(
+            request,
+            f"Entrega {entrega.codigo} registrada."
+            + (f" IVT asignados: {rangos_txt}." if rangos_txt else ""),
+        )
         return redirect("almacen:entrega_detalle", pk=entrega.pk)
 
 

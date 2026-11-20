@@ -3,6 +3,7 @@ from almacen import services
 from .models import Operacion
 
 
+
 class OperacionEditarForm(forms.ModelForm):
     numero_ivt = forms.IntegerField(
         label="N.º de IVT", min_value=1, required=False,
@@ -25,7 +26,7 @@ class OperacionEditarForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        if data.get("estado") in Operacion.ESTADOS_QUE_INSTALAN:
+        if data.get("estado") in Operacion.ESTADOS_QUE_REQUIEREN_IVT:
             numero = data.get("numero_ivt")
             if not numero:
                 self.add_error("numero_ivt", "Este campo es obligatorio: indique el IVT de la visita.")

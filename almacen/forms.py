@@ -53,19 +53,6 @@ class CategoriaForm(EstiloMixin, forms.ModelForm):
 # PRODUCTOS
 # ---------------------------------------------------------
 class ProductoForm(EstiloMixin, forms.ModelForm):
-    codigo_producto = forms.CharField(
-        label="Código del tipo de material",
-        max_length=30,
-        required=False,
-        disabled=True,
-        widget=forms.TextInput(
-            attrs={
-                "placeholder": "Se genera automáticamente según la material",
-                "class": "campo-automatico",
-            }
-        ),
-        help_text="Este código será generado automáticamente.",
-    )
 
     class Meta:
         model = Producto
@@ -139,13 +126,9 @@ class ProductoForm(EstiloMixin, forms.ModelForm):
     def save(self, commit=True):
         obj = super().save(commit=False)
 
-        if not obj.codigo_producto:
-            obj.codigo_producto = services.generar_codigo_producto(
-                obj.categoria
-            )
-
         if commit:
             obj.save()
+            self.save_m2m()
 
         return obj
 
@@ -587,9 +570,39 @@ class AsignacionForm(EstiloMixin, forms.Form):
         return data
 
 
+class AnomaliaSelect(forms.Select):
+    """Expone las reglas de aplicación de cada anomalía al JavaScript."""
+
+    def create_option(
+        self, name, value, label, selected, index,
+        subindex=None, attrs=None
+    ):
+        option = super().create_option(
+            name, value, label, selected, index,
+            subindex=subindex,
+            attrs=attrs,
+        )
+
+        instancia = getattr(value, "instance", None)
+
+        if instancia:
+            option["attrs"].update({
+                "data-ejecutada": (
+                    "1" if instancia.aplica_ejecutada else "0"
+                ),
+                "data-no-ejecutada": (
+                    "1" if instancia.aplica_no_ejecutada else "0"
+                ),
+                "data-sin-anomalia": (
+                    "1" if instancia.es_sin_anomalia else "0"
+                ),
+            })
+
+        return option
+
 
 class DatosOperacionForm(EstiloMixin, forms.Form):
-    """Datos de la orden. Comunes a toda operación."""
+    """Datos comunes de una operación."""
 
     tipo_operacion = forms.ChoiceField(
         label="Tipo de operación",
@@ -603,13 +616,19 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
     )
 
     numero_orden = forms.CharField(
-        label="Número de orden", max_length=10,
-        error_messages={"required": "Este campo es obligatorio."},
+        label="Número de orden",
+        max_length=10,
+        error_messages={
+            "required": "Este campo es obligatorio."
+        },
     )
 
     numero_cuenta_contrato = forms.CharField(
-        label="Número de cuenta contrato", max_length=10,
-        error_messages={"required": "Este campo es obligatorio."},
+        label="Número de cuenta contrato",
+        max_length=10,
+        error_messages={
+            "required": "Este campo es obligatorio."
+        },
     )
 
     fecha_instalacion = forms.DateField(
@@ -622,18 +641,23 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
         queryset=Anomalia.objects.none(),
         label="Anomalía",
         empty_label="Seleccione una anomalía",
-        error_messages={"required": "Seleccione una anomalía."},
         required=True,
+        error_messages={
+            "required": "Seleccione una anomalía."
+        },
+        widget=AnomaliaSelect(),
     )
 
     archivo_soporte = forms.FileField(
         label="Soporte (PDF o imagen)",
-        required=False,   # se exige en clean() solo si la orden aún no tiene archivo
+        required=False,
         validators=[
             FileExtensionValidator(EXTENSIONES_SOPORTE),
             validar_tamano_archivo,
         ],
-        widget=forms.FileInput(attrs={"accept": ".pdf,.jpg,.jpeg,.png"}),
+        widget=forms.FileInput(
+            attrs={"accept": ".pdf,.jpg,.jpeg,.png"}
+        ),
         help_text="PDF, JPG o PNG. Máximo 5 MB.",
     )
 
@@ -641,7 +665,9 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
         label="Observaciones",
         widget=forms.Textarea(attrs={"rows": 3}),
         required=True,
-        error_messages={"required": "La observación es obligatoria."},
+        error_messages={
+            "required": "La observación es obligatoria."
+        },
     )
 
     field_order = [
@@ -658,60 +684,122 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["anomalia"].queryset = Anomalia.objects.filter(
-            activa=True
-        ).order_by("codigo")
+        self.fields["anomalia"].queryset = (
+            Anomalia.objects
+            .filter(activa=True)
+            .order_by("codigo")
+        )
 
         sin = self.fields["anomalia"].queryset.filter(
             codigo=SIN_ANOMALIA
         ).first()
 
-        if sin:
+        if sin and not self.is_bound:
             self.fields["anomalia"].initial = sin.pk
 
     def clean_numero_orden(self):
-        return self.cleaned_data["numero_orden"].strip().upper()
+        return (
+            self.cleaned_data["numero_orden"]
+            .strip()
+            .upper()
+        )
 
     def clean_numero_cuenta_contrato(self):
-        return self.cleaned_data["numero_cuenta_contrato"].strip()
+        return self.cleaned_data[
+            "numero_cuenta_contrato"
+        ].strip()
 
     def clean(self):
         data = super().clean()
+
         estado = data.get("estado")
         anomalia = data.get("anomalia")
 
-        if (
-            estado in Operacion.ESTADOS_NEGATIVOS
-            and anomalia
-            and anomalia.es_sin_anomalia
-        ):
-            self.add_error(
-                "anomalia",
-                "Si la orden no se ejecutó, fue cancelada o anulada, "
-                "indique la anomalía que lo causó.",
-            )
+        # Validar que la anomalía corresponda al estado.
+        validar_anomalia_por_estado(self, data)
 
+                # Orden ya registrada / soporte
         orden = data.get("numero_orden")
-        if orden and not data.get("archivo_soporte"):
+
+        if orden:
             op = Operacion.objects.filter(numero_orden=orden).first()
-            if not (op and op.archivo_soporte):
+
+            if op and op.estado not in (
+                Operacion.Estado.CREADA,
+                Operacion.Estado.PENDIENTE,
+                Operacion.Estado.ASIGNADA,
+            ):
+                self.add_error(
+                    "numero_orden",
+                    f"La orden {orden} ya existe (estado: "
+                    f"{op.get_estado_display()}). Si necesita corregirla, "
+                    "solicítelo al administrador.",
+                )
+            elif not data.get("archivo_soporte") and not (op and op.archivo_soporte):
                 self.add_error(
                     "archivo_soporte",
                     "Adjunte el soporte (PDF o imagen) de la orden.",
                 )
+
         return data
+
+def configurar_campo_anomalia(form):
+    """Carga las anomalías activas."""
+
+    if "anomalia" not in form.fields:
+        return
+
+    form.fields["anomalia"].queryset = (
+        Anomalia.objects
+        .filter(activa=True)
+        .order_by("codigo")
+    )
+
+    form.fields["anomalia"].widget = AnomaliaSelect()
+
+
+def validar_anomalia_por_estado(form, data):
+    """Valida la relación entre estado y anomalía."""
+
+    estado = data.get("estado")
+    anomalia = data.get("anomalia")
+
+    if not estado or not anomalia:
+        return
+
+    if estado in (
+        Operacion.Estado.EJECUTADA,
+        Operacion.Estado.EJECUTADA_SUSPENDIDA,
+    ):
+        permitida = anomalia.aplica_ejecutada
+
+    elif estado == Operacion.Estado.NO_EJECUTADA:
+        permitida = anomalia.aplica_no_ejecutada
+
+    else:
+        permitida = False
+
+    if not permitida:
+        form.add_error(
+            "anomalia",
+            "La anomalía seleccionada no corresponde "
+            "al estado de la operación."
+        )
 
 
 class InstalacionForm(DatosOperacionForm):
-    """Instalación de UNA asignación (con su cantidad)."""
+    """Instalación de una asignación."""
 
-    cantidad = forms.IntegerField(label="Cantidad instalada", min_value=1)
+    cantidad = forms.IntegerField(
+        label="Cantidad instalada",
+        min_value=1,
+    )
 
     def __init__(self, *args, asignacion=None, **kwargs):
         self.asignacion = asignacion
+
         super().__init__(*args, **kwargs)
 
-        # Aquí siempre se instala: solo estados que instalan
         self.fields["estado"].choices = [
             (e.value, e.label)
             for e in Operacion.Estado
@@ -723,11 +811,18 @@ class InstalacionForm(DatosOperacionForm):
 
         if asignacion.unidad_serializada_id:
             del self.fields["cantidad"]
+
         else:
             pendiente = asignacion.cantidad_pendiente
+
             field = self.fields["cantidad"]
             field.initial = pendiente
-            field.widget.attrs.update({"min": 1, "max": pendiente})
+
+            field.widget.attrs.update({
+                "min": 1,
+                "max": pendiente,
+            })
+
             field.help_text = (
                 f"{asignacion.producto.nombre_completo}: "
                 f"tiene {pendiente} pendiente(s) por instalar."
@@ -735,45 +830,98 @@ class InstalacionForm(DatosOperacionForm):
 
     def clean_cantidad(self):
         cantidad = self.cleaned_data["cantidad"]
-        if self.asignacion and cantidad > self.asignacion.cantidad_pendiente:
+
+        if (
+            self.asignacion
+            and cantidad > self.asignacion.cantidad_pendiente
+        ):
             raise forms.ValidationError(
-                f"Solo tiene {self.asignacion.cantidad_pendiente} "
+                f"Solo tiene "
+                f"{self.asignacion.cantidad_pendiente} "
                 "pendiente(s) por instalar."
             )
+
         return cantidad
+
+
 class InstalacionMasivaForm(DatosOperacionForm):
-    """Datos comunes de la orden + IVT obligatorio cuando se instala."""
+    """Operación masiva con validación de IVT."""
 
     numero_ivt = forms.IntegerField(
-        label="N.º de IVT", min_value=1, required=False,
-        help_text="Obligatorio cuando la orden instala material.",
+        label="N.º de IVT",
+        min_value=1,
+        required=False,
+        help_text=(
+            "Obligatorio cuando la orden instala material."
+        ),
     )
 
     field_order = [
-        "tipo_operacion", "estado", "numero_orden", "numero_cuenta_contrato",
-        "numero_ivt", "fecha_instalacion", "anomalia",
-        "archivo_soporte", "observaciones",
+        "tipo_operacion",
+        "estado",
+        "numero_orden",
+        "numero_cuenta_contrato",
+        "numero_ivt",
+        "fecha_instalacion",
+        "anomalia",
+        "archivo_soporte",
+        "observaciones",
     ]
 
     def __init__(self, *args, tecnico=None, **kwargs):
         self.tecnico = tecnico
+
         super().__init__(*args, **kwargs)
+
+        self.fields["estado"].choices = [
+            (
+                Operacion.Estado.EJECUTADA,
+                "Ejecutado",
+            ),
+            (
+                Operacion.Estado.NO_EJECUTADA,
+                "No ejecutado",
+            ),
+            (
+                Operacion.Estado.EJECUTADA_SUSPENDIDA,
+                "Ejecutado suspendido",
+            ),
+        ]
 
     def clean(self):
         data = super().clean()
-        if data.get("estado") in Operacion.ESTADOS_QUE_INSTALAN:
+
+        estado = data.get("estado")
+
+        if estado in Operacion.ESTADOS_QUE_REQUIEREN_IVT:
             numero = data.get("numero_ivt")
+
             if not numero:
-                self.add_error("numero_ivt", "Este campo es obligatorio: indique el IVT de la visita.")
+                self.add_error(
+                    "numero_ivt",
+                    "Indique el IVT de la visita."
+                )
+
             elif self.tecnico:
-                op = Operacion.objects.filter(numero_orden=data.get("numero_orden")).first()
+                op = (
+                    Operacion.objects
+                    .filter(
+                        numero_orden=data.get("numero_orden")
+                    )
+                    .first()
+                )
+
                 try:
                     services.validar_ivt_para_operacion(
-                        numero=numero, tecnico=self.tecnico, operacion=op)
+                        numero=numero,
+                        tecnico=self.tecnico,
+                        operacion=op,
+                    )
+
                 except services.ErrorInventario as e:
                     self.add_error("numero_ivt", str(e))
-        return data
 
+        return data
 
 # ---------------------------------------------------------
 # IVT

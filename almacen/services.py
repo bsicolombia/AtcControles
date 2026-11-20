@@ -463,10 +463,67 @@ def asignar(
 
     return asignacion
 
+# Cuántas unidades serializadas (medidor, regulador, válvula...) de una
+# misma categoría se permiten por orden. Si Categoria.max_por_orden está
+# vacío, se usa este valor.
+MAX_SERIALIZADO_POR_ORDEN = 1
 
-# ============================================================
-# INSTALAR
-# ============================================================
+
+def _limite_por_orden(categoria):
+    return categoria.max_por_orden or MAX_SERIALIZADO_POR_ORDEN
+
+
+def _se_instalara(serial, tecnico, instaladas_en_orden):
+    """
+    True si ese serial realmente se va a instalar en la orden.
+    (Un serial inexistente / ya instalado en otra orden solo se reporta
+    como inconsistencia y no ocupa el cupo.)
+    """
+    unidad = (
+        UnidadSerializada.objects
+        .filter(Q(numero_serie__iexact=serial) | Q(codigo__iexact=serial))
+        .first()
+    )
+    if not unidad:
+        return False
+    if unidad.pk in instaladas_en_orden:      # ya estaba instalada en ESTA orden
+        return True
+    tipo = clasificar_serial(serial=serial, tecnico=tecnico)[0]
+    return tipo is None or (
+        REGULARIZAR_AUTOMATICO and tipo in (T.NO_ASIGNADO, T.OTRO_TECNICO)
+    )
+def _validar_unico_por_orden(*, operacion, producto, excluir_asignacion=None):
+    """Una orden no puede tener más unidades de una categoría que su límite."""
+    if not producto.es_serializado:
+        return
+
+    categoria = producto.categoria
+    limite = _limite_por_orden(categoria)          # <- ya no se salta si está vacío
+
+    # Bloquea la orden: dos usuarios a la vez no se saltan la regla
+    Operacion.objects.select_for_update().get(pk=operacion.pk)
+
+    qs = (
+        Asignacion.objects
+        .select_related("unidad_serializada", "producto")
+        .filter(
+            operacion=operacion,
+            estado=EstadoA.INSTALADA,
+            unidad_serializada__isnull=False,
+            producto__categoria_id=categoria.pk,
+        )
+    )
+    if excluir_asignacion is not None:
+        qs = qs.exclude(pk=excluir_asignacion.pk)
+
+    if qs.count() >= limite:
+        ya = qs.first().unidad_serializada
+        raise ErrorInventario(
+            f"Duplicado: la orden {operacion.numero_orden} ya tiene instalado "
+            f"un/a {categoria.nombre.lower()} ({ya.numero_serie or ya.codigo}). "
+            f"Solo se permite {limite} por orden. Si necesita cambiarlo, "
+            f"quite el anterior primero."
+        )
 
 @transaction.atomic
 def instalar(
@@ -479,44 +536,38 @@ def instalar(
     cantidad=None,
 ):
     """
-    Instala una asignación y la vincula a una operación.
+    Instala una asignacion y la vincula a una operacion.
 
-    Serializados:
-        Siempre se instala una unidad completa.
-
-    Por cantidad:
-        Permite instalaciones parciales.
+    Serializados: siempre una unidad completa (max. por categoria segun
+    Categoria.max_por_orden).
+    Por cantidad: permite instalaciones parciales.
     """
-
     a = (
         Asignacion.objects
         .select_for_update()
-        .select_related(
-            "producto",
-            "unidad_serializada",
-            "tecnico",
-        )
+        .select_related("producto", "producto__categoria",
+                        "unidad_serializada", "tecnico")
         .get(pk=asignacion.pk)
     )
 
     if a.estado != EstadoA.ASIGNADA:
         raise ErrorInventario(
-            "Esta asignación ya no está pendiente de instalar."
+            "Esta asignacion ya no esta pendiente de instalar."
         )
 
-    # --------------------------------------------------------
-    # UNIDADES SERIALIZADAS
-    # --------------------------------------------------------
-
+    # ---------------- SERIALIZADOS ----------------
     if a.unidad_serializada_id:
 
         if cantidad not in (None, 1):
             raise ErrorInventario(
-                "Una unidad serializada solo puede instalarse "
-                "en cantidad de una."
+                "Una unidad serializada solo puede instalarse en cantidad de una."
             )
-
         cantidad = 1
+
+        # Regla: uno por categoria en cada orden (antes de tocar nada)
+        _validar_unico_por_orden(
+            operacion=operacion, producto=a.producto, excluir_asignacion=a,
+        )
 
         unidad = (
             UnidadSerializada.objects
@@ -526,24 +577,14 @@ def instalar(
 
         if unidad.estado != EstadoU.ASIGNADO:
             raise ErrorInventario(
-                f"La unidad {unidad.codigo} no está asignada "
-                "actualmente."
+                f"La unidad {unidad.codigo} no esta asignada actualmente."
             )
 
         unidad.estado = EstadoU.INSTALADO
         unidad.fecha_cambio_estado = timezone.now()
+        unidad.save(update_fields=["estado", "fecha_cambio_estado"])
 
-        unidad.save(
-            update_fields=[
-                "estado",
-                "fecha_cambio_estado",
-            ]
-        )
-
-    # --------------------------------------------------------
-    # PRODUCTOS POR CANTIDAD
-    # --------------------------------------------------------
-
+    # ---------------- POR CANTIDAD ----------------
     else:
 
         if cantidad is None:
@@ -551,7 +592,7 @@ def instalar(
 
         if not isinstance(cantidad, int) or isinstance(cantidad, bool):
             raise ErrorInventario(
-                "La cantidad de instalación debe ser un entero."
+                "La cantidad de instalacion debe ser un entero."
             )
 
         if cantidad < 1 or cantidad > a.cantidad:
@@ -559,17 +600,10 @@ def instalar(
                 f"La cantidad debe estar entre 1 y {a.cantidad}."
             )
 
-        # Instalación parcial: separar la cantidad instalada.
+        # Instalacion parcial: separar la cantidad instalada.
         if cantidad < a.cantidad:
-
             a.cantidad -= cantidad
-
-            a.save(
-                update_fields=[
-                    "cantidad",
-                    "fecha_modificacion",
-                ]
-            )
+            a.save(update_fields=["cantidad", "fecha_modificacion"])
 
             a = Asignacion.objects.create(
                 tecnico=a.tecnico,
@@ -582,53 +616,32 @@ def instalar(
                 usuario=a.usuario,
             )
 
-    # --------------------------------------------------------
-    # ACTUALIZAR ASIGNACIÓN
-    # --------------------------------------------------------
-
+    # ---------------- ACTUALIZAR ASIGNACION ----------------
     a.estado = EstadoA.INSTALADA
     a.cantidad_instalada = cantidad
     a.operacion = operacion
     a.fecha_instalacion = fecha_instalacion
     a.observaciones_instalacion = observaciones or None
+    a.save(update_fields=[
+        "estado", "cantidad_instalada", "operacion",
+        "fecha_instalacion", "observaciones_instalacion",
+        "fecha_modificacion",
+    ])
 
-    a.save(
-        update_fields=[
-            "estado",
-            "cantidad_instalada",
-            "operacion",
-            "fecha_instalacion",
-            "observaciones_instalacion",
-            "fecha_modificacion",
-        ]
-    )
-
-    # --------------------------------------------------------
-    # ACTUALIZAR INVENTARIO ASIGNADO
-    # --------------------------------------------------------
-
+    # ---------------- INVENTARIO ----------------
     inventario = _inventario(a.producto)
 
     if inventario.cantidad_asignada < cantidad:
         raise ErrorInventario(
             f"El inventario de {a.producto.nombre_completo} "
             "no tiene suficientes unidades registradas como asignadas "
-            "para completar esta instalación."
+            "para completar esta instalacion."
         )
 
     inventario.cantidad_asignada -= cantidad
+    inventario.save(update_fields=["cantidad_asignada", "fecha_actualizacion"])
 
-    inventario.save(
-        update_fields=[
-            "cantidad_asignada",
-            "fecha_actualizacion",
-        ]
-    )
-
-    # --------------------------------------------------------
-    # REGISTRAR MOVIMIENTO
-    # --------------------------------------------------------
-
+    # ---------------- MOVIMIENTO ----------------
     MovimientoInventario.objects.create(
         producto=a.producto,
         unidad_serializada=a.unidad_serializada,
@@ -640,6 +653,7 @@ def instalar(
     )
 
     return a
+
 
 
 def _sumar_observacion(actual, nueva):
@@ -686,6 +700,21 @@ def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
     if op.estado in (Operacion.Estado.CANCELADA, Operacion.Estado.ANULADA):
         raise ErrorInventario(
             f"La orden {numero_orden} está {op.get_estado_display().lower()}."
+        )
+        # La orden ya fue registrada: desde "instalar" no se puede volver a guardar.
+    ya_tiene_material = (
+        op.materiales.filter(estado=EstadoA.INSTALADA).exists()
+        or op.ivts.filter(estado=EstadoI.INSTALADO).exists()
+    )
+    if ya_tiene_material or op.estado not in (
+        Operacion.Estado.CREADA,
+        Operacion.Estado.PENDIENTE,
+        Operacion.Estado.ASIGNADA,
+    ):
+        raise ErrorInventario(
+            f"La orden {numero_orden} ya fue registrada "
+            f"(estado: {op.get_estado_display()}). "
+            "Si necesita corregirla, solicítelo al administrador."
         )
     if op.numero_cuenta_contrato != cuenta:
         raise ErrorInventario(
@@ -1308,27 +1337,112 @@ def _revertir_cantidad(*, asignacion, cantidad, usuario, motivo):
 
 @transaction.atomic
 def sincronizar_materiales_operacion(*, operacion, payload, usuario):
-    """Deja los materiales de la operación iguales al payload, aplicando solo diferencias."""
+    """
+    Deja los materiales de la operacion iguales al payload, aplicando solo
+    diferencias.
+
+    payload = [
+        {"producto_id": 3, "seriales": ["ABC123"]},     # serializado
+        {"producto_id": 8, "cantidad": 2},              # por cantidad
+    ]
+
+    Todas las validaciones del payload ocurren ANTES de modificar nada.
+    """
+    # Bloquea la orden durante toda la sincronizacion
+    operacion = Operacion.objects.select_for_update().get(pk=operacion.pk)
+
     tecnico = operacion.tecnico
     if not tecnico:
-        raise ErrorInventario("La operación no tiene un técnico asignado.")
- 
+        raise ErrorInventario("La operacion no tiene un tecnico asignado.")
+
     fecha = operacion.fecha_ejecucion or operacion.fecha_operacion
-    motivo = f"Edición de la orden {operacion.numero_orden}."
- 
-    # (a) Las novedades que solo se reportaron se regeneran más abajo:
-    #     se borran para no dejar una copia "resuelta" por cada edición.
+    motivo = f"Edicion de la orden {operacion.numero_orden}."
+
+        # ========================================================
+    # 1) LEER Y VALIDAR LO QUE SE PIDE (sin tocar la BD)
+    # ========================================================
+    deseado_cant = {}          # {producto_id: cantidad}
+    deseado_serial = []        # [(producto_id, serial)]
+    conteo_categoria = {}      # {categoria_id: unidades que SE INSTALAN}
+    vistos = set()             # seriales ya usados en este formulario
+
+    instaladas_en_orden = set(
+        Asignacion.objects
+        .filter(operacion=operacion, estado=EstadoA.INSTALADA,
+                unidad_serializada__isnull=False)
+        .values_list("unidad_serializada_id", flat=True)
+    )
+
+    for item in payload or []:
+        try:
+            pid = int(item.get("producto_id"))
+        except (TypeError, ValueError):
+            raise ErrorInventario("Hay un material sin producto valido.")
+
+        producto = (
+            Producto.objects.select_related("categoria").filter(pk=pid).first()
+        )
+        if not producto:
+            raise ErrorInventario(f"No existe el producto con ID {pid}.")
+
+        if producto.es_serializado:
+            cat = producto.categoria
+            limite = _limite_por_orden(cat)
+
+            for s in item.get("seriales") or []:
+                s = str(s).strip()
+                if not s:
+                    continue
+
+                clave = s.lower()
+                if clave in vistos:
+                    raise ErrorInventario(
+                        f"Duplicado: el serial {s} esta repetido en la orden."
+                    )
+                vistos.add(clave)
+                deseado_serial.append((pid, s))
+
+                if _se_instalara(s, tecnico, instaladas_en_orden):
+                    n = conteo_categoria.get(cat.pk, 0) + 1
+                    conteo_categoria[cat.pk] = n
+                    if n > limite:
+                        raise ErrorInventario(
+                            f"Duplicado: la orden {operacion.numero_orden} solo "
+                            f"permite {limite} {cat.nombre.lower()} y esta "
+                            f"enviando mas ({s}). Deje solo uno."
+                        )
+        else:
+            try:
+                cant = int(item.get("cantidad") or 0)
+            except (TypeError, ValueError):
+                raise ErrorInventario(
+                    f"Cantidad invalida en {producto.nombre_completo}."
+                )
+            if cant < 0:
+                raise ErrorInventario(
+                    f"La cantidad de {producto.nombre_completo} no puede ser negativa."
+                )
+            if cant > 0:
+                deseado_cant[pid] = deseado_cant.get(pid, 0) + cant
+
+    # ========================================================
+    # 2) ESTADO ACTUAL
+    # ========================================================
+
+    # Novedades que solo se reportaron: se regeneran mas abajo
     Inconsistencia.objects.filter(
         operacion=operacion,
         estado=Inconsistencia.Estado.PENDIENTE,
         instalado=False,
     ).delete()
- 
-    actuales = list(Asignacion.objects.select_for_update()
-                    .filter(operacion=operacion, estado=EstadoA.INSTALADA)
-                    .order_by("-pk"))
- 
-    # (b) Depurar filas duplicadas de una misma unidad
+
+    actuales = list(
+        Asignacion.objects.select_for_update()
+        .filter(operacion=operacion, estado=EstadoA.INSTALADA)
+        .order_by("-pk")
+    )
+
+    # Depurar filas duplicadas de una misma unidad
     por_unidad = {}
     for a in actuales:
         if not a.unidad_serializada_id:
@@ -1341,72 +1455,61 @@ def sincronizar_materiales_operacion(*, operacion, payload, usuario):
         else:
             por_unidad[a.unidad_serializada_id] = a
     actuales = [a for a in actuales if a.estado == EstadoA.INSTALADA]
- 
+
     por_producto = {}
     for a in actuales:
         if not a.unidad_serializada_id:
             por_producto.setdefault(a.producto_id, []).append(a)
- 
-    # ----- lo que se pide ahora -----
-    deseado_cant, deseado_serial = {}, []
-    for item in payload:
-        try:
-            pid = int(item.get("producto_id"))
-        except (TypeError, ValueError):
-            raise ErrorInventario("Hay un material sin producto válido.")
-        producto = Producto.objects.filter(pk=pid).first()
-        if not producto:
-            raise ErrorInventario(f"No existe el producto con ID {pid}.")
- 
-        if producto.es_serializado:
-            vistos = set()
-            for s in item.get("seriales") or []:
-                s = str(s).strip()
-                if not s:
-                    continue
-                if s.lower() in vistos:
-                    raise ErrorInventario(f"Serial repetido en {producto.nombre_completo}: {s}.")
-                vistos.add(s.lower())
-                deseado_serial.append((pid, s))
-        else:
-            cant = int(item.get("cantidad") or 0)
-            if cant > 0:
-                deseado_cant[pid] = deseado_cant.get(pid, 0) + cant
- 
+
     novedades = []
- 
-    # ----- SERIALIZADOS -----
+
+    # ========================================================
+    # 3) SERIALIZADOS
+    # ========================================================
     conservar, por_instalar = set(), []
     for pid, serial in deseado_serial:
-        unidad = (UnidadSerializada.objects
-                  .filter(Q(numero_serie__iexact=serial) | Q(codigo__iexact=serial))
-                  .first())
+        unidad = (
+            UnidadSerializada.objects
+            .filter(Q(numero_serie__iexact=serial) | Q(codigo__iexact=serial))
+            .first()
+        )
         if unidad and unidad.pk in por_unidad:
             conservar.add(unidad.pk)
         else:
             por_instalar.append((pid, serial))
- 
-    for uid, a in por_unidad.items():            # primero se quita lo que sobra
+
+    # Primero se quita lo que sobra (asi se puede cambiar un medidor por otro)
+    for uid, a in por_unidad.items():
         if uid not in conservar:
             _revertir_serial(asignacion=a, usuario=usuario, motivo=motivo)
- 
-    for pid, serial in por_instalar:             # luego se instala lo nuevo
-        n = instalar_serial(serial=serial, producto_id=pid, tecnico=tecnico,
-                            usuario=usuario, operacion=operacion, fecha=fecha)
+
+    # Luego se instala lo nuevo (instalar() vuelve a validar el limite)
+    for pid, serial in por_instalar:
+        n = instalar_serial(
+            serial=serial, producto_id=pid, tecnico=tecnico,
+            usuario=usuario, operacion=operacion, fecha=fecha,
+        )
         if n:
             novedades.append(n)
- 
-    # ----- POR CANTIDAD -----
-    reg_ids = set(Inconsistencia.objects.filter(
-        operacion=operacion, instalado=True, asignacion_regularizada__isnull=False,
-    ).values_list("asignacion_regularizada_id", flat=True))
- 
+
+    # ========================================================
+    # 4) POR CANTIDAD
+    # ========================================================
+    reg_ids = set(
+        Inconsistencia.objects.filter(
+            operacion=operacion, instalado=True,
+            asignacion_regularizada__isnull=False,
+        ).values_list("asignacion_regularizada_id", flat=True)
+    )
+
     for pid in set(deseado_cant) | set(por_producto):
-        asigs = sorted(por_producto.get(pid, []),
-                       key=lambda a: (a.pk not in reg_ids, -a.pk))   # primero las regularizadas
+        asigs = sorted(
+            por_producto.get(pid, []),
+            key=lambda a: (a.pk not in reg_ids, -a.pk),  # primero las regularizadas
+        )
         actual = sum(a.cantidad for a in asigs)
         deseado = deseado_cant.get(pid, 0)
- 
+
         if deseado < actual:
             resto = actual - deseado
             for a in asigs:
@@ -1414,20 +1517,24 @@ def sincronizar_materiales_operacion(*, operacion, payload, usuario):
                     break
                 tomar = min(resto, a.cantidad)
                 if a.pk in reg_ids:
-                    _devolver_instalacion_a_almacen(asignacion=a, cantidad=tomar,
-                                                    usuario=usuario, motivo=motivo)
+                    _devolver_instalacion_a_almacen(
+                        asignacion=a, cantidad=tomar,
+                        usuario=usuario, motivo=motivo)
                 else:
-                    _revertir_cantidad(asignacion=a, cantidad=tomar,
-                                       usuario=usuario, motivo=motivo)
+                    _revertir_cantidad(
+                        asignacion=a, cantidad=tomar,
+                        usuario=usuario, motivo=motivo)
                 resto -= tomar
- 
+
         elif deseado > actual:
             novedades.extend(instalar_cantidad(
-                producto=Producto.objects.get(pk=pid), cantidad=deseado - actual,
-                tecnico=tecnico, usuario=usuario, operacion=operacion, fecha=fecha))
- 
-    return novedades
+                producto=Producto.objects.get(pk=pid),
+                cantidad=deseado - actual,
+                tecnico=tecnico, usuario=usuario,
+                operacion=operacion, fecha=fecha,
+            ))
 
+    return novedades
 @transaction.atomic
 def revertir_instalacion(
     *,
@@ -2272,3 +2379,22 @@ def devolver_ivt_rango(*, tecnico, inicial, final, usuario, estado_retorno, obse
         ids=ids, nuevo_estado=estado_retorno, usuario=usuario, motivo=observacion,
     )
     return total
+def _agrupar_rangos(numeros):
+    rangos, ini, prev = [], None, None
+    for n in numeros:
+        if ini is None:
+            ini = prev = n
+        elif n == prev + 1:
+            prev = n
+        else:
+            rangos.append((ini, prev)); ini = prev = n
+    if ini is not None:
+        rangos.append((ini, prev))
+    return [{"inicial": a, "final": b, "cantidad": b - a + 1} for a, b in rangos]
+
+
+def rangos_ivt_disponibles():
+    """Rangos consecutivos de IVT que están en almacén."""
+    numeros = (IVT.objects.filter(estado=EstadoI.DISPONIBLE)
+               .order_by("numero").values_list("numero", flat=True))
+    return _agrupar_rangos(numeros)

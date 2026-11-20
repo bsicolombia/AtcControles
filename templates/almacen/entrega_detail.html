@@ -109,34 +109,86 @@
   </table>
 
 </div>
-  <!-- ACCIONES -->
-
-  <p style="margin-top:20px">
+    <!-- ACCIONES -->
+  <div style="
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:22px;
+      padding-top:18px;
+      border-top:1px solid #d9dee7;
+  ">
 
     <a href="{% url 'almacen:entrega_pdf' object.pk %}"
-       target="_blank">
-      🖨 PDF para imprimir
+       target="_blank"
+       style="
+         display:inline-flex;
+         align-items:center;
+         gap:8px;
+         padding:10px 18px;
+         background:#1f3a5f;
+         color:white;
+         border-radius:7px;
+         text-decoration:none;
+         font-weight:600;
+         font-size:13px;
+         box-shadow:0 2px 5px #0002;
+       ">
+      <span>🖨️</span> Descargar / Imprimir PDF
     </a>
 
-    &nbsp;·&nbsp;
-
-    <a href="{% url 'almacen:entrega_excel' object.pk %}">
-      📥 Excel
+    <a href="{% url 'almacen:entrega_excel' object.pk %}"
+       style="
+         display:inline-flex;
+         align-items:center;
+         gap:8px;
+         padding:10px 18px;
+         background:#217346;
+         color:white;
+         border-radius:7px;
+         text-decoration:none;
+         font-weight:600;
+         font-size:13px;
+         box-shadow:0 2px 5px #0002;
+       ">
+      <span>📊</span> Exportar Excel
     </a>
 
-    &nbsp;·&nbsp;
-
-    <a href="{% url 'almacen:entrega_nueva' %}">
-      Nueva entrega
+    <a href="{% url 'almacen:entrega_nueva' %}"
+       style="
+         display:inline-flex;
+         align-items:center;
+         gap:8px;
+         padding:10px 18px;
+         background:#7a3db8;
+         color:white;
+         border-radius:7px;
+         text-decoration:none;
+         font-weight:600;
+         font-size:13px;
+         box-shadow:0 2px 5px #0002;
+       ">
+      <span>➕</span> Nueva entrega
     </a>
 
-    &nbsp;·&nbsp;
-
-    <a href="{% url 'almacen:entregas' %}">
-      Informe general
+    <a href="{% url 'almacen:entregas' %}"
+       style="
+         display:inline-flex;
+         align-items:center;
+         gap:8px;
+         padding:10px 18px;
+         background:#fff;
+         color:#1f3a5f;
+         border:1px solid #1f3a5f;
+         border-radius:7px;
+         text-decoration:none;
+         font-weight:600;
+         font-size:13px;
+       ">
+      <span>📋</span> Informe general
     </a>
 
-  </p>
+  </div>
 
 </div>
 

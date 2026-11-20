@@ -9,7 +9,7 @@ from django.utils import timezone
 # =====================================================================
 # Constantes
 # =====================================================================
-SIN_ANOMALIA = "00"
+SIN_ANOMALIA = "0000"
 EXTENSIONES_SOPORTE = ["pdf", "jpg", "jpeg", "png"]
 LIMITE_SOPORTE_MB = 5
 
@@ -28,13 +28,21 @@ def validar_tamano_archivo(archivo):
     if archivo.size > LIMITE_SOPORTE_MB * 1024 * 1024:
         raise ValidationError(f"El archivo no puede superar {LIMITE_SOPORTE_MB} MB.")
 
-
-# =====================================================================
-# Anomalía
-# =====================================================================
 class Anomalia(models.Model):
     codigo = models.CharField("Código", max_length=5, unique=True)
     descripcion = models.CharField("Descripción", max_length=150)
+
+    # Clasificación según las tablas operativas
+    aplica_ejecutada = models.BooleanField(
+        "Disponible en ejecutada",
+        default=False,
+    )
+
+    aplica_no_ejecutada = models.BooleanField(
+        "Disponible en no ejecutada",
+        default=False,
+    )
+
     activa = models.BooleanField(default=True)
 
     class Meta:
@@ -48,7 +56,6 @@ class Anomalia(models.Model):
     @property
     def es_sin_anomalia(self):
         return self.codigo == SIN_ANOMALIA
-
 
 # =====================================================================
 # Operación (orden de trabajo)
@@ -70,15 +77,27 @@ class Operacion(models.Model):
         ASIGNADA = "ASIGNADA", "Asignada"
         EJECUTADA = "EJECUTADA", "Ejecutada"
         NO_EJECUTADA = "NO_EJECUTADA", "No ejecutada"
-        EFECTIVA = "EFECTIVA", "Efectiva"
+        EJECUTADA_SUSPENDIDA = "EJECUTADA_SUSPENDIDA", "Ejecutada suspendida"
         CANCELADA = "CANCELADA", "Cancelada"
         ANULADA = "ANULADA", "Anulada"
 
     # Estados en los que se instala material
-    ESTADOS_QUE_INSTALAN = {Estado.EJECUTADA, Estado.EFECTIVA}
-    # Estados en los que la orden NO se hizo (exigen una anomalía real)
-    ESTADOS_NEGATIVOS = {Estado.NO_EJECUTADA, Estado.CANCELADA, Estado.ANULADA}
+    ESTADOS_QUE_INSTALAN = {
+        Estado.EJECUTADA,
+        Estado.EJECUTADA_SUSPENDIDA,
+    }
 
+    # Estados que requieren IVT y soporte de visita
+    ESTADOS_QUE_REQUIEREN_IVT = {
+        Estado.EJECUTADA,
+        Estado.NO_EJECUTADA,
+        Estado.EJECUTADA_SUSPENDIDA,
+    }
+
+    # Estados en los que la orden NO se hizo
+    ESTADOS_NEGATIVOS = {
+        Estado.NO_EJECUTADA,
+    }
     # --- Identificación ---
     numero_orden = models.CharField(max_length=10, unique=True)
     numero_cuenta_contrato = models.CharField(max_length=10, db_index=True)
@@ -149,6 +168,19 @@ class Operacion(models.Model):
 
     def __str__(self):
         return f"{self.numero_orden} - {self.get_tipo_operacion_display()}"
+    
+    @property
+    def grupo_anomalia(self):
+        if self.estado in {
+            self.Estado.EJECUTADA,
+            self.Estado.EJECUTADA_SUSPENDIDA,
+        }:
+            return Anomalia.Grupo.EJECUTADA
+
+        if self.estado == self.Estado.NO_EJECUTADA:
+            return Anomalia.Grupo.NO_EJECUTADA
+
+        return None
 
     def clean(self):
         super().clean()

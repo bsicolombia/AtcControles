@@ -73,6 +73,13 @@ class Categoria(models.Model):
     estado = models.BooleanField(default=True)
 
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+    
+    max_por_orden = models.PositiveSmallIntegerField(
+        "Máximo por orden",
+        null=True, blank=True,
+        help_text="Unidades serializadas de esta categoría permitidas por orden. "
+                  "Ej: 1 para medidor, regulador y válvula. Vacío = sin límite.",
+    )
 
     class Meta:
         verbose_name = "Categoría"

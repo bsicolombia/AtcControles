@@ -25,6 +25,7 @@ from almacen.models import (
     Producto,
     Inconsistencia,
 )
+from django.conf import settings
 from django.contrib.auth import get_user_model
 User = get_user_model() 
 from collections import defaultdict
@@ -1137,3 +1138,40 @@ class OperacionReabrirView(RolRequeridoMixin, View):
         except services_inventario.ErrorInventario as exc:
             messages.error(request, str(exc))
         return redirect("operaciones:consulta_orden")
+    
+import json
+import os
+
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_protect
+
+
+@login_required
+@require_POST
+@csrf_protect
+def validar_password_accion(request):
+
+    datos = json.loads(request.body)
+
+    password = datos.get("password", "")
+    accion = datos.get("accion", "")
+
+    if accion not in ["editar", "reactivar"]:
+        return JsonResponse({
+            "valido": False,
+            "error": "Acción no permitida."
+        }, status=400)
+
+    password_correcta = settings.PASSWORD_ACCIONES
+
+    if not password_correcta or password != password_correcta:
+        return JsonResponse({
+            "valido": False,
+            "error": "Contraseña incorrecta."
+        }, status=403)
+
+    return JsonResponse({
+        "valido": True
+    })

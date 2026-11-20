@@ -2,6 +2,7 @@
 {% load static %}
 <!doctype html>
 <html lang="es">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,229 +12,257 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <link
-        href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap"
+          rel="stylesheet">
 
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
+
     {% block extra_css %}{% endblock %}
 </head>
 
 <body>
+
 {% block body %}
 {% with u=request.resolver_match.url_name %}
 
 <div class="app">
-    <aside class="lateral" aria-label="Navegación principal">
 
+    <!-- BARRA LATERAL -->
+    <aside class="lateral" id="menu-lateral"
+           aria-label="Navegación principal">
+
+        <!-- MARCA -->
         <a href="{% url 'dashboard' %}" class="marca">
+
             <span class="marca-logo">
                 <img src="{% static 'img/LOGOBSI.png' %}" alt="BSI">
             </span>
+
             <span class="marca-texto">
                 <span class="marca-nombre">ATC CONTROLES</span>
                 <span class="marca-sub">Control de almacén</span>
             </span>
+
         </a>
 
+        <!-- NAVEGACIÓN -->
         <nav class="nav">
 
-            {# INICIO Y RESUMEN GENERAL #}
             {% if puede_ver_almacen %}
 
+                <div class="nav-grupo">Inicio</div>
+
                 <a href="{% url 'almacen:inicio' %}"
-                   class="{% if u == 'inicio' %}activo{% endif %}">
+                   class="{% if u == 'inicio' %}activo{% endif %}"
+                   {% if u == 'inicio' %}aria-current="page"{% endif %}>
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <rect x="3" y="3" width="7" height="9" rx="1.5"/>
                         <rect x="14" y="3" width="7" height="5" rx="1.5"/>
                         <rect x="14" y="12" width="7" height="9" rx="1.5"/>
                         <rect x="3" y="16" width="7" height="5" rx="1.5"/>
                     </svg>
+
                     Inicio
                 </a>
 
                 <div class="nav-grupo">1. Resumen General</div>
 
                 <a href="{% url 'dashboard' %}"
-                   class="{% if 'dashboard' in u or 'minimo' in u %}activo{% endif %}">
+                   class="{% if u == 'dashboard' or u == 'minimo' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <path d="M21 8l-9-5-9 5 9 5 9-5z"/>
                         <path d="M3 8v8l9 5 9-5V8"/>
                         <path d="M12 13v8"/>
                     </svg>
+
                     A. Resumen Material
                 </a>
 
                 <a href="{% url 'almacen:unidades' %}"
-                   class="{% if 'unidad' in u %}activo{% endif %}">
+                   class="{% if u == 'unidades' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <circle cx="12" cy="12" r="9"/>
                         <path d="M12 7v5l3 2"/>
                     </svg>
-                    B. Material Con Serial
+
+                    B. Material con Serial
                 </a>
 
                 <a href="{% url 'almacen:asignaciones' %}"
-                   class="{% if 'unidad' in u %}activo{% endif %}">
+                   class="{% if u == 'asignaciones' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <circle cx="12" cy="12" r="9"/>
-                        <path d="M12 7v5l3 2"/>
+                        <path d="M8 12h8M12 8v8"/>
                     </svg>
-                    C. Resumen Material Por Tecnico
+
+                    C. Resumen Material por Técnico
                 </a>
 
                 <a href="{% url 'almacen:ivt_lista' %}"
-                   class="{% if 'unidad' in u %}activo{% endif %}">
+                   class="{% if u == 'ivt_lista' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="9"/>
-                        <path d="M12 7v5l3 2"/>
+                         stroke="currentColor" stroke-width="1.8">
+                        <path d="M4 5h16v14H4z"/>
+                        <path d="M8 9h8M8 13h5"/>
                     </svg>
-                    C. Resumen IVT 
+
+                    D. Resumen IVT
                 </a>
 
             {% endif %}
 
-            {# CONSOLIDACIÓN: administrador y superusuario #}
+
+            <!-- CONSOLIDACIÓN -->
             {% if es_admin or es_coordinador %}
 
-                <div class="nav-grupo">2. Resumen Consolidación/Errores</div>
+                <div class="nav-grupo">2. Consolidación / Errores</div>
 
                 <a href="{% url 'operaciones:conciliacion_sap' %}"
                    class="{% if u == 'conciliacion_sap' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <path d="M9 11l3 3L22 4"/>
                         <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                     </svg>
+
                     A. Consolidación SAP
                 </a>
 
                 <a href="{% url 'operaciones:errores_actuales' %}"
                    class="{% if u == 'errores_actuales' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 11l3 3L22 4"/>
-                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                         stroke="currentColor" stroke-width="1.8">
+                        <path d="M12 9v4M12 17h.01"/>
+                        <path d="M10.3 3.9L2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3l-7.8-14.1a2 2 0 0 0-3.4 0z"/>
                     </svg>
+
                     B. Errores Consolidación
                 </a>
 
             {% endif %}
 
-            {# ASIGNACIONES: todos los roles autenticados #}
+
+            <!-- ASIGNACIONES -->
             {% if request.user.is_authenticated %}
 
                 <div class="nav-grupo">3. Asignación</div>
 
                 <a href="{% url 'almacen:asignaciones' %}"
-                   class="{% if 'asignacion' in u %}activo{% endif %}">
+                   class="{% if u == 'asignaciones' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
                         <circle cx="9" cy="7" r="4"/>
                         <path d="M19 8v6M22 11h-6"/>
                     </svg>
+
                     A. Asignaciones
                 </a>
 
                 <a href="{% url 'almacen:entregas' %}"
-                   class="{% if 'asignacion' in u %}activo{% endif %}">
+                   class="{% if u == 'entregas' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M19 8v6M22 11h-6"/>
+                         stroke="currentColor" stroke-width="1.8">
+                        <path d="M3 7h18v13H3z"/>
+                        <path d="M8 7V4h8v3M8 13l3 3 5-5"/>
                     </svg>
-                    C. Entregas / Devoluciones
+
+                    B. Entregas / Devoluciones
                 </a>
 
                 <a href="{% url 'almacen:inconsistencias' %}"
-                   class="{% if 'asignacion' in u %}activo{% endif %}">
+                   class="{% if u == 'inconsistencias' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M19 8v6M22 11h-6"/>
+                         stroke="currentColor" stroke-width="1.8">
+                        <path d="M12 9v4M12 17h.01"/>
+                        <circle cx="12" cy="12" r="9"/>
                     </svg>
-                D. Inconsistencias
+
+                    C. Inconsistencias
                 </a>
-                
 
             {% endif %}
 
-            {# REGISTRO, MOVIMIENTOS Y GRUPOS #}
+
+            <!-- REGISTRO -->
             {% if puede_ver_almacen %}
 
                 <div class="nav-grupo">4. Registro Materiales</div>
 
                 <a href="{% url 'almacen:ingreso_crear' %}"
-                   class="{% if 'ingreso' in u %}activo{% endif %}">
+                   class="{% if u == 'ingreso_crear' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 3v12"/>
-                        <path d="M7 10l5 5 5-5"/>
-                        <path d="M4 20h16"/>
+                         stroke="currentColor" stroke-width="1.8">
+                        <path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>
                     </svg>
+
                     A. Ingresar Material Registrado
                 </a>
 
                 <a href="{% url 'almacen:productos' %}"
-                   class="{% if 'producto' in u %}activo{% endif %}">
+                   class="{% if u == 'productos' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/>
                         <circle cx="7.5" cy="7.5" r="1.2"/>
                     </svg>
-                    C. Registrar Material Nuevo
+
+                    B. Registrar Material Nuevo
                 </a>
 
+
+                <!-- MOVIMIENTOS -->
                 <div class="nav-grupo">5. Movimientos</div>
 
                 <a href="{% url 'almacen:movimientos' %}"
-                   class="{% if 'movimiento' in u %}activo{% endif %}">
+                   class="{% if u == 'movimientos' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <path d="M4 7h13l-3-3M20 17H7l3 3"/>
                     </svg>
+
                     Movimientos
                 </a>
 
+
+                <!-- CATEGORÍAS -->
                 <div class="nav-grupo">6. Grupos por Material</div>
 
                 <a href="{% url 'almacen:categorias' %}"
-                   class="{% if 'categoria' in u %}activo{% endif %}">
+                   class="{% if u == 'categorias' %}activo{% endif %}">
+
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <rect x="3" y="3" width="7" height="7" rx="1.5"/>
                         <rect x="14" y="3" width="7" height="7" rx="1.5"/>
                         <rect x="3" y="14" width="7" height="7" rx="1.5"/>
                         <rect x="14" y="14" width="7" height="7" rx="1.5"/>
                     </svg>
+
                     Materiales
                 </a>
 
             {% endif %}
 
-            {# CARGA SAP: administrador y superusuario #}
+
+            <!-- CARGA SAP -->
             {% if es_admin or es_coordinador %}
 
                 <div class="nav-grupo">7. Carga SAP</div>
@@ -241,8 +270,7 @@
                 <a href="{% url 'operaciones:carga_sap' %}"
                    class="{% if u == 'carga_sap' %}activo{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/>
                     </svg>
                     A. Carga SAP
@@ -251,34 +279,34 @@
                 <a href="{% url 'operaciones:carga_sap_historial' %}"
                    class="{% if u == 'carga_sap_historial' %}activo{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/>
+                         stroke="currentColor" stroke-width="1.8">
+                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+                        <path d="M3 3v5h5M12 7v5l3 2"/>
                     </svg>
-                    B. Carga HISTORIAL
+                    B. Historial de Cargas
                 </a>
 
                 <a href="{% url 'operaciones:consulta_orden' %}"
-                   class="{% if u == 'carga_sap_historial' %}activo{% endif %}">
+                   class="{% if u == 'consulta_orden' %}activo{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/>
+                         stroke="currentColor" stroke-width="1.8">
+                        <circle cx="10.5" cy="10.5" r="6.5"/>
+                        <path d="m16 16 5 5M8 10h5M8 13h3"/>
                     </svg>
-                    C. Consultar Ordenes
+                    C. Consultar Órdenes
                 </a>
 
             {% endif %}
 
-            {# ADMINISTRACIÓN #}
+
+            <!-- ADMINISTRACIÓN -->
             {% if es_admin %}
 
                 <div class="nav-grupo">Administración</div>
 
                 <a href="{% url 'admin:index' %}">
                     <svg viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="1.8"
-                         stroke-linecap="round" stroke-linejoin="round">
+                         stroke="currentColor" stroke-width="1.8">
                         <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>
                     </svg>
                     Panel de Django
@@ -288,57 +316,102 @@
 
         </nav>
 
+
+        <!-- USUARIO -->
         <div class="usuario">
-            <div class="avatar" aria-hidden="true">
+
+            <div class="avatar">
                 {{ request.user.username|slice:":1"|upper }}
             </div>
 
             <div class="usuario-datos">
+
                 <div class="usuario-nombre">
                     {{ request.user.get_full_name|default:request.user.username }}
                 </div>
-                <div class="usuario-rol">{{ rol_actual }}</div>
+
+                <div class="usuario-rol">
+                    {{ rol_actual }}
+                </div>
+
             </div>
 
             <form method="post" action="{% url 'logout' %}">
                 {% csrf_token %}
-                <button class="btn-salir" type="submit">Salir</button>
+                <button class="btn-salir" type="submit">
+                    Salir
+                </button>
             </form>
+
         </div>
 
     </aside>
 
+
+    <!-- VELO -->
     <div class="velo" id="velo"></div>
 
+
+    <!-- CONTENIDO -->
     <div class="principal">
-        <div class="topbar-movil">
-            <button id="abrir-menu" type="button"
-                    aria-label="Abrir menú">☰</button>
+
+        <header class="topbar-movil">
+
+            <button id="abrir-menu"
+                    type="button"
+                    aria-label="Abrir menú"
+                    aria-expanded="false"
+                    aria-controls="menu-lateral">
+                ☰
+            </button>
+
             ATC CONTROLES
-        </div>
+
+        </header>
+
 
         <main class="contenido">
+
             {% if messages %}
+
                 <div class="mensajes" role="status">
+
                     {% for m in messages %}
+
                         <div class="mensaje {{ m.tags }}">
+
                             <span>{{ m }}</span>
-                            <button type="button" data-cerrar
-                                    aria-label="Cerrar">×</button>
+
+                            <button type="button"
+                                    data-cerrar
+                                    aria-label="Cerrar mensaje">
+                                ×
+                            </button>
+
                         </div>
+
                     {% endfor %}
+
                 </div>
+
             {% endif %}
 
+
             {% block contenido %}{% endblock %}
+
         </main>
+
     </div>
+
 </div>
 
 {% endwith %}
 {% endblock %}
 
+
 <script src="{% static 'js/act.js' %}"></script>
+
 {% block extra_js %}{% endblock %}
+
 </body>
 </html>

@@ -453,8 +453,14 @@ a.cant:hover { filter: brightness(.95); text-decoration: underline; }
         </div>
 
         <div class="acciones">
-            <a class="btn-i" href="{% url 'almacen:ingreso_crear' %}">+ Ingreso de IVT</a>
-            <a class="btn-i sec" href="{% url 'almacen:asignacion_crear' %}">Asignar a técnico</a>
+            <a class="btn-i" href="{% url 'almacen:ingreso_crear' %}">
+                + Ingreso de IVT
+            </a>
+
+            <a class="btn-i sec"
+            href="{% url 'almacen:asignacion_crear' %}?tipo=ivt">
+                Asignar a técnico
+            </a>
         </div>
     </div>
 

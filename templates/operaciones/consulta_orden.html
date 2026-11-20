@@ -885,18 +885,26 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                             </td>
 
                             <td class="centro">
-                                <a href="{% url 'operaciones:editar_instalacion' o.pk %}" class="btn-mini warn">Editar</a>
+                                <a href="{% url 'operaciones:editar_instalacion' o.pk %}"
+                                class="btn-mini warn"
+                                onclick="return solicitarPassword(event, this, 'editar')">
+                                    ✏ Editar
+                                </a>
                             </td>
 
                             <td class="centro">
                                 {% if o.n_inc %}
                                     <span class="etq etq-inc">⚠ {{ o.n_inc }}</span>
+
                                     <form method="post"
-                                          action="{% url 'operaciones:operacion_reabrir' o.pk %}"
-                                          class="d-inline">
+                                        action="{% url 'operaciones:operacion_reabrir' o.pk %}"
+                                        class="d-inline">
+
                                         {% csrf_token %}
-                                        <button type="submit" class="btn-mini danger"
-                                                onclick="return confirm('Se revertirán TODOS los materiales de la orden {{ o.numero_orden }} a su estado anterior y la orden se eliminará. ¿Continuar?')">
+
+                                        <button type="submit"
+                                                class="btn-mini danger"
+                                                onclick="return solicitarPassword(event, this, 'reactivar')">
                                             ↩ Reactivar
                                         </button>
                                     </form>
@@ -1251,5 +1259,130 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 {% endif %}
 
 
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+let accionPendiente = null;
+let elementoPendiente = null;
+
+function solicitarPassword(event, elemento, accion) {
+    event.preventDefault();
+
+    accionPendiente = accion;
+    elementoPendiente = elemento;
+
+    Swal.fire({
+        title: 'Validación de seguridad',
+        text: accion === 'editar'
+            ? 'Ingrese la contraseña para editar esta orden.'
+            : 'Ingrese la contraseña para reactivar esta orden.',
+        input: 'password',
+        inputPlaceholder: 'Ingrese su contraseña',
+        inputAttributes: {
+            autocomplete: 'current-password',
+            autocapitalize: 'off'
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Validar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#166534',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+        allowOutsideClick: false,
+        inputValidator: (value) => {
+            if (!value || !value.trim()) {
+                return 'Debe ingresar la contraseña.';
+            }
+        }
+    }).then(async (resultado) => {
+
+        if (!resultado.isConfirmed) return;
+
+        await validarPassword(resultado.value);
+    });
+
+    return false;
+}
+
+
+async function validarPassword(password) {
+
+    Swal.fire({
+        title: 'Validando...',
+        text: 'Verificando autorización.',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+
+        const response = await fetch(
+            "{% url 'operaciones:validar_password_accion' %}",
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    password: password,
+                    accion: accionPendiente
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.valido) {
+
+            await Swal.fire({
+                icon: 'error',
+                title: 'Acceso denegado',
+                text: data.error || 'Contraseña incorrecta.',
+                confirmButtonColor: '#166534'
+            });
+
+            return;
+        }
+
+        if (accionPendiente === 'editar') {
+
+            window.location.href = elementoPendiente.href;
+
+        } else if (accionPendiente === 'reactivar') {
+
+            const confirmacion = await Swal.fire({
+                icon: 'warning',
+                title: '¿Reactivar esta orden?',
+                text: 'Esta acción modificará el estado de la orden.',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, reactivar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#166534',
+                cancelButtonColor: '#64748b'
+            });
+
+            if (confirmacion.isConfirmed) {
+                elementoPendiente.closest('form').submit();
+            }
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No fue posible validar la contraseña.',
+            confirmButtonColor: '#166534'
+        });
+    }
+}
+</script>
 </div>
 {% endblock %}
