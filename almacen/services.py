@@ -664,7 +664,32 @@ def _sumar_observacion(actual, nueva):
         return actual
     return f"{actual}\n[{timezone.localdate():%d/%m/%Y}] {nueva}"
 
+@transaction.atomic
+def actualizar_operacion(*, operacion, numero_orden, cuenta_contrato, tipo,
+                         estado, anomalia, observaciones, fecha, archivo=None):
+    """Edita todos los datos de la orden. Las observaciones se reemplazan."""
+    op = Operacion.objects.select_for_update().get(pk=operacion.pk)
 
+    numero = (numero_orden or "").strip().upper()
+    if not numero:
+        raise ErrorInventario("El número de orden es obligatorio.")
+    if Operacion.objects.filter(numero_orden=numero).exclude(pk=op.pk).exists():
+        raise ErrorInventario(f"Ya existe otra orden con el número {numero}.")
+
+    ejecutada = estado in Operacion.ESTADOS_QUE_INSTALAN
+
+    op.numero_orden = numero
+    op.numero_cuenta_contrato = (cuenta_contrato or "").strip()
+    op.tipo_operacion = tipo
+    op.estado = estado
+    op.anomalia = anomalia
+    op.observaciones = (observaciones or "").strip()
+    op.fecha_operacion = fecha
+    op.fecha_ejecucion = fecha if ejecutada else None
+    if archivo:
+        op.archivo_soporte = archivo   # el save() del modelo borra el anterior
+    op.save()
+    return op
 @transaction.atomic
 def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
                               tecnico, usuario, fecha, estado, anomalia,
@@ -1434,7 +1459,7 @@ def sincronizar_materiales_operacion(*, operacion, payload, usuario):
         operacion=operacion,
         estado=Inconsistencia.Estado.PENDIENTE,
         instalado=False,
-    ).delete()
+    ).exclude(tipo__in=TIPOS_IVT).delete()
 
     actuales = list(
         Asignacion.objects.select_for_update()
@@ -2398,3 +2423,114 @@ def rangos_ivt_disponibles():
     numeros = (IVT.objects.filter(estado=EstadoI.DISPONIBLE)
                .order_by("numero").values_list("numero", flat=True))
     return _agrupar_rangos(numeros)
+
+# ============================================================
+# IVT: INCONSISTENCIAS (la orden se registra igual)
+# ============================================================
+
+TIPOS_IVT = {
+    T.IVT_NO_REGISTRADO,
+    T.IVT_NO_ASIGNADO,
+    T.IVT_OTRO_TECNICO,
+    T.IVT_YA_USADO,
+    T.IVT_NO_UTILIZABLE,
+}
+
+
+def clasificar_ivt(*, numero, tecnico, operacion=None):
+    """
+    Devuelve (tipo, ivt, detalle).
+    tipo = None significa que todo está bien: el IVT está asignado a ese
+    técnico, o ya está instalado en esta misma orden.
+    """
+    try:
+        numero = int(str(numero).strip())
+    except (TypeError, ValueError):
+        return T.IVT_NO_REGISTRADO, None, "El IVT debe ser un número."
+
+    codigo = fmt_ivt(numero)
+    ivt = (
+        IVT.objects
+        .select_related("tecnico", "operacion")
+        .filter(numero=numero)
+        .first()
+    )
+
+    if not ivt:
+        return (
+            T.IVT_NO_REGISTRADO, None,
+            f"El IVT {codigo} no existe en el sistema: no se registró en "
+            "ningún ingreso de cajas.",
+        )
+
+    if ivt.estado == EstadoI.INSTALADO:
+        if operacion is not None and ivt.operacion_id == operacion.pk:
+            return None, ivt, ""
+        orden = ivt.operacion.numero_orden if ivt.operacion_id else "sin orden"
+        return (
+            T.IVT_YA_USADO, ivt,
+            f"El IVT {codigo} ya fue usado en la orden {orden}.",
+        )
+
+    if ivt.estado == EstadoI.DISPONIBLE:
+        return (
+            T.IVT_NO_ASIGNADO, ivt,
+            f"El IVT {codigo} figura en almacén; nunca se asignó al técnico.",
+        )
+
+    if ivt.estado in (EstadoI.ANULADO, EstadoI.PERDIDO):
+        return (
+            T.IVT_NO_UTILIZABLE, ivt,
+            f"El IVT {codigo} figura como «{ivt.get_estado_display()}».",
+        )
+
+    # Estado ASIGNADO
+    if tecnico is not None and ivt.tecnico_id != tecnico.id:
+        return (
+            T.IVT_OTRO_TECNICO, ivt,
+            f"El IVT {codigo} está asignado a {ivt.tecnico}.",
+        )
+
+    return None, ivt, ""
+
+
+@transaction.atomic
+def vincular_ivt_o_reportar(*, numero, operacion, tecnico, usuario):
+    """
+    Si el IVT está bien, lo vincula a la orden.
+    Si tiene algún problema NO bloquea la orden: queda como Inconsistencia
+    y devuelve esa Inconsistencia.
+    """
+    if numero in (None, ""):
+        return None
+
+    # La orden se está guardando de nuevo: se regeneran las novedades de IVT
+    Inconsistencia.objects.filter(
+        operacion=operacion,
+        tipo__in=TIPOS_IVT,
+        estado=Inconsistencia.Estado.PENDIENTE,
+        instalado=False,
+    ).delete()
+
+    tipo, ivt, detalle = clasificar_ivt(
+        numero=numero, tecnico=tecnico, operacion=operacion,
+    )
+
+    if tipo is None:
+        vincular_ivt(
+            numero=numero, operacion=operacion, tecnico=tecnico, usuario=usuario,
+        )
+        return None
+
+    return _novedad(
+        tipo=tipo,
+        tecnico=tecnico,
+        usuario=usuario,
+        operacion=operacion,
+        detalle=detalle,
+        serial=str(numero).strip().zfill(5),
+        cantidad=1,
+        instalado=False,
+        estado_anterior=ivt.estado if ivt else None,
+        tecnico_anterior=ivt.tecnico if ivt and ivt.tecnico_id else None,
+    )

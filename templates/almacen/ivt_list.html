@@ -505,7 +505,6 @@ a.cant:hover { filter: brightness(.95); text-decoration: underline; }
                         <th class="centro g-perd">PERDIDOS</th>
                         <th class="centro g-anul">ANULADOS</th>
                         <th class="centro">TOTAL IVT</th>
-                        <th class="centro">DETALLE</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -551,10 +550,6 @@ a.cant:hover { filter: brightness(.95); text-decoration: underline; }
                             </td>
 
                             <td class="centro"><span class="cant n-total">{{ t.total|default:0 }}</span></td>
-
-                            <td class="centro">
-                                <a class="btn-mini" href="?tecnico={{ t.tecnico_id }}">Ver IVT</a>
-                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -566,7 +561,7 @@ a.cant:hover { filter: brightness(.95); text-decoration: underline; }
                         <td class="centro" id="totPerd">0</td>
                         <td class="centro" id="totAnul">0</td>
                         <td class="centro" id="totTotal">0</td>
-                        <td></td>
+
                     </tr>
                 </tfoot>
             </table>

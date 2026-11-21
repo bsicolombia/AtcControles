@@ -894,32 +894,8 @@ class InstalacionMasivaForm(DatosOperacionForm):
         estado = data.get("estado")
 
         if estado in Operacion.ESTADOS_QUE_REQUIEREN_IVT:
-            numero = data.get("numero_ivt")
-
-            if not numero:
-                self.add_error(
-                    "numero_ivt",
-                    "Indique el IVT de la visita."
-                )
-
-            elif self.tecnico:
-                op = (
-                    Operacion.objects
-                    .filter(
-                        numero_orden=data.get("numero_orden")
-                    )
-                    .first()
-                )
-
-                try:
-                    services.validar_ivt_para_operacion(
-                        numero=numero,
-                        tecnico=self.tecnico,
-                        operacion=op,
-                    )
-
-                except services.ErrorInventario as e:
-                    self.add_error("numero_ivt", str(e))
+            if not data.get("numero_ivt"):
+                self.add_error("numero_ivt", "Indique el IVT de la visita.")
 
         return data
 

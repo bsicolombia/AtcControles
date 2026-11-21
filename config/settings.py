@@ -102,6 +102,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'usuarios.context_processors.roles',
+                "almacen.context_processors.inconsistencias_burbuja",
             ],
         },
     },
@@ -121,7 +122,7 @@ DATABASES = {
         "USER": "atc_user",
         "PASSWORD": "12345678d",
         "HOST": "127.0.0.1",
-        "PORT": "3307",
+        "PORT": "3306",
         "OPTIONS": {
             "charset": "utf8mb4",
         },

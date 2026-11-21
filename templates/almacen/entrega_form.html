@@ -12,299 +12,147 @@
     --ac:#1f3a5f;
     font-size:13px;
   }
-
   .ent h2 { margin:0 0 8px; font-size:17px; }
-
-  .ent .card {
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:10px 12px;
+  .ent .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .ent .top { display:grid; grid-template-columns:2fr 1fr 2fr; gap:10px; margin-bottom:10px; }
+  .ent label { display:block; font-weight:600; font-size:12px; margin-bottom:3px; color:#444; }
+  .ent input, .ent select, .ent textarea {
+    width:100%; padding:6px 8px; border:1px solid var(--line);
+    border-radius:6px; font-size:13px; box-sizing:border-box;
   }
-
-  .ent .top {
-    display:grid;
-    grid-template-columns:2fr 1fr 2fr;
-    gap:10px;
-    margin-bottom:10px;
-  }
-
-  .ent label {
-    display:block;
-    font-weight:600;
-    font-size:12px;
-    margin-bottom:3px;
-    color:#444;
-  }
-
-  .ent input,
-  .ent select,
-  .ent textarea {
-    width:100%;
-    padding:6px 8px;
-    border:1px solid var(--line);
-    border-radius:6px;
-    font-size:13px;
-    box-sizing:border-box;
-  }
-
-  .ent .main {
-    display:grid;
-    grid-template-columns:minmax(290px,360px) 1fr;
-    gap:10px;
-  }
-
-  .ent .row {
-    display:flex;
-    gap:6px;
-    align-items:flex-end;
-    margin-top:8px;
-  }
-
-  .ent .row>div { flex:1; }
-
+  .ent .main { display:grid; grid-template-columns:minmax(290px,380px) 1fr; gap:10px; }
+  .ent .row { display:flex; gap:6px; align-items:flex-end; margin-top:8px; }
+  .ent .row > div { flex:1; }
   .ent .btn {
-    padding:7px 12px;
-    border:0;
-    border-radius:6px;
-    background:var(--ac);
-    color:#fff;
-    font-weight:600;
-    cursor:pointer;
-    white-space:nowrap;
+    padding:7px 12px; border:0; border-radius:6px; background:var(--ac);
+    color:#fff; font-weight:600; cursor:pointer; white-space:nowrap;
   }
-
-  .ent .btn.sec {
-    background:#fff;
-    color:var(--ac);
-    border:1px solid var(--ac);
-  }
-
-  .ent .btn:disabled {
-    opacity:.45;
-    cursor:not-allowed;
-  }
-
-  .ent .msg {
-    margin-top:6px;
-    font-weight:600;
-    min-height:18px;
-  }
-
+  .ent .btn.sec { background:#fff; color:var(--ac); border:1px solid var(--ac); }
+  .ent .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .ent .msg { margin-top:6px; font-weight:600; min-height:18px; }
   .ent .msg.ok { color:var(--ok); }
   .ent .msg.err { color:var(--err); }
-
-  .ent .scroll {
-    max-height:200px;
-    overflow:auto;
-  }
-
-  .ent table {
-    border-collapse:collapse;
-    width:100%;
-  }
-
-  .ent th,
-  .ent td {
-    border:1px solid var(--line);
-    padding:4px 7px;
-    text-align:left;
-    vertical-align:top;
-  }
-
-  .ent th {
-    background:var(--ac);
-    color:#fff;
-    font-size:12px;
-    position:sticky;
-    top:0;
-  }
-
-  .ent td.n,
-  .ent th.n { text-align:center; }
-
+  .ent .scroll { max-height:200px; overflow:auto; }
+  .ent table { border-collapse:collapse; width:100%; }
+  .ent th, .ent td { border:1px solid var(--line); padding:4px 7px; text-align:left; vertical-align:top; }
+  .ent th { background:var(--ac); color:#fff; font-size:12px; position:sticky; top:0; }
+  .ent td.n, .ent th.n { text-align:center; }
   .ent .chip {
-    display:inline-flex;
-    gap:4px;
-    align-items:center;
-    background:#e7f4ec;
-    color:var(--ok);
-    border:1px solid #b7dcc6;
-    border-radius:12px;
-    padding:1px 7px;
-    margin:1px 3px 1px 0;
-    font-size:12px;
+    display:inline-flex; gap:4px; align-items:center; background:#e7f4ec; color:var(--ok);
+    border:1px solid #b7dcc6; border-radius:12px; padding:1px 7px; margin:1px 3px 1px 0; font-size:12px;
   }
-
-  .ent .chip button,
-  .ent .x {
-    border:0;
-    background:none;
-    cursor:pointer;
-    color:var(--err);
-    font-weight:700;
-  }
-
+  .ent .chip button, .ent .x { border:0; background:none; cursor:pointer; color:var(--err); font-weight:700; }
   .ent .informe { margin-top:10px; }
   .ent .informe .scroll { max-height:150px; }
-
-  .ent .informe th {
-    font-size:11px;
-    white-space:normal;
-    min-width:80px;
-  }
-
-  .ent .foot {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-top:10px;
-  }
-
+  .ent .informe th { font-size:11px; white-space:normal; min-width:80px; }
+  .ent .foot { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
   .ent .hidden { display:none !important; }
 
-  @media(max-width:900px) {
-    .ent .top,
-    .ent .main {
-      grid-template-columns:1fr;
-    }
+  /* ---- IVT: consecutivos ---- */
+  .ent .ivt-disp { margin-top:8px; font-size:12px; }
+  .ent .ivt-disp .tit { font-weight:600; color:#444; margin-bottom:3px; }
+  .ent .ivt-chip {
+    display:inline-block; margin:2px 4px 2px 0; padding:2px 9px; cursor:pointer;
+    border:1px solid #b7dcc6; background:#e7f4ec; color:var(--ok);
+    border-radius:12px; font-size:12px;
   }
+  .ent .ivt-chip:hover { background:#d3ecde; }
+  .ent .ivt-prev { flex:1; font-weight:600; color:var(--ac); min-height:18px; }
+  .ent .ivt-resumen { margin-top:8px; font-size:12px; }
+  .ent .ivt-resumen ul { margin:4px 0 4px 18px; padding:0; }
+
+  @media(max-width:900px) { .ent .top, .ent .main { grid-template-columns:1fr; } }
 </style>
 
 <div class="ent">
 
   <h2>Nueva entrega de material</h2>
 
-  {% if messages %}
-    {% for m in messages %}
-      <div class="card"
-           style="margin-bottom:8px;border-color:{% if m.tags == 'error' %}#b42318{% else %}#2d6a4f{% endif %}">
-        {{ m }}
-      </div>
-    {% endfor %}
-  {% endif %}
+  {# Los mensajes ya los muestra base.html; no se repiten aquí. #}
 
   <form method="post" id="form-entrega">
-
     {% csrf_token %}
-
     <input type="hidden" name="payload" id="payload">
     <input type="hidden" name="payload_ivt" id="payload-ivt">
 
     <!-- DATOS GENERALES -->
-
     <div class="card top">
-
       <div>
         <label for="id_tecnico">Técnico</label>
         {{ form.tecnico }}
         {{ form.tecnico.errors }}
       </div>
-
       <div>
         <label for="id_fecha">Fecha</label>
         {{ form.fecha }}
         {{ form.fecha.errors }}
       </div>
-
       <div>
         <label for="id_observaciones">Observaciones</label>
         {{ form.observaciones }}
       </div>
-
     </div>
 
     <div class="main">
 
       <!-- AGREGAR MATERIAL -->
-
       <div class="card">
 
         <label for="sel-producto">Material</label>
-
         <select id="sel-producto">
-
           <option value="">Seleccione…</option>
-
-          <option value="IVT">
-            IVT — consecutivos ({{ ivt_disponibles }} disponibles)
-          </option>
-
+          <option value="IVT">IVT — Informe de Visita Técnica ({{ ivt_disponibles }} libres)</option>
           {% for p in productos %}
-            <option value="{{ p.pk }}">
-              {{ p.nombre_completo }}
-            </option>
+            <option value="{{ p.pk }}">{{ p.nombre_completo }}</option>
           {% endfor %}
-
         </select>
 
         <div class="msg" id="stock"></div>
 
-        <!-- CANTIDAD: SIEMPRE VISIBLE AL SELECCIONAR MATERIAL -->
-
+        <!-- CANTIDAD (materiales normales) -->
         <div id="pane-cant" class="row hidden">
-
           <div>
             <label for="in-cantidad">Cantidad</label>
-            <input
-              type="number"
-              min="1"
-              id="in-cantidad"
-              value="1">
+            <input type="number" min="1" id="in-cantidad" value="1">
           </div>
-
-          <button type="button" class="btn" id="btn-add-cant">
-            Agregar cantidad
-          </button>
-
+          <button type="button" class="btn" id="btn-add-cant">Agregar cantidad</button>
         </div>
 
         <!-- SERIALIZADOS -->
-
         <div id="pane-serial" class="hidden">
-
           <div class="row">
-
             <div>
-              <label for="in-serial">
-                Serial físico (Enter para validar)
-              </label>
-
-              <input
-                type="text"
-                id="in-serial"
-                autocomplete="off"
-                placeholder="Escriba o escanee el serial">
+              <label for="in-serial">Serial físico (Enter para validar)</label>
+              <input type="text" id="in-serial" autocomplete="off"
+                     placeholder="Escriba o escanee el serial">
             </div>
-
-            <button type="button" class="btn" id="btn-add-serial">
-              Validar serial
-            </button>
-
+            <button type="button" class="btn" id="btn-add-serial">Validar serial</button>
           </div>
-
         </div>
 
-        <!-- IVT -->
-
+        <!-- IVT: CONSECUTIVOS -->
         <div id="pane-ivt" class="hidden">
 
-          <div class="row">
+          <div class="ivt-disp" id="ivt-disp"></div>
 
+          <div class="row">
             <div>
               <label for="in-ivt-ini">Desde</label>
               <input type="number" min="1" id="in-ivt-ini">
             </div>
-
+            <div>
+              <label for="in-ivt-cant">Cantidad</label>
+              <input type="number" min="1" id="in-ivt-cant">
+            </div>
             <div>
               <label for="in-ivt-fin">Hasta</label>
               <input type="number" min="1" id="in-ivt-fin">
             </div>
+          </div>
 
-            <button type="button" class="btn" id="btn-add-ivt">
-              Agregar IVT
-            </button>
-
+          <div class="row">
+            <div class="ivt-prev" id="ivt-prev"></div>
+            <button type="button" class="btn" id="btn-add-ivt">Agregar IVT</button>
           </div>
 
         </div>
@@ -314,15 +162,10 @@
       </div>
 
       <!-- LISTA DE MATERIALES -->
-
       <div class="card">
-
         <label>Materiales de esta entrega</label>
-
         <div class="scroll">
-
           <table>
-
             <thead>
               <tr>
                 <th>Material</th>
@@ -331,66 +174,38 @@
                 <th></th>
               </tr>
             </thead>
-
             <tbody id="lineas"></tbody>
-
           </table>
-
-          <div id="vacio"
-               style="padding:14px;color:#777;text-align:center">
+          <div id="vacio" style="padding:14px;color:#777;text-align:center">
             Aún no agrega materiales.
           </div>
-
         </div>
-
       </div>
 
     </div>
 
-    <!-- INFORME -->
-
+    <!-- INFORME EN VIVO -->
     <div class="card informe">
-
       <label>Informe de la entrega</label>
-
-      <div class="scroll">
-        <table id="informe"></table>
-      </div>
-
+      <div class="scroll"><table id="informe"></table></div>
+      <div class="ivt-resumen" id="ivt-resumen"></div>
     </div>
-
-    <!-- BOTONES -->
 
     <div class="foot">
-
-      <a href="{% url 'almacen:entregas' %}"
-         class="btn sec"
-         style="text-decoration:none">
-        Cancelar
-      </a>
-
+      <a href="{% url 'almacen:entregas' %}" class="btn sec" style="text-decoration:none">Cancelar</a>
       <span>
-
-        <b id="total-gen">0</b> pieza(s)
-
-        <button
-          class="btn"
-          id="btn-guardar"
-          type="submit"
-          disabled>
-          Registrar entrega
-        </button>
-
+        <b id="total-gen">0</b> pieza(s) &nbsp;
+        <button class="btn" id="btn-guardar" type="submit" disabled>Registrar entrega</button>
       </span>
-
     </div>
 
   </form>
-
 </div>
 
 {{ payload_previo|json_script:"payload-previo" }}
 {{ payload_ivt_previo|json_script:"payload-ivt-previo" }}
+{{ ivt_rangos_disp|json_script:"ivt-disp-data" }}
+{{ seleccionar_ivt|json_script:"seleccionar-ivt" }}
 
 {% endblock %}
 
@@ -400,20 +215,15 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 
 <script>
-
 (function () {
 
-  var $ = function (id) {
-    return document.getElementById(id);
-  };
+  var $ = function (id) { return document.getElementById(id); };
 
   var urlInfo = "{% url 'almacen:api_unidades' %}";
   var urlSerial = "{% url 'almacen:api_validar_serial' %}";
 
-  var IVT = {
-    disponibles: {{ ivt_disponibles|default:0 }},
-    primero: {{ ivt_primero|default:0 }}
-  };
+  // Rangos de IVT que hay en almacén: [{inicial, final, cantidad}]
+  var ivtDisp = JSON.parse($("ivt-disp-data").textContent || "[]") || [];
 
   var tsTec = new TomSelect($("id_tecnico"), {
     placeholder: "Buscar técnico…",
@@ -425,54 +235,178 @@
     maxOptions: 300
   });
 
-  var lineas = JSON.parse(
-    $("payload-previo").textContent || "[]"
-  ) || [];
-
-  var ivtRangos = JSON.parse(
-    $("payload-ivt-previo").textContent || "[]"
-  ) || [];
+  var lineas = JSON.parse($("payload-previo").textContent || "[]") || [];
+  var ivtRangos = JSON.parse($("payload-ivt-previo").textContent || "[]") || [];
 
   var info = null;
   var seleccionado = null;
 
-  function pad(n) {
-    return String(n).padStart(5, "0");
-  }
+  /* ---------- utilidades ---------- */
+
+  function pad(n) { return String(n).padStart(5, "0"); }
 
   function msg(txt, ok) {
     var m = $("msg");
     m.textContent = txt || "";
-    m.className = "msg " + (
-      txt ? (ok ? "ok" : "err") : ""
-    );
+    m.className = "msg " + (txt ? (ok ? "ok" : "err") : "");
   }
 
   function enLinea(id) {
-    return lineas.find(function (l) {
-      return String(l.producto) === String(id);
-    });
+    return lineas.find(function (l) { return String(l.producto) === String(id); });
   }
 
-  function cantLinea(l) {
-    return l.serializado
-      ? l.unidades.length
-      : l.cantidad;
-  }
+  function cantLinea(l) { return l.serializado ? l.unidades.length : l.cantidad; }
 
   function totalIvt() {
-    return ivtRangos.reduce(function (a, r) {
-      return a + (r.final - r.inicial + 1);
-    }, 0);
+    return ivtRangos.reduce(function (a, r) { return a + (r.final - r.inicial + 1); }, 0);
   }
 
   function textoRango(r) {
-    return r.inicial === r.final
-      ? pad(r.inicial)
-      : pad(r.inicial) + " - " + pad(r.final);
+    return r.inicial === r.final ? pad(r.inicial) : pad(r.inicial) + " - " + pad(r.final);
   }
 
-  /* SELECCIONAR MATERIAL */
+  /* ---------- IVT: consecutivos libres ---------- */
+
+  // Rangos del almacén menos los que ya se agregaron a esta entrega
+  function libres() {
+    var out = [];
+    ivtDisp.forEach(function (r) {
+      var segs = [[r.inicial, r.final]];
+      ivtRangos.forEach(function (x) {
+        var next = [];
+        segs.forEach(function (s) {
+          if (x.final < s[0] || x.inicial > s[1]) { next.push(s); return; }
+          if (x.inicial > s[0]) next.push([s[0], x.inicial - 1]);
+          if (x.final < s[1]) next.push([x.final + 1, s[1]]);
+        });
+        segs = next;
+      });
+      segs.forEach(function (s) { out.push({ inicial: s[0], final: s[1] }); });
+    });
+    return out;
+  }
+
+  function totalLibres() {
+    return libres().reduce(function (a, s) { return a + (s.final - s.inicial + 1); }, 0);
+  }
+
+  function leerIvt() {
+    return {
+      ini: parseInt($("in-ivt-ini").value, 10),
+      fin: parseInt($("in-ivt-fin").value, 10),
+      cant: parseInt($("in-ivt-cant").value, 10)
+    };
+  }
+
+  function previaIvt() {
+    var v = leerIvt(), p = $("ivt-prev");
+    if (v.ini && v.fin && v.fin >= v.ini) {
+      p.textContent = "Se asignarán " + (v.fin - v.ini + 1) + " IVT: " +
+                      pad(v.ini) + " → " + pad(v.fin);
+    } else {
+      p.textContent = "";
+    }
+  }
+
+  function pintarLibres() {
+    var box = $("ivt-disp");
+    box.innerHTML = "";
+    var ls = libres();
+
+    var t = document.createElement("div");
+    t.className = "tit";
+    t.textContent = ls.length
+      ? "Consecutivos libres en almacén (clic para usar):"
+      : "No hay consecutivos IVT libres en almacén.";
+    box.appendChild(t);
+
+    ls.slice(0, 12).forEach(function (s) {
+      var n = s.final - s.inicial + 1;
+      var c = document.createElement("span");
+      c.className = "ivt-chip";
+      c.textContent = pad(s.inicial) + (n > 1 ? " – " + pad(s.final) : "") + " (" + n + ")";
+      c.onclick = function () {
+        $("in-ivt-ini").value = s.inicial;
+        $("in-ivt-fin").value = s.final;
+        $("in-ivt-cant").value = n;
+        previaIvt();
+      };
+      box.appendChild(c);
+    });
+
+    if (ls.length > 12) {
+      var mas = document.createElement("span");
+      mas.textContent = "… y " + (ls.length - 12) + " rango(s) más";
+      box.appendChild(mas);
+    }
+  }
+
+  function siguienteIvt() {
+    var l = libres()[0];
+    $("in-ivt-ini").value = l ? l.inicial : "";
+    $("in-ivt-fin").value = "";
+    $("in-ivt-cant").value = "";
+    previaIvt();
+  }
+
+  // Desde / Cantidad / Hasta se mantienen sincronizados
+  $("in-ivt-ini").addEventListener("input", function () {
+    var v = leerIvt();
+    if (v.ini && v.cant > 0) $("in-ivt-fin").value = v.ini + v.cant - 1;
+    else if (v.ini && v.fin >= v.ini) $("in-ivt-cant").value = v.fin - v.ini + 1;
+    previaIvt();
+  });
+
+  $("in-ivt-cant").addEventListener("input", function () {
+    var v = leerIvt();
+    if (v.ini && v.cant > 0) $("in-ivt-fin").value = v.ini + v.cant - 1;
+    previaIvt();
+  });
+
+  $("in-ivt-fin").addEventListener("input", function () {
+    var v = leerIvt();
+    if (v.ini && v.fin >= v.ini) $("in-ivt-cant").value = v.fin - v.ini + 1;
+    previaIvt();
+  });
+
+  $("btn-add-ivt").addEventListener("click", function () {
+
+    var v = leerIvt();
+
+    if (!v.ini || !v.fin || v.ini < 1 || v.fin < v.ini) {
+      return msg("Rango inválido: complete Desde y Hasta (el final no puede ser menor).", false);
+    }
+
+    var cruza = ivtRangos.some(function (r) {
+      return v.ini <= r.final && v.fin >= r.inicial;
+    });
+    if (cruza) return msg("Ese rango se cruza con uno ya agregado.", false);
+
+    var cabe = libres().some(function (s) {
+      return v.ini >= s.inicial && v.fin <= s.final;
+    });
+    if (!cabe) {
+      var ls = libres().slice(0, 6).map(function (s) {
+        return pad(s.inicial) + "-" + pad(s.final);
+      });
+      return msg(
+        "Ese rango no está completo en almacén." +
+        (ls.length ? " Libres: " + ls.join(", ") + "." : " No hay IVT libres."),
+        false
+      );
+    }
+
+    ivtRangos.push({ inicial: v.ini, final: v.fin });
+    ivtRangos.sort(function (a, b) { return a.inicial - b.inicial; });
+
+    msg("Agregado IVT " + pad(v.ini) + " → " + pad(v.fin) +
+        " (" + (v.fin - v.ini + 1) + ")", true);
+
+    render();
+    siguienteIvt();
+  });
+
+  /* ---------- seleccionar material ---------- */
 
   tsProd.on("change", function (valor) {
 
@@ -483,131 +417,77 @@
     $("pane-cant").classList.add("hidden");
     $("pane-serial").classList.add("hidden");
     $("pane-ivt").classList.add("hidden");
-
     $("stock").textContent = "";
+    $("stock").className = "msg";
 
     if (!valor) return;
 
-    /* IVT */
-
+    /* ----- IVT ----- */
     if (valor === "IVT") {
 
-      seleccionado = {
-        id: "IVT",
-        nombre: "IVT (consecutivos)"
-      };
+      seleccionado = { id: "IVT", nombre: "Informe de Visita Técnica (IVT)" };
 
       $("pane-ivt").classList.remove("hidden");
 
-      $("stock").textContent =
-        "IVT disponibles en almacén: " +
-        IVT.disponibles +
-        (IVT.primero
-          ? " · primero libre: " + pad(IVT.primero)
-          : "");
+      var libresN = totalLibres();
+      $("stock").textContent = "IVT libres en almacén: " + libresN;
+      $("stock").className = "msg " + (libresN > 0 ? "ok" : "err");
 
-      $("stock").className =
-        "msg " + (IVT.disponibles > 0 ? "ok" : "err");
-
-      var ultimo = ivtRangos.length
-        ? ivtRangos[ivtRangos.length - 1].final + 1
-        : IVT.primero;
-
-      $("in-ivt-ini").value = ultimo || "";
-      $("in-ivt-fin").value = "";
-
+      pintarLibres();
+      siguienteIvt();
       $("in-ivt-ini").focus();
 
       return;
     }
 
+    /* ----- materiales normales / serializados ----- */
     seleccionado = {
       id: valor,
       nombre: tsProd.getItem(valor).textContent.trim()
     };
 
     fetch(urlInfo + "?producto=" + encodeURIComponent(valor))
-
       .then(function (r) {
         if (!r.ok) throw new Error("Error consultando material");
         return r.json();
       })
-
       .then(function (d) {
 
         info = d;
 
-        var ya = enLinea(valor)
-          ? cantLinea(enLinea(valor))
-          : 0;
-
+        var ya = enLinea(valor) ? cantLinea(enLinea(valor)) : 0;
         pintarStock(d.stock - ya);
-
-        /*
-          IMPORTANTE:
-          La cantidad siempre se muestra,
-          independientemente del tipo de material.
-        */
 
         $("pane-cant").classList.remove("hidden");
         $("in-cantidad").value = 1;
 
-        /*
-          Si es serializado también mostramos
-          el campo para validar cada serial.
-        */
-
         if (d.serializado) {
-
           $("pane-serial").classList.remove("hidden");
-
           $("in-serial").value = "";
           $("in-serial").focus();
-
         }
-
       })
-
       .catch(function () {
         msg("No se pudo consultar el stock del material.", false);
       });
-
   });
 
-  /* STOCK */
-
   function pintarStock(disp) {
-
     var s = $("stock");
-
-    s.textContent =
-      "Disponible: " + disp +
-      (info && info.serializado
-        ? " unidad(es)"
-        : " en almacén");
-
+    s.textContent = "Disponible: " + disp +
+      (info && info.serializado ? " unidad(es)" : " en almacén");
     s.className = "msg " + (disp > 0 ? "ok" : "err");
-
   }
 
   function disponible() {
-
     if (!seleccionado || !info) return 0;
-
-    var ya = enLinea(seleccionado.id)
-      ? cantLinea(enLinea(seleccionado.id))
-      : 0;
-
+    var ya = enLinea(seleccionado.id) ? cantLinea(enLinea(seleccionado.id)) : 0;
     return info.stock - ya;
-
   }
 
   function asegurarLinea() {
-
     var l = enLinea(seleccionado.id);
-
     if (!l) {
-
       l = {
         producto: seleccionado.id,
         nombre: seleccionado.nombre,
@@ -615,415 +495,221 @@
         cantidad: 0,
         unidades: []
       };
-
       lineas.push(l);
-
     }
-
     return l;
-
   }
 
-  /* AGREGAR IVT */
-
-  $("btn-add-ivt").addEventListener("click", function () {
-
-    var ini = parseInt($("in-ivt-ini").value, 10);
-    var fin = parseInt($("in-ivt-fin").value, 10);
-
-    if (!ini || !fin || ini < 1 || fin < ini) {
-      return msg(
-        "Rango inválido: el final debe ser mayor o igual al inicial.",
-        false
-      );
-    }
-
-    var cantidad = fin - ini + 1;
-
-    var yaAgregados = totalIvt();
-
-    if (cantidad > IVT.disponibles - yaAgregados) {
-      return msg(
-        "No hay suficientes consecutivos IVT disponibles.",
-        false
-      );
-    }
-
-    var cruza = ivtRangos.some(function (r) {
-      return ini <= r.final && fin >= r.inicial;
-    });
-
-    if (cruza) {
-      return msg("Ese rango se cruza con uno ya agregado.", false);
-    }
-
-    ivtRangos.push({
-      inicial: ini,
-      final: fin
-    });
-
-    msg(
-      "Agregado IVT " + pad(ini) +
-      " - " + pad(fin) +
-      " (" + cantidad + ")",
-      true
-    );
-
-    $("in-ivt-ini").value = fin + 1;
-    $("in-ivt-fin").value = "";
-
-    render();
-
-  });
-
-  /* AGREGAR CANTIDAD */
+  /* ---------- agregar cantidad ---------- */
 
   $("btn-add-cant").addEventListener("click", function () {
 
-    if (!seleccionado || !info) {
-      return msg("Seleccione un material primero.", false);
-    }
+    if (!seleccionado || !info) return msg("Seleccione un material primero.", false);
 
     var n = parseInt($("in-cantidad").value, 10);
-
-    if (!n || n <= 0) {
-      return msg("Cantidad inválida.", false);
-    }
-
-    /*
-      Los materiales serializados no pueden agregarse
-      manualmente por cantidad: deben validar cada serial.
-    */
+    if (!n || n <= 0) return msg("Cantidad inválida.", false);
 
     if (info.serializado) {
-      return msg(
-        "Este material requiere validar cada serial individualmente.",
-        false
-      );
+      return msg("Este material requiere validar cada serial individualmente.", false);
     }
 
     if (n > disponible()) {
-      return msg(
-        "Solo hay " + disponible() +
-        " disponible(s) y pide " + n + ".",
-        false
-      );
+      return msg("Solo hay " + disponible() + " disponible(s) y pide " + n + ".", false);
     }
 
-    var l = asegurarLinea();
+    asegurarLinea().cantidad += n;
 
-    l.cantidad += n;
-
-    msg(
-      "Agregado: " + n +
-      " × " + seleccionado.nombre,
-      true
-    );
-
+    msg("Agregado: " + n + " × " + seleccionado.nombre, true);
     pintarStock(disponible());
-
     $("in-cantidad").value = 1;
-
     render();
-
   });
 
-  /* VALIDAR SERIAL */
+  /* ---------- validar serial ---------- */
 
   function validarSerial() {
 
-    if (!seleccionado || !info) return;
-
-    if (!info.serializado) return;
+    if (!seleccionado || !info || !info.serializado) return;
 
     var serial = $("in-serial").value.trim();
-
     if (!serial) return;
 
-    if (disponible() <= 0) {
-      return msg("No hay unidades disponibles.", false);
-    }
+    if (disponible() <= 0) return msg("No hay unidades disponibles.", false);
 
     var l = enLinea(seleccionado.id);
-
-    if (
-      l &&
-      l.unidades.some(function (u) {
-        return u.serial.toLowerCase() === serial.toLowerCase();
-      })
-    ) {
+    if (l && l.unidades.some(function (u) {
+      return u.serial.toLowerCase() === serial.toLowerCase();
+    })) {
       return msg("Ese serial ya está en la lista.", false);
     }
 
-    fetch(
-      urlSerial +
-      "?producto=" + encodeURIComponent(seleccionado.id) +
-      "&serial=" + encodeURIComponent(serial)
-    )
-
+    fetch(urlSerial +
+          "?producto=" + encodeURIComponent(seleccionado.id) +
+          "&serial=" + encodeURIComponent(serial))
       .then(function (r) {
         if (!r.ok) throw new Error("Error validando serial");
         return r.json();
       })
-
       .then(function (d) {
 
         if (!d.ok) {
-
           msg("✗ " + d.mensaje, false);
           $("in-serial").select();
-
           return;
-
         }
 
         var linea = asegurarLinea();
 
-        if (
-          linea.unidades.some(function (u) {
-            return u.id === d.id;
-          })
-        ) {
+        if (linea.unidades.some(function (u) { return u.id === d.id; })) {
           return msg("Ese serial ya está en la lista.", false);
         }
 
-        linea.unidades.push({
-          id: d.id,
-          serial: d.serial
-        });
+        linea.unidades.push({ id: d.id, serial: d.serial });
 
-        msg(
-          "✓ " + d.serial + " — " + d.mensaje,
-          true
-        );
-
+        msg("✓ " + d.serial + " — " + d.mensaje, true);
         pintarStock(disponible());
 
         $("in-serial").value = "";
         $("in-serial").focus();
-
         $("in-cantidad").value = linea.unidades.length;
 
         render();
-
       })
-
       .catch(function () {
         msg("No se pudo validar. Intente de nuevo.", false);
       });
-
   }
 
-  $("btn-add-serial").addEventListener(
-    "click",
-    validarSerial
-  );
+  $("btn-add-serial").addEventListener("click", validarSerial);
 
   $("in-serial").addEventListener("keydown", function (e) {
-
-    if (e.key === "Enter") {
-      e.preventDefault();
-      validarSerial();
-    }
-
+    if (e.key === "Enter") { e.preventDefault(); validarSerial(); }
   });
 
-  /* CREAR CELDAS */
+  /* ---------- pintar ---------- */
 
   function celda(tr, txt, cls) {
-
     var td = document.createElement("td");
-
     td.textContent = txt;
-
     if (cls) td.className = cls;
-
     tr.appendChild(td);
-
     return td;
-
   }
 
-  /* RENDERIZAR LISTA */
+  function botonQuitar(fn) {
+    var tdx = document.createElement("td");
+    tdx.className = "n";
+    var x = document.createElement("button");
+    x.type = "button";
+    x.className = "x";
+    x.textContent = "🗑";
+    x.onclick = fn;
+    tdx.appendChild(x);
+    return tdx;
+  }
 
   function render() {
 
     var tb = $("lineas");
-
     tb.innerHTML = "";
 
     lineas.forEach(function (l, i) {
 
       var tr = document.createElement("tr");
-
       celda(tr, l.nombre);
 
       var det = document.createElement("td");
 
       if (l.serializado) {
-
         l.unidades.forEach(function (u, j) {
-
           var c = document.createElement("span");
-
           c.className = "chip";
-
-          c.appendChild(
-            document.createTextNode("✓ " + u.serial)
-          );
+          c.appendChild(document.createTextNode("✓ " + u.serial));
 
           var b = document.createElement("button");
-
           b.type = "button";
           b.textContent = "×";
-
           b.onclick = function () {
-
             l.unidades.splice(j, 1);
-
-            if (!l.unidades.length) {
-              lineas.splice(i, 1);
-            }
-
+            if (!l.unidades.length) lineas.splice(i, 1);
             refrescarStock();
             render();
-
           };
 
           c.appendChild(b);
           det.appendChild(c);
-
         });
-
       } else {
-
         det.textContent = "—";
-
       }
 
       tr.appendChild(det);
-
       celda(tr, cantLinea(l), "n");
-
-      var tdx = document.createElement("td");
-
-      tdx.className = "n";
-
-      var x = document.createElement("button");
-
-      x.type = "button";
-      x.className = "x";
-      x.textContent = "🗑";
-
-      x.onclick = function () {
-
+      tr.appendChild(botonQuitar(function () {
         lineas.splice(i, 1);
-
         refrescarStock();
         render();
-
-      };
-
-      tdx.appendChild(x);
-
-      tr.appendChild(tdx);
+      }));
 
       tb.appendChild(tr);
-
     });
 
-    /* RANGOS IVT */
-
+    /* rangos IVT */
     ivtRangos.forEach(function (r, j) {
 
       var tr = document.createElement("tr");
-
-      celda(tr, "IVT (consecutivos)");
+      celda(tr, "Informe de Visita Técnica (IVT)");
 
       var det = document.createElement("td");
-
       var c = document.createElement("span");
-
       c.className = "chip";
       c.textContent = textoRango(r);
-
       det.appendChild(c);
-
       tr.appendChild(det);
 
-      celda(
-        tr,
-        r.final - r.inicial + 1,
-        "n"
-      );
-
-      var tdx = document.createElement("td");
-
-      tdx.className = "n";
-
-      var x = document.createElement("button");
-
-      x.type = "button";
-      x.className = "x";
-      x.textContent = "🗑";
-
-      x.onclick = function () {
-
+      celda(tr, r.final - r.inicial + 1, "n");
+      tr.appendChild(botonQuitar(function () {
         ivtRangos.splice(j, 1);
-
         render();
-
-      };
-
-      tdx.appendChild(x);
-
-      tr.appendChild(tdx);
+      }));
 
       tb.appendChild(tr);
-
     });
 
     var hay = lineas.length || ivtRangos.length;
-
     $("vacio").style.display = hay ? "none" : "";
 
     informe();
+    resumenIvt();
+    pintarLibres();
 
-    var total =
-      lineas.reduce(function (a, l) {
-        return a + cantLinea(l);
-      }, 0) + totalIvt();
+    // Si está seleccionado IVT, el contador de libres se actualiza
+    if (seleccionado && seleccionado.id === "IVT") {
+      var n = totalLibres();
+      $("stock").textContent = "IVT libres en almacén: " + n;
+      $("stock").className = "msg " + (n > 0 ? "ok" : "err");
+    }
 
+    var total = lineas.reduce(function (a, l) { return a + cantLinea(l); }, 0) + totalIvt();
     $("total-gen").textContent = total;
-
     $("btn-guardar").disabled = !hay;
 
     $("payload").value = JSON.stringify(lineas);
-
     $("payload-ivt").value = JSON.stringify(ivtRangos);
-
   }
-
-  /* ACTUALIZAR STOCK */
 
   function refrescarStock() {
-
-    if (seleccionado && info) {
-      pintarStock(disponible());
-    }
-
+    if (seleccionado && info) pintarStock(disponible());
   }
 
-  /* INFORME EN VIVO */
+  /* ---------- informe en vivo ---------- */
 
   function informe() {
 
     var t = $("informe");
-
     t.innerHTML = "";
 
     var hayIvt = ivtRangos.length > 0;
-
     if (!lineas.length && !hayIvt) return;
 
     var tec = tsTec.getValue()
@@ -1034,140 +720,119 @@
 
     ["Técnico", "Fecha"]
       .concat(
-        lineas.map(function (l) {
-          return l.nombre;
-        }),
-        hayIvt ? ["IVT"] : [],
+        lineas.map(function (l) { return l.nombre; }),
+        hayIvt ? ["Informe de Visita Técnica (IVT)"] : [],
         ["Total"]
       )
       .forEach(function (h) {
-
         var th = document.createElement("th");
-
         th.textContent = h;
         th.className = "n";
-
         thead.appendChild(th);
-
       });
 
     t.appendChild(thead);
 
     var r1 = document.createElement("tr");
-
     celda(r1, tec);
     celda(r1, $("id_fecha").value);
 
     var total = 0;
-
     lineas.forEach(function (l) {
-
       var c = cantLinea(l);
-
       total += c;
-
       celda(r1, c, "n");
-
     });
 
     if (hayIvt) {
-
       total += totalIvt();
-
       celda(r1, totalIvt(), "n");
-
     }
 
     celda(r1, total, "n").style.fontWeight = "700";
-
     t.appendChild(r1);
 
-    var seriales = lineas.some(function (l) {
-      return l.serializado;
-    });
-
-    if (seriales || hayIvt) {
+    if (lineas.some(function (l) { return l.serializado; }) || hayIvt) {
 
       var r2 = document.createElement("tr");
-
       celda(r2, "Detalle");
       celda(r2, "");
 
       lineas.forEach(function (l) {
-
-        celda(
-          r2,
-          l.serializado
-            ? l.unidades.map(function (u) {
-                return u.serial;
-              }).join(", ")
-            : "—"
-        );
-
+        celda(r2, l.serializado
+          ? l.unidades.map(function (u) { return u.serial; }).join(", ")
+          : "—");
       });
 
-      if (hayIvt) {
-
-        celda(
-          r2,
-          ivtRangos.map(textoRango).join(", ")
-        );
-
-      }
+      if (hayIvt) celda(r2, ivtRangos.map(textoRango).join(" | "));
 
       celda(r2, "");
-
       t.appendChild(r2);
-
     }
-
   }
 
-  /* ACTUALIZAR INFORME */
+  // Consecutivos de IVT: de cuál a cuál y cuántos
+  function resumenIvt() {
+
+    var box = $("ivt-resumen");
+    box.innerHTML = "";
+    if (!ivtRangos.length) return;
+
+    var t = document.createElement("div");
+    t.innerHTML = "<b>Informe de Visita Técnica (IVT) — consecutivos de esta entrega</b>";
+    box.appendChild(t);
+
+    var ul = document.createElement("ul");
+    ivtRangos.forEach(function (r) {
+      var n = r.final - r.inicial + 1;
+      var li = document.createElement("li");
+      li.textContent = r.inicial === r.final
+        ? "Consecutivo " + pad(r.inicial) + " (1 IVT)"
+        : "Desde " + pad(r.inicial) + " hasta " + pad(r.final) + " (" + n + " IVT)";
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+
+    var tot = document.createElement("div");
+    tot.innerHTML = "<b>Total IVT: " + totalIvt() + "</b>";
+    box.appendChild(tot);
+  }
 
   tsTec.on("change", informe);
+  $("id_fecha").addEventListener("change", informe);
 
-  $("id_fecha").addEventListener(
-    "change",
-    informe
-  );
-
-  /* VALIDAR ENVÍO */
+  /* ---------- enviar ---------- */
 
   $("form-entrega").addEventListener("submit", function (e) {
 
     if (!lineas.length && !ivtRangos.length) {
-
       e.preventDefault();
-
-      msg("Debe agregar al menos un material.", false);
-
+      msg("Debe agregar al menos un material o un rango de IVT.", false);
       return;
-
     }
 
     $("payload").value = JSON.stringify(lineas);
-
     $("payload-ivt").value = JSON.stringify(ivtRangos);
-
   });
 
-  /* INICIALIZAR */
+  /* ---------- iniciar ---------- */
 
   render();
 
-  /* SELECCIONAR IVT AUTOMÁTICAMENTE */
+  // Viene de "Asignar IVT": se selecciona IVT y se abre el panel Desde / Hasta.
+  // La bandera llega por json_script (sin etiquetas de Django dentro del script)
+  // y setValue va SIN el segundo parámetro "true", que es el modo silencioso:
+  // con "true" TomSelect no dispara el evento change y el panel no se abría.
+  var abrirIvt = false;
+  try {
+    abrirIvt = JSON.parse($("seleccionar-ivt").textContent) === true;
+  } catch (e) {}
 
-  {% if seleccionar_ivt %}
-  tsProd.setValue("IVT", true);
-
-  setTimeout(function () {
-      $("in-ivt-ini").focus();
-  }, 300);
-  {% endif %}
+  if (abrirIvt) {
+    tsProd.setValue("IVT");
+  }
 
 })();
-
 </script>
 
 {% endblock %}

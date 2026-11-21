@@ -17,17 +17,16 @@
     --verde-900: #166534;
     --verde-100: #eaf3ed;
     --azul: #2563eb;
+    --ej: #16a34a;
+    --no: #dc2626;
     font-size: 10px;
 }
 
 /* CABECERA */
 .cons-cab {
-    padding: 10px 14px;
-    margin-bottom: 10px;
-    background: var(--fondo-cab);
-    border: 1px solid var(--borde);
-    border-left: 4px solid var(--verde-900);
-    border-radius: 7px;
+    padding: 10px 14px; margin-bottom: 10px;
+    background: var(--fondo-cab); border: 1px solid var(--borde);
+    border-left: 4px solid var(--verde-900); border-radius: 7px;
 }
 .cons-cab h1 { margin: 0 0 3px; font-size: 14px; font-weight: 800; letter-spacing: .2px; color: var(--texto); }
 .cons-cab p  { margin: 0; font-size: 10px; line-height: 1.4; color: var(--texto-3); }
@@ -64,10 +63,7 @@
 .btn-mini.danger:hover { background: #fee2e2; }
 
 /* TARJETAS */
-.cons-card {
-    background: #fff; border: 1px solid var(--borde);
-    border-radius: 7px; margin-bottom: 10px;
-}
+.cons-card { background: #fff; border: 1px solid var(--borde); border-radius: 7px; margin-bottom: 10px; }
 .cons-card-cab {
     display: flex; flex-wrap: wrap; justify-content: space-between;
     align-items: flex-end; gap: 8px; padding: 10px 12px 6px;
@@ -75,12 +71,10 @@
 .cons-card-cab h2 { margin: 0 0 2px; font-size: 13px; font-weight: 800; color: var(--texto); }
 .cons-card-cab p  { margin: 0; font-size: 9px; color: var(--texto-3); }
 
-/* FILTROS (2 filas compactas) */
+/* FILTROS */
 .cons-filtros {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 8px; align-items: end;
-    padding: 9px 12px; margin-bottom: 10px;
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    gap: 8px; align-items: end; padding: 9px 12px; margin-bottom: 10px;
     background: #fff; border: 1px solid var(--borde); border-radius: 7px;
 }
 .cons-filtros .f-q { grid-column: span 2; }
@@ -90,32 +84,25 @@
     margin: 0; font-size: 9px; font-weight: 700; letter-spacing: .2px;
     color: var(--texto-2); text-transform: uppercase;
 }
-.cons-filtros input,
-.cons-filtros select {
+.cons-filtros input, .cons-filtros select {
     width: 100%; height: 30px; box-sizing: border-box; padding: 0 8px;
     border: 1px solid #cbd5e1; border-radius: 5px; background: #fff;
     font-size: 10px; color: var(--texto);
 }
-.cons-filtros input:focus,
-.cons-filtros select:focus { outline: 2px solid #a7c5b2; border-color: var(--verde-900); }
+.cons-filtros input:focus, .cons-filtros select:focus { outline: 2px solid #a7c5b2; border-color: var(--verde-900); }
 .f-botones { display: flex; gap: 5px; }
 
-/* MIGAS DE PAN */
-.cons-migas {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
-    margin-bottom: 8px; font-size: 9px; color: var(--texto-3);
-}
+/* MIGAS */
+.cons-migas { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 9px; color: var(--texto-3); }
 .miga {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 5px 3px 10px;
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 5px 3px 10px;
     background: var(--verde-100); border: 1px solid #cfe3d6; border-radius: 999px;
     font-weight: 700; color: var(--verde-900);
 }
 .miga a {
     display: inline-flex; align-items: center; justify-content: center;
     width: 14px; height: 14px; border-radius: 50%;
-    background: #cfe3d6; color: var(--verde-900);
-    font-size: 10px; line-height: 1; text-decoration: none;
+    background: #cfe3d6; color: var(--verde-900); font-size: 10px; line-height: 1; text-decoration: none;
 }
 .miga a:hover { background: #fecaca; color: #b91c1c; }
 
@@ -123,43 +110,87 @@
 .anios { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .chip-anio {
     padding: 3px 10px; border: 1px solid var(--borde); border-radius: 999px;
-    background: #fff; color: var(--texto-2);
-    font-size: 9px; font-weight: 700; text-decoration: none;
+    background: #fff; color: var(--texto-2); font-size: 9px; font-weight: 700; text-decoration: none;
     transition: background-color .15s ease;
 }
 .chip-anio:hover { background: var(--verde-100); color: var(--verde-900); }
 .chip-anio.activo { background: var(--verde-900); border-color: var(--verde-900); color: #fff; }
 .chip-volver { border-style: dashed; color: var(--azul); }
 
-/* LEYENDA EJECUTADAS / NO EJECUTADAS */
+/* LEYENDA */
 .leyenda { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; font-size: 9px; color: var(--texto-2); }
 .leyenda span { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
 .leyenda i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
 .leyenda i.ej { background: #22c55e; }
 .leyenda i.no { background: #ef4444; }
 
-/* TABLAS (encabezado fijo + scroll) */
+/* =========================================================
+   KPIs DEL RESUMEN
+========================================================= */
+.kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px; padding: 6px 12px 12px;
+}
+.kpi {
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 9px 12px; background: #f8fafc;
+    border: 1px solid #e2e8f0; border-left: 4px solid #94a3b8; border-radius: 7px;
+}
+.kpi > span { font-size: 9px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--texto-3); }
+.kpi > strong { font-size: 22px; line-height: 1; font-weight: 800; color: var(--texto); font-variant-numeric: tabular-nums; }
+.kpi.k-total { border-left-color: #334155; }
+.kpi.k-ej    { border-left-color: #22c55e; } .kpi.k-ej > strong { color: #15803d; }
+.kpi.k-no    { border-left-color: #ef4444; } .kpi.k-no > strong { color: #b91c1c; }
+.kpi.k-efec  { border-left-color: var(--verde-900); }
+.kpi.k-tec   { border-left-color: #3b82f6; }
+
+/* Barra ejecutadas | no ejecutadas */
+.barra {
+    display: flex; width: 100%; height: 6px; overflow: hidden;
+    border-radius: 999px; background: #e2e8f0;
+}
+.barra i { display: block; height: 100%; background: #22c55e; min-width: 0; }
+.barra b { display: block; height: 100%; background: #ef4444; min-width: 0; }
+
+/* =========================================================
+   CONTADORES POR TIPO DE OPERACIÓN
+========================================================= */
+.tipos-cont {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 8px; padding: 6px 12px 12px;
+}
+.tipo-card {
+    display: flex; flex-direction: column; gap: 7px; padding: 10px 12px;
+    background: #fff; border: 1px solid var(--borde); border-radius: 7px;
+    text-decoration: none; color: var(--texto);
+    transition: background-color .15s ease, border-color .15s ease;
+}
+.tipo-card:hover { background: var(--verde-100); border-color: #a7c5b2; color: var(--texto); }
+.tipo-card.activo { background: var(--verde-900); border-color: var(--verde-900); color: #fff; }
+.tipo-card .tipo-nombre { font-size: 9px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; line-height: 1.3; }
+.tipo-card .tipo-total { display: flex; align-items: baseline; gap: 5px; font-size: 20px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.tipo-card .tipo-total small { font-size: 9px; font-weight: 600; opacity: .7; }
+.tipo-card .tipo-det { display: flex; align-items: center; gap: 4px; }
+.tipo-card .pct { margin-left: auto; font-size: 9px; font-weight: 700; opacity: .8; }
+.tipo-card.activo .barra { background: rgba(255,255,255,.25); }
+
+/* TABLAS */
 .cons-scroll {
     max-height: 62vh; overflow: auto; margin: 4px 12px 12px;
-    border: 1px solid var(--borde); border-radius: 7px; background: #fff;
-    scrollbar-gutter: stable;
+    border: 1px solid var(--borde); border-radius: 7px; background: #fff; scrollbar-gutter: stable;
 }
 .tabla-c { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 10px; }
 .tabla-c th {
     position: sticky; top: 0; z-index: 10; height: 30px; padding: 5px 8px;
-    background: var(--fondo-cab); color: #334155;
-    font-size: 9px; font-weight: 800; letter-spacing: .3px;
-    text-align: left; white-space: nowrap;
-    border-right: 1px solid var(--borde-suave);
+    background: var(--fondo-cab); color: #334155; font-size: 9px; font-weight: 800; letter-spacing: .3px;
+    text-align: left; white-space: nowrap; border-right: 1px solid var(--borde-suave);
     box-shadow: inset 0 -2px 0 #cfdcd4;
 }
 .tabla-c th a { color: inherit; text-decoration: none; }
 .tabla-c th a:hover { color: var(--azul); text-decoration: underline; }
 .tabla-c td {
-    padding: 5px 8px;
-    border-right: 1px solid var(--borde-suave);
-    border-bottom: 1px solid var(--borde-suave);
-    vertical-align: middle; color: #334155;
+    padding: 5px 8px; border-right: 1px solid var(--borde-suave);
+    border-bottom: 1px solid var(--borde-suave); vertical-align: middle; color: #334155;
 }
 .tabla-c tbody tr:hover td { background: #f4f9f6; }
 .tabla-c .centro, .tabla-c th.centro { text-align: center; }
@@ -168,412 +199,200 @@
 
 .etq {
     display: inline-block; padding: 2px 8px; border-radius: 999px;
-    background: #e0f2fe; color: #075985;
-    font-size: 9px; font-weight: 700; white-space: nowrap;
+    background: #e0f2fe; color: #075985; font-size: 9px; font-weight: 700; white-space: nowrap;
 }
 .etq-ok  { background: #dcfce7; color: #166534; }
 .etq-no  { background: #fee2e2; color: #991b1b; }
 .etq-inc { background: #fef3c7; color: #92400e; }
-/* ESTADOS DE LAS ÓRDENES */
-.etq-ejecutada,
-.etq-efectiva {
-    background: #dcfce7 !important;
-    color: #166534 !important;
-    border: 1px solid #bbf7d0;
-}
-
-.etq-no-ejecutada,
-.etq-anulada,
-.etq-cancelada {
-    background: #fee2e2 !important;
-    color: #991b1b !important;
-    border: 1px solid #fecaca;
-}
-
-.etq-pendiente,
-.etq-creada,
-.etq-asignada {
-    background: #fef3c7 !important;
-    color: #92400e !important;
-    border: 1px solid #fde68a;
-}
+.etq-ejecutada, .etq-efectiva { background: #dcfce7 !important; color: #166534 !important; border: 1px solid #bbf7d0; }
+.etq-no-ejecutada, .etq-anulada, .etq-cancelada { background: #fee2e2 !important; color: #991b1b !important; border: 1px solid #fecaca; }
+.etq-pendiente, .etq-creada, .etq-asignada { background: #fef3c7 !important; color: #92400e !important; border: 1px solid #fde68a; }
 .sin-datos { padding: 22px 12px !important; text-align: center; color: var(--texto-3); }
 
-/* MATRIZ DEL RESUMEN */
+/* =========================================================
+   MATRIZ DEL RESUMEN POR TÉCNICO
+========================================================= */
+.res-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 0 12px 6px; }
+.res-botones { display: flex; gap: 5px; }
+
 .tabla-res { min-width: 100%; table-layout: auto; }
-.tabla-res .c-nombre {
-    position: sticky; left: 0; z-index: 6; min-width: 190px;
-    background: #fff; font-weight: 700; color: var(--texto);
-    text-transform: uppercase; box-shadow: 2px 0 5px rgba(15, 23, 42, .06);
-}
-.tabla-res thead .c-nombre { z-index: 30; background: #e3ece7; }
-.tabla-res tbody tr:hover td.c-nombre { background: #f4f9f6; }
 .tabla-res th.col-dato { min-width: 58px; text-align: center; padding: 5px 4px; }
 .tabla-res td.col-dato { text-align: center; padding: 4px; }
 
-/* Par de pastillas: ejecutadas | no ejecutadas */
-.par { display: inline-flex; gap: 3px; align-items: center; justify-content: center; }
+.tabla-res .c-nombre {
+    position: sticky; left: 0; z-index: 6; min-width: 230px;
+    background: #fff; box-shadow: 2px 0 5px rgba(15, 23, 42, .06);
+}
+.tabla-res thead .c-nombre { z-index: 30; background: #e3ece7; }
 
+/* Columnas fijas a la derecha: TOTAL y EFECTIVIDAD */
+.tabla-res th.col-total, .tabla-res td.col-total {
+    position: sticky; right: 96px; min-width: 96px; width: 96px;
+    text-align: center; background: #f8fafc; border-left: 2px solid #cfdcd4;
+}
+.tabla-res th.col-efec, .tabla-res td.col-efec {
+    position: sticky; right: 0; min-width: 96px; width: 96px;
+    text-align: center; background: #f8fafc; border-right: 0;
+    box-shadow: -2px 0 5px rgba(15, 23, 42, .05);
+}
+.tabla-res td.col-total, .tabla-res td.col-efec { z-index: 5; }
+.tabla-res thead th.col-total, .tabla-res thead th.col-efec { z-index: 25; background: #e3ece7; }
+
+/* Grupo de cada técnico */
+.tabla-res tbody.grupo tr.fila-tec td { border-top: 2px solid #cfdcd4; background: #fff; }
+.tabla-res tbody.grupo tr.fila-tec td.col-total,
+.tabla-res tbody.grupo tr.fila-tec td.col-efec { background: #f1f6f3; }
+.tabla-res tbody.grupo tr.fila-tec td.c-nombre { border-left: 4px solid var(--verde-900); }
+
+.tec-nombre { display: flex; align-items: center; gap: 7px; }
+.tec-nombre .nom { font-weight: 800; color: var(--texto); text-transform: uppercase; overflow-wrap: anywhere; }
+.tec-nombre .n-tipos { margin-left: auto; padding: 1px 7px; border-radius: 999px; background: var(--verde-100); color: var(--verde-900); font-size: 9px; font-weight: 800; white-space: nowrap; }
+
+.tog {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 18px; height: 18px; padding: 0; border: 1px solid #cfdcd4; border-radius: 4px;
+    background: #fff; color: #334155; font-size: 9px; line-height: 1; cursor: pointer;
+    transition: transform .15s ease, background-color .15s ease;
+}
+.tog:hover { background: var(--verde-100); }
+.tog .flecha { display: inline-block; transition: transform .15s ease; }
+tbody.colapsado .tog .flecha { transform: rotate(-90deg); }
+tbody.colapsado tr.fila-tipo { display: none; }
+
+/* Filas por tipo de operación */
+.tabla-res tr.fila-tipo td { background: #fafcfb; font-size: 9px; }
+.tabla-res tr.fila-tipo td.c-nombre {
+    padding-left: 34px; font-weight: 600; color: var(--texto-2);
+    border-left: 4px solid #cfe3d6; background: #fafcfb;
+}
+.tabla-res tr.fila-tipo td.col-total, .tabla-res tr.fila-tipo td.col-efec { background: #f1f5f9; }
+
+/* Pastillas */
+.par { display: inline-flex; gap: 3px; align-items: center; justify-content: center; }
 .cel {
     display: inline-block; min-width: 22px; padding: 2px 6px; border-radius: 999px;
     font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums;
-    text-align: center; text-decoration: none;
-    transition: filter .15s ease, box-shadow .15s ease;
+    text-align: center; text-decoration: none; transition: filter .15s ease, box-shadow .15s ease;
 }
 .cel.ej { background: #dcfce7; color: #166534; }
 .cel.no { background: #fee2e2; color: #b91c1c; }
 .cel.nada { background: #f1f5f9; color: #cbd5e1; font-weight: 600; }
 a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 .cero { color: #cbd5e1; }
+.tipo-card.activo .cel { box-shadow: none; }
 
-.tabla-res th.col-total,
-.tabla-res td.col-total { text-align: center; background: #f8fafc; border-left: 2px solid #cfdcd4; min-width: 80px; }
+/* Efectividad por fila */
+.efec { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
+.efec .efec-pct { font-size: 10px; font-weight: 800; color: var(--texto); font-variant-numeric: tabular-nums; }
 
+/* Totales fijos abajo */
 .tabla-res tfoot td {
     position: sticky; bottom: 0; z-index: 8; padding: 6px 4px;
     background: var(--verde-100); font-weight: 800; color: var(--texto);
     text-align: center; border-top: 2px solid #cfe0d5;
 }
-.tabla-res tfoot td.c-nombre { z-index: 12; text-align: left; padding-left: 8px; background: var(--verde-100); }
-.tabla-res tfoot td.col-total { background: #dcebe2; }
+.tabla-res tfoot td.c-nombre { z-index: 12; text-align: left; padding-left: 12px; background: var(--verde-100); }
+.tabla-res tfoot td.col-total { z-index: 14; background: #dcebe2; }
+.tabla-res tfoot td.col-efec  { z-index: 14; background: #dcebe2; }
 
 /* LISTADO */
 .cons-total { font-size: 9px; color: var(--texto-2); }
 .cons-total strong { font-size: 11px; color: var(--texto); }
-.cons-paginacion {
-    display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
-    gap: 6px; padding: 0 12px 12px;
-}
+.cons-paginacion { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 0 12px 12px; }
 .cons-paginacion .pag-info {
     padding: 5px 12px; font-size: 9px; font-weight: 700; color: var(--texto-2);
     background: var(--verde-100); border: 1px solid #d8e8dc; border-radius: 5px;
 }
+.candidatas { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 8px; }
+
+/* IVT y observaciones */
+.chip-ivt {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: #ede9fe; color: #5b21b6; font-size: 9px; font-weight: 800; font-family: monospace; white-space: nowrap;
+}
+.chip-ivt.perdido { background: #fee2e2; color: #991b1b; }
+.obs-celda { max-width: 240px; white-space: normal; line-height: 1.4; color: var(--texto-2); }
+
+/* =========================================================
+   DETALLE DE ORDEN
+========================================================= */
+.det-orden { --det-borde: #dfe7e2; --det-verde: #166534; --det-texto: #1e293b; --det-sec: #64748b; color: var(--det-texto); font-size: 10px; }
+.det-header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    padding: 12px 15px; margin-bottom: 10px; background: #f0f5f2;
+    border: 1px solid var(--det-borde); border-left: 4px solid var(--det-verde); border-radius: 7px;
+}
+.det-header-info { display: flex; flex-direction: column; gap: 3px; }
+.det-header-info .det-label { font-size: 9px; font-weight: 800; letter-spacing: .7px; color: var(--det-sec); }
+.det-header-info h2 { margin: 0; font-size: 17px; font-weight: 800; color: var(--det-texto); }
+.det-header-info p { margin: 0; font-size: 10px; color: var(--det-sec); }
+.det-header-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+
+.det-card { margin-bottom: 10px; background: #fff; border: 1px solid var(--det-borde); border-radius: 7px; overflow: hidden; }
+.det-card-header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    padding: 9px 12px; background: #f0f5f2; border-bottom: 1px solid var(--det-borde);
+}
+.det-card-header h3 { margin: 0; font-size: 11px; font-weight: 800; color: var(--det-texto); }
+.det-card-header p { margin: 2px 0 0; font-size: 9px; color: var(--det-sec); }
+
+.det-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 12px; }
+.det-dato { min-width: 0; padding: 9px 10px; background: #fafcfb; border: 1px solid #e8eeea; border-radius: 5px; }
+.det-dato .etiqueta { display: block; margin-bottom: 5px; font-size: 9px; font-weight: 700; color: var(--det-sec); text-transform: uppercase; letter-spacing: .3px; }
+.det-dato .valor { display: block; overflow-wrap: anywhere; font-size: 11px; font-weight: 800; color: var(--det-texto); }
+.det-dato.destacado { background: #f0f7f2; border-color: #cfe3d6; }
+.det-dato.destacado .valor { color: var(--det-verde); }
+
+.det-estado { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.det-estado.ok { background: #dcfce7; color: #166534; }
+.det-estado.error { background: #fee2e2; color: #991b1b; }
+.det-estado.pendiente { background: #fef3c7; color: #92400e; }
+.det-estado.neutro { background: #e2e8f0; color: #475569; }
+
+.det-tabla-scroll { width: 100%; overflow-x: auto; }
+.det-tabla { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 10px; }
+.det-tabla th {
+    padding: 9px 10px; background: #f8faf9; color: #475569; font-size: 9px; font-weight: 800;
+    text-align: left; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; border-bottom: 1px solid var(--det-borde);
+}
+.det-tabla td { padding: 8px 10px; color: #334155; border-bottom: 1px solid #edf1ee; vertical-align: middle; }
+.det-tabla tbody tr:last-child td { border-bottom: 0; }
+.det-tabla tbody tr:hover td { background: #f5f9f6; }
+.det-tabla .principal { font-weight: 800; color: var(--det-texto); }
+.det-tabla .secundario, .det-dato .secundario { display: block; margin-top: 3px; font-size: 9px; color: var(--det-sec); }
+.det-tabla .centro { text-align: center; }
+
+.det-inc-pendiente td { background: #fffbeb; }
+.det-inc-resuelta td { background: #fff; }
+.det-inc-pendiente:hover td { background: #fef3c7 !important; }
+.det-inc-resuelta:hover td { background: #f0fdf4 !important; }
+.det-contador {
+    display: inline-flex; justify-content: center; align-items: center; min-width: 22px; height: 22px; padding: 0 7px;
+    background: #fef3c7; color: #92400e; border-radius: 999px; font-size: 10px; font-weight: 800;
+}
+.det-vacio { padding: 22px 12px !important; text-align: center; color: #94a3b8 !important; font-size: 10px; }
+.det-vacio .icono { display: block; margin-bottom: 5px; font-size: 20px; }
+.det-serial { font-family: monospace; font-size: 10px; font-weight: 800; color: #1d4ed8; }
 
 /* RESPONSIVE */
 @media (max-width: 1300px) {
     .cons-filtros { grid-template-columns: repeat(4, 1fr); }
     .cons-filtros .f-q, .cons-filtros .f-botones { grid-column: 1 / -1; }
 }
+@media (max-width: 1100px) {
+    .det-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 768px) {
     .cons-filtros { grid-template-columns: 1fr 1fr; padding: 8px; }
     .cons-scroll { margin-left: 8px; margin-right: 8px; }
+    .tabla-res .c-nombre { min-width: 170px; }
 }
-
-/* =========================================================
-   DETALLE PROFESIONAL DE ORDEN
-========================================================= */
-
-.det-orden {
-    --det-borde: #dfe7e2;
-    --det-fondo: #f5f8f6;
-    --det-verde: #166534;
-    --det-texto: #1e293b;
-    --det-sec: #64748b;
-    color: var(--det-texto);
-    font-size: 10px;
-}
-
-/* CABECERA DEL DETALLE */
-.det-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 12px 15px;
-    margin-bottom: 10px;
-    background: #f0f5f2;
-    border: 1px solid var(--det-borde);
-    border-left: 4px solid var(--det-verde);
-    border-radius: 7px;
-}
-
-.det-header-info {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.det-header-info .det-label {
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .7px;
-    color: var(--det-sec);
-}
-
-.det-header-info h2 {
-    margin: 0;
-    font-size: 17px;
-    font-weight: 800;
-    color: var(--det-texto);
-}
-
-.det-header-info p {
-    margin: 0;
-    font-size: 10px;
-    color: var(--det-sec);
-}
-
-.det-header-acciones {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 7px;
-}
-
-/* TARJETA GENERAL */
-.det-card {
-    margin-bottom: 10px;
-    background: #fff;
-    border: 1px solid var(--det-borde);
-    border-radius: 7px;
-    overflow: hidden;
-}
-
-.det-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 9px 12px;
-    background: #f0f5f2;
-    border-bottom: 1px solid var(--det-borde);
-}
-
-.det-card-header h3 {
-    margin: 0;
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--det-texto);
-}
-
-.det-card-header p {
-    margin: 2px 0 0;
-    font-size: 9px;
-    color: var(--det-sec);
-}
-
-/* INFORMACIÓN GENERAL */
-.det-grid {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 8px;
-    padding: 12px;
-}
-
-.det-dato {
-    min-width: 0;
-    padding: 9px 10px;
-    background: #fafcfb;
-    border: 1px solid #e8eeea;
-    border-radius: 5px;
-}
-
-.det-dato .etiqueta {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--det-sec);
-    text-transform: uppercase;
-    letter-spacing: .3px;
-}
-
-.det-dato .valor {
-    display: block;
-    overflow-wrap: anywhere;
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--det-texto);
-}
-
-.det-dato.destacado {
-    background: #f0f7f2;
-    border-color: #cfe3d6;
-}
-
-.det-dato.destacado .valor {
-    color: var(--det-verde);
-}
-
-/* INDICADORES */
-.det-estado {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 9px;
-    border-radius: 999px;
-    font-size: 9px;
-    font-weight: 800;
-    white-space: nowrap;
-}
-
-.det-estado.ok {
-    background: #dcfce7;
-    color: #166534;
-}
-
-.det-estado.error {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.det-estado.pendiente {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.det-estado.neutro {
-    background: #e2e8f0;
-    color: #475569;
-}
-
-/* CONTENIDO DE TARJETAS */
-.det-card-body {
-    padding: 10px 12px;
-}
-
-/* TABLAS DEL DETALLE */
-.det-tabla-scroll {
-    width: 100%;
-    overflow-x: auto;
-}
-
-.det-tabla {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 10px;
-}
-
-.det-tabla th {
-    padding: 9px 10px;
-    background: #f8faf9;
-    color: #475569;
-    font-size: 9px;
-    font-weight: 800;
-    text-align: left;
-    text-transform: uppercase;
-    letter-spacing: .3px;
-    white-space: nowrap;
-    border-bottom: 1px solid var(--det-borde);
-}
-
-.det-tabla td {
-    padding: 8px 10px;
-    color: #334155;
-    border-bottom: 1px solid #edf1ee;
-    vertical-align: middle;
-}
-
-.det-tabla tbody tr:last-child td {
-    border-bottom: 0;
-}
-
-.det-tabla tbody tr:hover td {
-    background: #f5f9f6;
-}
-
-.det-tabla .principal {
-    font-weight: 800;
-    color: var(--det-texto);
-}
-
-.det-tabla .secundario {
-    display: block;
-    margin-top: 3px;
-    font-size: 9px;
-    color: var(--det-sec);
-}
-
-.det-tabla .centro {
-    text-align: center;
-}
-
-/* INCONSISTENCIAS */
-.det-inc-pendiente td {
-    background: #fffbeb;
-}
-
-.det-inc-resuelta td {
-    background: #fff;
-}
-
-.det-inc-pendiente:hover td {
-    background: #fef3c7 !important;
-}
-
-.det-inc-resuelta:hover td {
-    background: #f0fdf4 !important;
-}
-
-.det-contador {
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 7px;
-    background: #fef3c7;
-    color: #92400e;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 800;
-}
-
-/* MENSAJES VACÍOS */
-.det-vacio {
-    padding: 22px 12px !important;
-    text-align: center;
-    color: #94a3b8 !important;
-    font-size: 10px;
-}
-
-.det-vacio .icono {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 20px;
-}
-
-/* IDENTIFICADORES */
-.det-serial {
-    font-family: monospace;
-    font-size: 10px;
-    font-weight: 800;
-    color: #1d4ed8;
-}
-
-/* RESPONSIVE */
-@media (max-width: 1100px) {
-    .det-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
 @media (max-width: 650px) {
-    .det-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        padding: 8px;
-    }
-
-    .det-header {
-        align-items: flex-start;
-    }
-
-    .det-header-acciones {
-        width: 100%;
-    }
-
-    .det-header-acciones a {
-        flex: 1;
-    }
-
-    .det-card-body {
-        padding: 8px;
-    }
+    .det-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; }
+    .det-header { align-items: flex-start; }
+    .det-header-acciones { width: 100%; }
+    .det-header-acciones a { flex: 1; }
 }
-
 </style>
 {% endblock %}
 
@@ -686,23 +505,15 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 
 {% if mostrar_listado %}
 
-    <!-- ============ RESUMEN DE EJECUCIÓN POR TÉCNICO ============ -->
+    <!-- ============================================================
+         RESUMEN DE EJECUCIÓN · KPIs
+    ============================================================ -->
     {% if resumen %}
     <div class="cons-card">
         <div class="cons-card-cab">
             <div>
-                <h2>Resumen de ejecución por técnico · {{ resumen.titulo }}</h2>
-                <p>
-                    {% if resumen.nivel == "mes" %}
-                        Órdenes por mes. Haga clic en un número (o en el mes) para ver los días de ese mes.
-                    {% else %}
-                        Órdenes por día. Haga clic en un número (o en el día) para ver las órdenes de ese día.
-                    {% endif %}
-                </p>
-                <div class="leyenda">
-                    <span><i class="ej"></i> Ejecutadas</span>
-                    <span><i class="no"></i> No ejecutadas</span>
-                </div>
+                <h2>Resumen de ejecución · {{ resumen.titulo }}</h2>
+                <p>Órdenes ejecutadas frente a no ejecutadas, según los filtros aplicados.</p>
             </div>
 
             <div class="anios">
@@ -715,65 +526,214 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
             </div>
         </div>
 
+        {% with evaluadas=resumen.total_ej|add:resumen.total_no %}
+        <div class="kpis">
+
+            <div class="kpi k-total">
+                <span>Órdenes evaluadas</span>
+                <strong>{{ evaluadas }}</strong>
+            </div>
+
+            <div class="kpi k-ej">
+                <span>Ejecutadas</span>
+                <strong>{{ resumen.total_ej }}</strong>
+            </div>
+
+            <div class="kpi k-no">
+                <span>No ejecutadas</span>
+                <strong>{{ resumen.total_no }}</strong>
+            </div>
+
+            <div class="kpi k-efec">
+                <span>Efectividad</span>
+                {% widthratio resumen.total_ej evaluadas 100 as pct_global %}
+                <strong>{{ pct_global }}%</strong>
+                <div class="barra" title="Ejecutadas vs no ejecutadas">
+                    <i data-v="{{ resumen.total_ej }}"></i>
+                    <b data-v="{{ resumen.total_no }}"></b>
+                </div>
+            </div>
+
+            <div class="kpi k-tec">
+                <span>Técnicos con órdenes</span>
+                <strong>{{ resumen.filas|length }}</strong>
+            </div>
+
+        </div>
+        {% endwith %}
+    </div>
+    {% endif %}
+
+
+
+
+
+    <!-- ============================================================
+         MATRIZ: EJECUCIÓN POR TÉCNICO Y TIPO DE OPERACIÓN
+    ============================================================ -->
+    {% if resumen %}
+    <div class="cons-card">
+        <div class="cons-card-cab">
+            <div>
+                <h2>Ejecución por técnico y tipo de operación</h2>
+                <p>
+                    {% if resumen.nivel == "mes" %}
+                        Órdenes por mes. Haga clic en un número (o en el mes) para ver los días de ese mes.
+                    {% else %}
+                        Órdenes por día. Haga clic en un número (o en el día) para ver las órdenes de ese día.
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="res-botones">
+                <button type="button" class="btn-mini" id="btnExpandir">Expandir todo</button>
+                <button type="button" class="btn-mini" id="btnContraer">Contraer todo</button>
+            </div>
+        </div>
+
         <div class="cons-scroll">
             <table class="tabla-c tabla-res">
+
                 <thead>
                     <tr>
-                        <th class="c-nombre">TÉCNICO</th>
+                        <th class="c-nombre">TÉCNICO / TIPO DE OPERACIÓN</th>
                         {% for c in resumen.columnas %}
                             <th class="col-dato"><a href="{{ c.url }}" title="Ver {{ c.label }}">{{ c.label }}</a></th>
                         {% endfor %}
                         <th class="col-total">TOTAL</th>
+                        <th class="col-efec">EFECTIVIDAD</th>
                     </tr>
                 </thead>
 
-                <tbody>
-                    {% for f in resumen.filas %}
-                        <tr>
-                            <td class="c-nombre">{{ f.nombre }}</td>
+                {% for f in resumen.filas %}
+                <tbody class="grupo">
 
-                            {% for c in f.celdas %}
-                                <td class="col-dato">
-                                    {% if c.ej or c.no %}
-                                        <div class="par">
-                                            {% if c.ej %}
-                                                <a class="cel ej" href="{{ c.url_ej }}" title="Ejecutadas">{{ c.ej }}</a>
-                                            {% else %}
-                                                <span class="cel nada">0</span>
-                                            {% endif %}
+                    <!-- Fila del técnico -->
+                    <tr class="fila-tec">
+                        <td class="c-nombre">
+                            <div class="tec-nombre">
+                                {% if f.tipos %}
+                                    <button type="button" class="tog" aria-expanded="true" title="Mostrar u ocultar tipos de operación">
+                                        <span class="flecha">▼</span>
+                                    </button>
+                                {% endif %}
+                                <span class="nom">{{ f.nombre }}</span>
+                                {% if f.tipos %}<span class="n-tipos">{{ f.tipos|length }} tipo{{ f.tipos|length|pluralize }}</span>{% endif %}
+                            </div>
+                        </td>
 
-                                            {% if c.no %}
-                                                <a class="cel no" href="{{ c.url_no }}" title="No ejecutadas">{{ c.no }}</a>
-                                            {% else %}
-                                                <span class="cel nada">0</span>
-                                            {% endif %}
-                                        </div>
-                                    {% else %}
-                                        <span class="cero">·</span>
-                                    {% endif %}
-                                </td>
-                            {% endfor %}
-
-                            <td class="col-total">
-                                <div class="par">
-                                    {% if f.total_ej %}
-                                        <a class="cel ej" href="{{ f.url_ej }}" title="Ejecutadas">{{ f.total_ej }}</a>
-                                    {% else %}
-                                        <span class="cel nada">0</span>
-                                    {% endif %}
-
-                                    {% if f.total_no %}
-                                        <a class="cel no" href="{{ f.url_no }}" title="No ejecutadas">{{ f.total_no }}</a>
-                                    {% else %}
-                                        <span class="cel nada">0</span>
-                                    {% endif %}
-                                </div>
+                        {% for c in f.celdas %}
+                            <td class="col-dato">
+                                {% if c.ej or c.no %}
+                                    <div class="par">
+                                        {% if c.ej %}
+                                            <a class="cel ej" href="{{ c.url_ej }}" title="Ejecutadas">{{ c.ej }}</a>
+                                        {% else %}
+                                            <span class="cel nada">0</span>
+                                        {% endif %}
+                                        {% if c.no %}
+                                            <a class="cel no" href="{{ c.url_no }}" title="No ejecutadas">{{ c.no }}</a>
+                                        {% else %}
+                                            <span class="cel nada">0</span>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="cero">·</span>
+                                {% endif %}
                             </td>
-                        </tr>
-                    {% empty %}
-                        <tr><td class="sin-datos" colspan="{{ resumen.columnas|length|add:2 }}">No hay órdenes en este período con los filtros seleccionados.</td></tr>
+                        {% endfor %}
+
+                        <td class="col-total">
+                            <div class="par">
+                                {% if f.total_ej %}
+                                    <a class="cel ej" href="{{ f.url_ej }}" title="Ejecutadas">{{ f.total_ej }}</a>
+                                {% else %}
+                                    <span class="cel nada">0</span>
+                                {% endif %}
+                                {% if f.total_no %}
+                                    <a class="cel no" href="{{ f.url_no }}" title="No ejecutadas">{{ f.total_no }}</a>
+                                {% else %}
+                                    <span class="cel nada">0</span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <td class="col-efec">
+                            {% with tt=f.total_ej|add:f.total_no %}
+                                {% if tt %}
+                                    {% widthratio f.total_ej tt 100 as pct_f %}
+                                    <div class="efec">
+                                        <span class="efec-pct">{{ pct_f }}%</span>
+                                        <span class="barra"><i data-v="{{ f.total_ej }}"></i><b data-v="{{ f.total_no }}"></b></span>
+                                    </div>
+                                {% else %}
+                                    <span class="cero">·</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+
+                    <!-- Una fila por tipo de operación -->
+                    {% for t in f.tipos %}
+                    <tr class="fila-tipo">
+                        <td class="c-nombre">{{ t.label }}</td>
+
+                        {% for c in t.celdas %}
+                            <td class="col-dato">
+                                {% if c.ej or c.no %}
+                                    <div class="par">
+                                        {% if c.ej %}
+                                            <a class="cel ej" href="{{ c.url_ej }}" title="{{ t.label }} · ejecutadas">{{ c.ej }}</a>
+                                        {% else %}
+                                            <span class="cel nada">0</span>
+                                        {% endif %}
+                                        {% if c.no %}
+                                            <a class="cel no" href="{{ c.url_no }}" title="{{ t.label }} · no ejecutadas">{{ c.no }}</a>
+                                        {% else %}
+                                            <span class="cel nada">0</span>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="cero">·</span>
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+
+                        <td class="col-total">
+                            <div class="par">
+                                {% if t.total_ej %}
+                                    <a class="cel ej" href="{{ t.url_ej }}">{{ t.total_ej }}</a>
+                                {% else %}
+                                    <span class="cel nada">0</span>
+                                {% endif %}
+                                {% if t.total_no %}
+                                    <a class="cel no" href="{{ t.url_no }}">{{ t.total_no }}</a>
+                                {% else %}
+                                    <span class="cel nada">0</span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <td class="col-efec">
+                            {% if t.total %}
+                                {% widthratio t.total_ej t.total 100 as pct_t %}
+                                <div class="efec">
+                                    <span class="efec-pct">{{ pct_t }}%</span>
+                                    <span class="barra"><i data-v="{{ t.total_ej }}"></i><b data-v="{{ t.total_no }}"></b></span>
+                                </div>
+                            {% else %}
+                                <span class="cero">·</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                     {% endfor %}
+
                 </tbody>
+                {% empty %}
+                <tbody>
+                    <tr><td class="sin-datos" colspan="{{ resumen.columnas|length|add:3 }}">No hay órdenes en este período con los filtros seleccionados.</td></tr>
+                </tbody>
+                {% endfor %}
 
                 {% if resumen.filas %}
                 <tfoot>
@@ -797,22 +757,38 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                                 <span class="cel no">{{ resumen.total_no }}</span>
                             </div>
                         </td>
+                        <td class="col-efec">
+                            {% with tt=resumen.total_ej|add:resumen.total_no %}
+                                {% if tt %}
+                                    {% widthratio resumen.total_ej tt 100 as pct_tf %}
+                                    <div class="efec">
+                                        <span class="efec-pct">{{ pct_tf }}%</span>
+                                        <span class="barra"><i data-v="{{ resumen.total_ej }}"></i><b data-v="{{ resumen.total_no }}"></b></span>
+                                    </div>
+                                {% else %}
+                                    <span class="cero">·</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
                     </tr>
                 </tfoot>
                 {% endif %}
+
             </table>
         </div>
     </div>
     {% endif %}
 
 
-    <!-- ============ LISTADO DE ÓRDENES ============ -->
+    <!-- ============================================================
+         LISTADO DE ÓRDENES
+    ============================================================ -->
     <div class="cons-card">
         <div class="cons-card-cab">
             <div>
                 <h2>Órdenes registradas</h2>
                 {% if migas %}
-                    <div class="cons-migas" style="margin:4px 0 0;">
+                    <div class="cons-migas" style="margin-top:4px;">
                         <span>Filtrando por:</span>
                         {% for m in migas %}
                             <span class="miga">{{ m.label }} <a href="{{ m.quitar }}" title="Quitar filtro">×</a></span>
@@ -832,7 +808,9 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                         <th>TIPO DE OPERACIÓN</th>
                         <th>ESTADO</th>
                         <th>TÉCNICO</th>
+                        <th>IVT</th>
                         <th>FECHA</th>
+                        <th>OBSERVACIONES</th>
                         <th class="centro">SOPORTE</th>
                         <th class="centro">EDITAR</th>
                         <th class="centro">INCONSISTENCIAS</th>
@@ -842,71 +820,61 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                 <tbody>
                     {% for o in page_obj %}
                         <tr>
-                            <td>
-                                <a href="?detalle={{ o.numero_orden|urlencode }}" class="orden">{{ o.numero_orden }}</a>
-                            </td>
+                            <td><a href="?detalle={{ o.numero_orden|urlencode }}" class="orden">{{ o.numero_orden }}</a></td>
                             <td>{{ o.numero_cuenta_contrato|default:"—" }}</td>
                             <td>{{ o.get_tipo_operacion_display }}</td>
-                            
-<td>
-    <span class="etq
-        {% if o.estado == 'EFECTIVA' %}
-            etq-efectiva
-        {% elif o.estado == 'EJECUTADA' %}
-            etq-ejecutada
-        {% elif o.estado == 'NO_EJECUTADA' %}
-            etq-no-ejecutada
-        {% elif o.estado == 'ANULADA' %}
-            etq-anulada
-        {% elif o.estado == 'CANCELADA' %}
-            etq-cancelada
-        {% elif o.estado == 'PENDIENTE' or o.estado == 'CREADA' or o.estado == 'ASIGNADA' %}
-            etq-pendiente
-        {% else %}
-            etq-no-ejecutada
-        {% endif %}">
-        {{ o.get_estado_display }}
-    </span>
-</td>
 
                             <td>
-                                {% if o.tecnico %}{{ o.tecnico.get_full_name|default:o.tecnico.username }}{% else %}—{% endif %}
+                                <span class="etq
+                                    {% if o.estado == 'EFECTIVA' %}etq-efectiva
+                                    {% elif o.estado == 'EJECUTADA' %}etq-ejecutada
+                                    {% elif o.estado == 'NO_EJECUTADA' %}etq-no-ejecutada
+                                    {% elif o.estado == 'ANULADA' %}etq-anulada
+                                    {% elif o.estado == 'CANCELADA' %}etq-cancelada
+                                    {% elif o.estado == 'PENDIENTE' or o.estado == 'CREADA' or o.estado == 'ASIGNADA' %}etq-pendiente
+                                    {% else %}etq-no-ejecutada{% endif %}">
+                                    {{ o.get_estado_display }}
+                                </span>
                             </td>
+
+                            <td>{% if o.tecnico %}{{ o.tecnico.get_full_name|default:o.tecnico.username }}{% else %}—{% endif %}</td>
+
+                            <td>
+                                {% for ivt in o.ivts.all %}
+                                    <span class="chip-ivt {% if ivt.fisico_perdido %}perdido{% endif %}"
+                                          title="{% if ivt.fisico_perdido %}Físico extraviado{% else %}IVT instalado{% endif %}">{{ ivt.codigo }}</span>
+                                {% empty %}
+                                    <span class="cero">—</span>
+                                {% endfor %}
+                            </td>
+
                             <td>{{ o.fecha_operacion|date:"d/m/Y"|default:"—" }}</td>
+
+                            <td class="obs-celda" title="{{ o.observaciones }}">
+                                {% if o.observaciones %}{{ o.observaciones|truncatechars:90 }}{% else %}<span class="cero">—</span>{% endif %}
+                            </td>
 
                             <td class="centro">
                                 {% if o.archivo_soporte %}
-                                    <a href="{% url 'operaciones:soporte' o.pk %}"
-                                       target="_blank" rel="noopener noreferrer"
-                                       class="btn-mini azul">Ver soporte</a>
+                                    <a href="{% url 'operaciones:soporte' o.pk %}" target="_blank" rel="noopener noreferrer" class="btn-mini azul">Ver soporte</a>
                                 {% else %}
                                     <span class="cero">Sin soporte</span>
                                 {% endif %}
                             </td>
 
                             <td class="centro">
-                                <a href="{% url 'operaciones:editar_instalacion' o.pk %}"
-                                class="btn-mini warn"
-                                onclick="return solicitarPassword(event, this, 'editar')">
-                                    ✏ Editar
-                                </a>
+                                <a href="{% url 'operaciones:editar_instalacion' o.pk %}" class="btn-mini warn"
+                                   onclick="return solicitarPassword(event, this, 'editar')">✏ Editar</a>
                             </td>
 
                             <td class="centro">
                                 {% if o.n_inc %}
                                     <span class="etq etq-inc">⚠ {{ o.n_inc }}</span>
 
-                                    <form method="post"
-                                        action="{% url 'operaciones:operacion_reabrir' o.pk %}"
-                                        class="d-inline">
-
+                                    <form method="post" action="{% url 'operaciones:operacion_reabrir' o.pk %}" class="d-inline">
                                         {% csrf_token %}
-
-                                        <button type="submit"
-                                                class="btn-mini danger"
-                                                onclick="return solicitarPassword(event, this, 'reactivar')">
-                                            ↩ Reactivar
-                                        </button>
+                                        <button type="submit" class="btn-mini danger"
+                                                onclick="return solicitarPassword(event, this, 'reactivar')">↩ Reactivar</button>
                                     </form>
                                 {% else %}
                                     <span class="cero">—</span>
@@ -915,7 +883,17 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="9" class="sin-datos">No se encontraron órdenes con los filtros seleccionados.</td>
+                            <td colspan="11" class="sin-datos">
+                                No se encontraron órdenes con los filtros seleccionados.
+                                {% if candidatas %}
+                                    <div class="candidatas">
+                                        <span>¿Quiso decir?</span>
+                                        {% for c in candidatas %}
+                                            <a class="btn-mini azul" href="?detalle={{ c.numero_orden|urlencode }}">{{ c.numero_orden }}</a>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -940,12 +918,106 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 {% endif %}
 
 
+<!-- ============================================================
+     BÚSQUEDA POR SERIAL O CÓDIGO DE UNIDAD
+============================================================ -->
+{% if bloques %}
+<div class="det-orden">
 
+    <div class="det-header">
+        <div class="det-header-info">
+            <span class="det-label">CONSULTA POR SERIAL O CÓDIGO</span>
+            <h2>{{ q }}</h2>
+            <p>Historial de asignaciones y registros SAP de la unidad.</p>
+        </div>
+        <div class="det-header-acciones">
+            <a href="{% url 'operaciones:consulta_orden' %}" class="btn-c gris">← Volver al listado</a>
+        </div>
+    </div>
+
+    {% for b in bloques %}
+    <div class="det-card">
+        <div class="det-card-header">
+            <div>
+                <h3>{{ b.unidad.producto.nombre_completo }}</h3>
+                <p>
+                    Serie: <span class="det-serial">{{ b.unidad.numero_serie|default:"—" }}</span>
+                    · Código: <span class="det-serial">{{ b.unidad.codigo }}</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="det-tabla-scroll">
+            <table class="det-tabla">
+                <thead>
+                    <tr><th colspan="4">Asignaciones</th></tr>
+                    <tr>
+                        <th>Orden</th><th>Técnico</th><th>Estado</th><th>Instalación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in b.asignaciones %}
+                        <tr>
+                            <td>
+                                {% if a.operacion %}
+                                    <a class="orden" style="color:#2563eb;font-weight:800;text-decoration:none;" href="?detalle={{ a.operacion.numero_orden|urlencode }}">{{ a.operacion.numero_orden }}</a>
+                                {% else %}—{% endif %}
+                            </td>
+                            <td>{% if a.tecnico %}{{ a.tecnico.get_full_name|default:a.tecnico.username }}{% else %}—{% endif %}</td>
+                            <td><span class="det-estado neutro">{{ a.get_estado_display }}</span></td>
+                            <td>{{ a.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="det-vacio">Sin asignaciones registradas.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <table class="det-tabla">
+                <thead>
+                    <tr><th colspan="4">Registros SAP</th></tr>
+                    <tr>
+                        <th>Carga</th><th>Orden</th><th>Estado</th><th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in b.registros %}
+                        <tr>
+                            <td>{{ r.carga.fecha|date:"d/m/Y H:i"|default:"—" }}</td>
+                            <td>{{ r.numero_orden|default:"—" }}</td>
+                            <td>
+                                {% if r.estado == "OK" %}
+                                    <span class="det-estado ok">✓ Coincide</span>
+                                {% elif r.estado == "IGNORADO" %}
+                                    <span class="det-estado neutro">Ignorado</span>
+                                {% else %}
+                                    <span class="det-estado error">{{ r.get_estado_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if r.tipo_error %}{{ r.tipo_error|sap_meta:"etiqueta" }}{% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="det-vacio">Sin registros SAP para esta unidad.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+{% endif %}
+
+
+<!-- ============================================================
+     DETALLE DE UNA ORDEN
+============================================================ -->
 {% if operacion %}
 
 <div class="det-orden">
 
-    <!-- CABECERA -->
     <div class="det-header">
         <div class="det-header-info">
             <span class="det-label">CONSULTA DE OPERACIÓN</span>
@@ -955,18 +1027,10 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 
         <div class="det-header-acciones">
             {% if operacion.archivo_soporte %}
-                <a href="{% url 'operaciones:soporte' operacion.pk %}"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   class="btn-mini azul">
-                    Ver soporte
-                </a>
+                <a href="{% url 'operaciones:soporte' operacion.pk %}" target="_blank" rel="noopener noreferrer" class="btn-mini azul">Ver soporte</a>
             {% endif %}
 
-            <a href="{% url 'operaciones:consulta_orden' %}"
-               class="btn-c gris">
-                ← Volver al listado
-            </a>
+            <a href="{% url 'operaciones:consulta_orden' %}" class="btn-c gris">← Volver al listado</a>
         </div>
     </div>
 
@@ -980,18 +1044,12 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                 <p>Datos principales de identificación y ejecución.</p>
             </div>
 
-            
-<span class="det-estado
-    {% if operacion.estado == 'EFECTIVA' or operacion.estado == 'EJECUTADA' %}
-        ok
-    {% elif operacion.estado == 'PENDIENTE' or operacion.estado == 'CREADA' or operacion.estado == 'ASIGNADA' %}
-        pendiente
-    {% else %}
-        error
-    {% endif %}">
-    {{ operacion.get_estado_display }}
-</span>
-
+            <span class="det-estado
+                {% if operacion.estado == 'EFECTIVA' or operacion.estado == 'EJECUTADA' %}ok
+                {% elif operacion.estado == 'PENDIENTE' or operacion.estado == 'CREADA' or operacion.estado == 'ASIGNADA' %}pendiente
+                {% else %}error{% endif %}">
+                {{ operacion.get_estado_display }}
+            </span>
         </div>
 
         <div class="det-grid">
@@ -1021,16 +1079,31 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                 <span class="valor">
                     {% if operacion.tecnico %}
                         {{ operacion.tecnico.get_full_name|default:operacion.tecnico.username }}
-                    {% else %}
-                        —
-                    {% endif %}
+                    {% else %}—{% endif %}
+                </span>
+            </div>
+
+            <div class="det-dato destacado">
+                <span class="etiqueta">IVT</span>
+                <span class="valor">
+                    {% for ivt in operacion.ivts.all %}
+                        <span class="chip-ivt {% if ivt.fisico_perdido %}perdido{% endif %}">{{ ivt.codigo }}</span>
+                        {% if ivt.fisico_perdido %}<span class="secundario">Físico extraviado</span>{% endif %}
+                    {% empty %}
+                        Sin IVT
+                    {% endfor %}
                 </span>
             </div>
 
             <div class="det-dato">
                 <span class="etiqueta">Fecha de operación</span>
-                <span class="valor">
-                    {{ operacion.fecha_operacion|date:"d/m/Y"|default:"—" }}
+                <span class="valor">{{ operacion.fecha_operacion|date:"d/m/Y"|default:"—" }}</span>
+            </div>
+
+            <div class="det-dato" style="grid-column: 1 / -1;">
+                <span class="etiqueta">Observaciones de la instalación</span>
+                <span class="valor" style="font-weight:600;">
+                    {{ operacion.observaciones|default:"Sin observaciones"|linebreaksbr }}
                 </span>
             </div>
 
@@ -1065,77 +1138,40 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                 <tbody>
                     {% for m in materiales %}
                     <tr>
+                        <td><span class="principal">{{ m.producto.nombre_completo }}</span></td>
 
                         <td>
-                            <span class="principal">
-                                {{ m.producto.nombre_completo }}
-                            </span>
-                        </td>
-
-                        <td>
-                            <span class="det-serial">
-                                {{ m.identificador_consulta }}
-                            </span>
-                            <span class="secundario">
-                                {{ m.tipo_identificador }}
-                            </span>
+                            <span class="det-serial">{{ m.identificador_consulta }}</span>
+                            <span class="secundario">{{ m.tipo_identificador }}</span>
                         </td>
 
                         <td class="centro">
-                            <strong>
-                                {% if m.unidad_serializada_id %}
-                                    1
-                                {% else %}
-                                    {{ m.cantidad }}
-                                {% endif %}
-                            </strong>
+                            <strong>{% if m.unidad_serializada_id %}1{% else %}{{ m.cantidad }}{% endif %}</strong>
                         </td>
 
-                        <td>
-                            <span class="det-estado neutro">
-                                {{ m.get_estado_display }}
-                            </span>
-                        </td>
+                        <td><span class="det-estado neutro">{{ m.get_estado_display }}</span></td>
 
                         <td>
-                            {% if m.tecnico %}
-                                {{ m.tecnico.get_full_name|default:m.tecnico.username }}
-                            {% else %}
-                                —
-                            {% endif %}
+                            {% if m.tecnico %}{{ m.tecnico.get_full_name|default:m.tecnico.username }}{% else %}—{% endif %}
                         </td>
 
-                        <td>
-                            {{ m.fecha_instalacion|date:"d/m/Y"|default:"—" }}
-                        </td>
+                        <td>{{ m.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
 
                         <td>
                             {% if m.sap %}
-
                                 {% if m.sap.estado == "OK" %}
                                     <span class="det-estado ok">✓ Coincide</span>
-
                                 {% elif m.sap.estado == "IGNORADO" %}
                                     <span class="det-estado neutro">Ignorado</span>
-
                                 {% else %}
-                                    <span class="det-estado error">
-                                        {{ m.sap.tipo_error|sap_meta:"etiqueta" }}
-                                    </span>
+                                    <span class="det-estado error">{{ m.sap.tipo_error|sap_meta:"etiqueta" }}</span>
                                 {% endif %}
-
                             {% elif m.unidad_serializada_id %}
-                                <span class="det-estado pendiente">
-                                    No reportado en SAP
-                                </span>
-
+                                <span class="det-estado pendiente">No reportado en SAP</span>
                             {% else %}
-                                <span class="det-estado neutro">
-                                    Opcional · No reportado
-                                </span>
+                                <span class="det-estado neutro">Opcional · No reportado</span>
                             {% endif %}
                         </td>
-
                     </tr>
 
                     {% empty %}
@@ -1162,9 +1198,7 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
             </div>
 
             {% if inconsistencias %}
-                <span class="det-contador">
-                    {{ inconsistencias|length }}
-                </span>
+                <span class="det-contador">{{ inconsistencias|length }}</span>
             {% endif %}
         </div>
 
@@ -1185,28 +1219,12 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 
                 <tbody>
                     {% for i in inconsistencias %}
-
                     <tr class="{% if i.estado == 'PENDIENTE' %}det-inc-pendiente{% else %}det-inc-resuelta{% endif %}">
 
-                        <td>
-                            <span class="principal">
-                                {{ i.get_tipo_display }}
-                            </span>
-                        </td>
-
-                        <td>
-                            {{ i.producto.nombre_completo|default:"—" }}
-                        </td>
-
-                        <td>
-                            <span class="det-serial">
-                                {{ i.serial_reportado|default:"—" }}
-                            </span>
-                        </td>
-
-                        <td class="centro">
-                            {{ i.cantidad }}
-                        </td>
+                        <td><span class="principal">{{ i.get_tipo_display }}</span></td>
+                        <td>{{ i.producto.nombre_completo|default:"—" }}</td>
+                        <td><span class="det-serial">{{ i.serial_reportado|default:"—" }}</span></td>
+                        <td class="centro">{{ i.cantidad }}</td>
 
                         <td>
                             {% if i.instalado %}
@@ -1216,28 +1234,18 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                             {% endif %}
                         </td>
 
-                        <td>
-                            {{ i.detalle|default:"—" }}
-                        </td>
+                        <td>{{ i.detalle|default:"—" }}</td>
 
                         <td>
                             {% if i.estado == 'PENDIENTE' %}
-                                <span class="det-estado pendiente">
-                                    ⚠ Pendiente
-                                </span>
+                                <span class="det-estado pendiente">⚠ Pendiente</span>
                             {% else %}
-                                <span class="det-estado ok">
-                                    ✓ Resuelta
-                                </span>
-
+                                <span class="det-estado ok">✓ Resuelta</span>
                                 {% if i.nota_resolucion %}
-                                    <span class="secundario">
-                                        {{ i.nota_resolucion }}
-                                    </span>
+                                    <span class="secundario">{{ i.nota_resolucion }}</span>
                                 {% endif %}
                             {% endif %}
                         </td>
-
                     </tr>
 
                     {% empty %}
@@ -1258,11 +1266,60 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 
 {% endif %}
 
-
 </div>
 
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+/* ---------- Barras ejecutadas | no ejecutadas ---------- */
+(function () {
+    document.querySelectorAll('.barra [data-v]').forEach(function (el) {
+        el.style.flex = (parseInt(el.getAttribute('data-v'), 10) || 0) + ' 1 0';
+    });
+})();
+
+/* ---------- Resumen: filas desplegables y tarjeta "Todos los tipos" ---------- */
+(function () {
+    var grupos = Array.prototype.slice.call(document.querySelectorAll('.tabla-res tbody.grupo'));
+
+    function fijar(grupo, abierto) {
+        grupo.classList.toggle('colapsado', !abierto);
+        var b = grupo.querySelector('.tog');
+        if (b) b.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    }
+
+    grupos.forEach(function (g) {
+        var b = g.querySelector('.tog');
+        if (b) b.addEventListener('click', function () {
+            fijar(g, g.classList.contains('colapsado'));
+        });
+    });
+
+    var bE = document.getElementById('btnExpandir');
+    var bC = document.getElementById('btnContraer');
+    if (bE) bE.addEventListener('click', function () { grupos.forEach(function (g) { fijar(g, true); }); });
+    if (bC) bC.addEventListener('click', function () { grupos.forEach(function (g) { fijar(g, false); }); });
+
+    // Suma de ejecutadas / no ejecutadas para la tarjeta "Todos los tipos"
+    var tarjetas = document.querySelectorAll('.tipo-card[data-ej]');
+    if (tarjetas.length) {
+        var ej = 0, no = 0;
+        tarjetas.forEach(function (t) {
+            ej += parseInt(t.getAttribute('data-ej'), 10) || 0;
+            no += parseInt(t.getAttribute('data-no'), 10) || 0;
+        });
+        var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+        set('todosEj', ej);
+        set('todosNo', no);
+        var total = ej + no;
+        set('todosPct', (total ? Math.round(ej * 100 / total) : 0) + '% efectivas');
+        var be = document.getElementById('todosBarEj'), bn = document.getElementById('todosBarNo');
+        if (be) be.style.flex = ej + ' 1 0';
+        if (bn) bn.style.flex = no + ' 1 0';
+    }
+})();
+</script>
 
 <script>
 let accionPendiente = null;
@@ -1384,5 +1441,4 @@ async function validarPassword(password) {
     }
 }
 </script>
-</div>
 {% endblock %}

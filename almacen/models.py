@@ -704,31 +704,41 @@ class EntregaItem(models.Model):
     def __str__(self):
         return f"{self.nombre_material} - {self.cantidad}"
 
-    # ---- helpers para que PDF/Excel/plantillas traten IVT como un material ----
+        # ---- helpers para que PDF/Excel/plantillas traten IVT como un material ----
     @property
     def es_ivt(self):
         return self.ivt_inicial is not None
 
     @property
     def nombre_material(self):
-        return "IVT (consecutivos)" if self.es_ivt else self.producto.nombre_completo
+        if self.es_ivt:
+            return "Informe de Visita Técnica (IVT)"
+        return self.producto.nombre_completo if self.producto_id else "—"
 
     @property
     def codigo_material(self):
-        return "IVT" if self.es_ivt else (self.producto.codigo_producto or "")
+        if self.es_ivt:
+            return "IVT"
+        return (self.producto.codigo_producto or "") if self.producto_id else ""
 
     @property
-    def texto_ivt(self):
-        """'00100-00149' (+ estado si es devolución)."""
+    def rango_ivt(self):
+        """'00100 - 00149' (o '00100' si es uno solo)."""
         if not self.es_ivt:
             return ""
         if self.ivt_inicial == self.ivt_final:
-            rango = f"{self.ivt_inicial:05d}"
-        else:
-            rango = f"{self.ivt_inicial:05d}-{self.ivt_final:05d}"
+            return f"{self.ivt_inicial:05d}"
+        return f"{self.ivt_inicial:05d} - {self.ivt_final:05d}"
+
+    @property
+    def texto_ivt(self):
+        """Rango + estado de retorno si es devolución."""
+        if not self.es_ivt:
+            return ""
+        texto = self.rango_ivt
         if self.estado_retorno:
-            rango += f" ({self.get_estado_retorno_display()})"
-        return rango
+            texto += f" ({self.get_estado_retorno_display()})"
+        return texto
 class Inconsistencia(models.Model):
 
     class Tipo(models.TextChoices):
@@ -739,6 +749,11 @@ class Inconsistencia(models.Model):
         NO_UTILIZABLE = "NO_UTILIZABLE", "Figura dañado o dado de baja"
         EXCEDE_CANTIDAD = "EXCEDE_CANTIDAD", "Instaló más de lo asignado"
         SIN_STOCK = "SIN_STOCK", "No asignado y sin existencias en el sistema"
+        IVT_NO_REGISTRADO = "IVT_NO_REGISTRADO", "IVT inexistente (no está registrado en el sistema)"
+        IVT_NO_ASIGNADO = "IVT_NO_ASIGNADO", "IVT no asignado al técnico (figura en almacén)"
+        IVT_OTRO_TECNICO = "IVT_OTRO_TECNICO", "IVT asignado a otro técnico"
+        IVT_YA_USADO = "IVT_YA_USADO", "IVT ya usado en otra orden"
+        IVT_NO_UTILIZABLE = "IVT_NO_UTILIZABLE", "IVT anulado o perdido"
 
     class Estado(models.TextChoices):
         PENDIENTE = "PENDIENTE", "Pendiente de revisar"

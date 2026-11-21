@@ -57,6 +57,162 @@ from .forms import OperacionEditarForm
 E = RegistroSAP.Estado
 
 
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from django.db.models import Count, Q
+
+# Ajusta si tu "ejecutada / no ejecutada" se define distinto
+ESTADOS_EJECUTADA = set(Operacion.ESTADOS_QUE_INSTALAN)
+ESTADOS_NO_EJECUTADA = {"NO_EJECUTADA"}
+
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from django.db.models import Count, Q
+
+# Estados que cuentan como "ejecutada" / "no ejecutada"
+ESTADOS_EJECUTADA = {getattr(e, "value", e) for e in Operacion.ESTADOS_QUE_INSTALAN}
+ESTADOS_NO_EJECUTADA = {"NO_EJECUTADA"}
+
+
+def _get(obj, clave, defecto=None):
+    """Lee de dict u objeto indistintamente."""
+    if isinstance(obj, dict):
+        return obj.get(clave, defecto)
+    return getattr(obj, clave, defecto)
+
+
+def _con_tipo(url, tipo):
+    """Toma una URL del resumen y le pone/reemplaza ?tipo=..."""
+    if not url:
+        return ""
+    p = urlsplit(url)
+    params = [(k, v) for k, v in parse_qsl(p.query) if k != "tipo"]
+    params.append(("tipo", tipo))
+    return urlunsplit((p.scheme, p.netloc, p.path, urlencode(params), p.fragment))
+
+
+def _tecnico_id_de_fila(fila):
+    """id del técnico: de la fila, o sacado de la URL de sus enlaces."""
+    tid = _get(fila, "tecnico_id")
+    if tid:
+        return int(tid)
+    for campo in ("url_ej", "url_no"):
+        url = _get(fila, campo)
+        if url:
+            for k, v in parse_qsl(urlsplit(url).query):
+                if k == "tecnico" and v.isdigit():
+                    return int(v)
+    return None
+
+
+def agregar_tipos_resumen(resumen, qs, anio, mes):
+    """
+    A cada técnico del resumen le agrega `tipos`: una fila por tipo de
+    operación con sus celdas (ejecutadas / no ejecutadas) por columna.
+
+    Supone columnas en orden: meses 1..12 (nivel "mes") o días 1..N (nivel "dia").
+    """
+    if not resumen:
+        return resumen
+
+    etiquetas = dict(Operacion.TipoOperacion.choices)
+
+    qs = qs.filter(fecha_operacion__year=anio)
+    if resumen["nivel"] == "dia" and mes:
+        qs = qs.filter(fecha_operacion__month=mes)
+    campo = "fecha_operacion__month" if resumen["nivel"] == "mes" else "fecha_operacion__day"
+
+    filas_db = (
+        qs.order_by()
+        .values("tecnico_id", "tipo_operacion", campo)
+        .annotate(
+            ej=Count("id", filter=Q(estado__in=ESTADOS_EJECUTADA)),
+            no=Count("id", filter=Q(estado__in=ESTADOS_NO_EJECUTADA)),
+        )
+    )
+
+    datos = {}   # (tecnico, tipo) -> {columna: (ej, no)}
+    for r in filas_db:
+        datos.setdefault((r["tecnico_id"], r["tipo_operacion"]), {})[r[campo]] = (r["ej"], r["no"])
+
+    for fila in resumen["filas"]:
+        tid = _tecnico_id_de_fila(fila)
+        celdas_padre = _get(fila, "celdas", [])
+        url_total_ej = _get(fila, "url_ej", "")
+        url_total_no = _get(fila, "url_no", "")
+
+        tipos = []
+        claves = {t for (tec, t) in datos if tec == tid}
+        for tipo in sorted(claves, key=lambda t: etiquetas.get(t, t)):
+            por_col = datos[(tid, tipo)]
+            celdas, tot_ej, tot_no = [], 0, 0
+
+            for i, padre in enumerate(celdas_padre):
+                ej, no = por_col.get(i + 1, (0, 0))
+                tot_ej += ej
+                tot_no += no
+                celdas.append({
+                    "ej": ej,
+                    "no": no,
+                    "url_ej": _con_tipo(_get(padre, "url_ej", ""), tipo) if ej else "",
+                    "url_no": _con_tipo(_get(padre, "url_no", ""), tipo) if no else "",
+                })
+
+            tipos.append({
+                "tipo": tipo,
+                "label": etiquetas.get(tipo, tipo),
+                "celdas": celdas,
+                "total_ej": tot_ej,
+                "total_no": tot_no,
+                "total": tot_ej + tot_no,
+                "url_ej": _con_tipo(url_total_ej, tipo) if tot_ej else "",
+                "url_no": _con_tipo(url_total_no, tipo) if tot_no else "",
+            })
+
+        if isinstance(fila, dict):
+            fila["tipos"] = tipos
+        else:
+            fila.tipos = tipos
+
+    return resumen
+
+
+def contadores_tipos(qs_sin_tipo, request):
+    """
+    Contadores por tipo de operación (clicables como filtro).
+    Devuelve (items, url_todos, total).
+    """
+    etiquetas = dict(Operacion.TipoOperacion.choices)
+    tipo_sel = request.GET.get("tipo", "").strip()
+
+    base = request.GET.copy()
+    for k in ("page", "detalle", "tipo"):
+        base.pop(k, None)
+
+    filas = (
+        qs_sin_tipo.order_by()
+        .values("tipo_operacion")
+        .annotate(
+            total=Count("id"),
+            ej=Count("id", filter=Q(estado__in=ESTADOS_EJECUTADA)),
+            no=Count("id", filter=Q(estado__in=ESTADOS_NO_EJECUTADA)),
+        )
+    )
+
+    items, total = [], 0
+    for f in sorted(filas, key=lambda x: etiquetas.get(x["tipo_operacion"], "")):
+        params = base.copy()
+        params["tipo"] = f["tipo_operacion"]
+        total += f["total"]
+        items.append({
+            "tipo": f["tipo_operacion"],
+            "label": etiquetas.get(f["tipo_operacion"], f["tipo_operacion"]),
+            "total": f["total"],
+            "ej": f["ej"],
+            "no": f["no"],
+            "activo": tipo_sel == f["tipo_operacion"],
+            "url": "?" + params.urlencode(),
+        })
+
+    return items, "?" + base.urlencode(), total
 def _con_label(qs):
     return [
         {"codigo": x["tipo_error"],
@@ -420,7 +576,6 @@ class ConciliacionSAPView(
 
         return ctx
 
-
 class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_ALMACEN
     template_name = "operaciones/consulta_orden.html"
@@ -553,6 +708,7 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
         tecnico = g.get("tecnico", "").strip()
         anomalia = g.get("anomalia", "").strip()
         detalle = g.get("detalle", "").strip()
+        resultado = g.get("resultado", "").strip()
 
         anio_param = g.get("anio", "").strip()
         mes_param = g.get("mes", "").strip()
@@ -594,6 +750,7 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             tipo_sel=tipo,
             tecnico_sel=tecnico,
             anomalia_sel=anomalia,
+            resultado_sel=resultado,
             anio_sel=anio_param,
             mes_sel=str(mes) if mes else "",
             fecha_sel=fecha_dt.isoformat() if fecha_dt else "",
@@ -630,27 +787,44 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
                 return ctx
 
         # ---------------- Resumen + listado ----------------
-        # 1) Base: filtros normales, SIN fechas y SIN annotate
-        base = self._filtrar(
+        # 1) Base sin filtro de tipo (para los contadores)
+        base_sin_tipo = self._filtrar(
             Operacion.objects.select_related("tecnico", "anomalia"),
-            q, estado, tipo, tecnico, anomalia,
+            q, estado, "", tecnico, anomalia,
         )
 
-        # 2) Resumen por técnico (año -> mes -> día)
-        ctx["resumen"] = resumen_ejecucion(base, g, anio, mes)
+        if resultado == "EJECUTADAS":
+            base_sin_tipo = base_sin_tipo.filter(estado__in=ESTADOS_EJECUTADA)
+        elif resultado == "NO_EJECUTADAS":
+            base_sin_tipo = base_sin_tipo.filter(estado__in=ESTADOS_NO_EJECUTADA)
 
-        # 3) Filtros de fecha sobre el LISTADO
-        qs = base
-        if fecha_dt:
-            qs = qs.filter(fecha_operacion=fecha_dt)
-        else:
-            if anio_param.isdigit() or mes:
-                qs = qs.filter(fecha_operacion__year=anio)
+        # 2) Base con filtro de tipo (resumen y listado)
+        base = base_sin_tipo.filter(tipo_operacion=tipo) if tipo else base_sin_tipo
+
+        # 3) Resumen por técnico + filas por tipo
+        resumen = resumen_ejecucion(base, g, anio, mes)
+        if resumen:
+            agregar_tipos_resumen(resumen, base, anio, mes)
+        ctx["resumen"] = resumen
+
+        # 4) Contadores por tipo (respetan año/mes/día)
+        def con_fechas(qs_):
+            if fecha_dt:
+                return qs_.filter(fecha_operacion=fecha_dt)
+            qs_ = qs_.filter(fecha_operacion__year=anio)
             if mes:
-                qs = qs.filter(fecha_operacion__month=mes)
+                qs_ = qs_.filter(fecha_operacion__month=mes)
+            return qs_
 
-        # 4) Ahora sí, el annotate de inconsistencias
-        qs = qs.annotate(
+        items_tipos, url_todos_tipos, total_tipos = contadores_tipos(
+            con_fechas(base_sin_tipo), self.request
+        )
+        ctx["contadores_tipos"] = items_tipos
+        ctx["url_todos_tipos"] = url_todos_tipos
+        ctx["total_tipos"] = total_tipos
+
+        # 5) Listado: fechas + annotate de inconsistencias
+        qs = con_fechas(base).annotate(
             n_inc=Count(
                 "inconsistencias",
                 filter=Q(inconsistencias__estado="PENDIENTE"),
@@ -658,7 +832,7 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             )
         ).order_by("-fecha_operacion", "-pk")
 
-        # 5) Migas de pan (cada una quita su filtro)
+        # 6) Migas de pan (cada una quita su filtro)
         migas = []
         if anio_param.isdigit() or mes or fecha_dt:
             migas.append({"label": f"Año {anio}",
@@ -674,8 +848,16 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             if tec:
                 migas.append({"label": tec.get_full_name() or tec.username,
                               "quitar": url_con(g, tecnico=None)})
+        if tipo:
+            etiqueta_tipo = dict(Operacion.TipoOperacion.choices).get(tipo, tipo)
+            migas.append({"label": etiqueta_tipo, "quitar": url_con(g, tipo=None)})
+        if resultado:
+            migas.append({
+                "label": "Solo ejecutadas" if resultado == "EJECUTADAS" else "Solo no ejecutadas",
+                "quitar": url_con(g, resultado=None),
+            })
 
-        # 6) Paginación (el querystring conserva todos los filtros)
+        # 7) Paginación (el querystring conserva todos los filtros)
         params = g.copy()
         params.pop("page", None)
         params.pop("detalle", None)

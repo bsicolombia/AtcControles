@@ -1,0 +1,210 @@
+{% comment %}
+  Burbuja flotante de inconsistencias pendientes.
+  Se incluye UNA vez en base.html, justo antes de {% endwith %}:
+
+      {% include "_burbuja_inconsistencias.html" %}
+
+  Solo aparece si hay inconsistencias pendientes y el usuario es de almacén.
+{% endcomment %}
+
+{% if burbuja_inc %}
+{% url 'almacen:inconsistencias' as url_inc %}
+
+<div class="burbuja-inc" id="burbuja-inc" data-total="{{ burbuja_inc.total }}">
+
+  <div class="burbuja-globo" id="burbuja-globo">
+
+    <button type="button" class="burbuja-x" id="burbuja-x"
+            aria-label="Ocultar detalle">×</button>
+
+    <a class="burbuja-titulo" href="{{ url_inc }}?estado=PENDIENTE">
+      Tienes <strong>{{ burbuja_inc.total }}</strong>
+      inconsistencia{{ burbuja_inc.total|pluralize }}
+      pendiente{{ burbuja_inc.total|pluralize }}
+    </a>
+
+    <ul>
+      {% for t in burbuja_inc.tipos %}
+        <li>
+          <a href="{{ url_inc }}?estado=PENDIENTE&amp;tipo={{ t.tipo }}">
+            <span>{{ t.etiqueta }}</span>
+            <b>{{ t.n }}</b>
+          </a>
+        </li>
+      {% endfor %}
+
+      {% if burbuja_inc.otros %}
+        <li class="mas">y {{ burbuja_inc.otros }} tipo{{ burbuja_inc.otros|pluralize }} más…</li>
+      {% endif %}
+    </ul>
+
+    <span class="burbuja-pico"></span>
+  </div>
+
+  <a class="burbuja-boton" id="burbuja-boton"
+     href="{{ url_inc }}?estado=PENDIENTE"
+     title="Ver inconsistencias pendientes"
+     aria-label="{{ burbuja_inc.total }} inconsistencias pendientes. Ir a inconsistencias">
+
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 9v4M12 17h.01"/>
+      <path d="M10.3 3.9L2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3l-7.8-14.1a2 2 0 0 0-3.4 0z"/>
+    </svg>
+
+    <span class="burbuja-badge">{{ burbuja_inc.total }}</span>
+  </a>
+
+</div>
+
+<style>
+  .burbuja-inc {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    font-family: inherit;
+  }
+
+  .burbuja-boton {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #b54708;
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+    text-decoration: none;
+    animation: burbuja-pulso 2.4s ease-in-out infinite;
+  }
+
+  .burbuja-boton:hover { background: #93390a; }
+
+  .burbuja-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 11px;
+    background: #b42318;
+    border: 2px solid #fff;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .burbuja-globo {
+    position: relative;
+    width: 280px;
+    max-width: calc(100vw - 36px);
+    padding: 12px 14px 10px;
+    background: #fff;
+    border: 1px solid #f0c9a0;
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+    font-size: 12px;
+    color: #333;
+  }
+
+  .burbuja-globo.oculto { display: none; }
+
+  .burbuja-pico {
+    position: absolute;
+    right: 20px;
+    bottom: -7px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-right: 1px solid #f0c9a0;
+    border-bottom: 1px solid #f0c9a0;
+    transform: rotate(45deg);
+  }
+
+  .burbuja-titulo {
+    display: block;
+    margin-right: 16px;
+    font-size: 13px;
+    color: #7a2e0e;
+    text-decoration: none;
+  }
+
+  .burbuja-titulo strong { font-size: 15px; }
+
+  .burbuja-globo ul { list-style: none; margin: 8px 0 0; padding: 0; }
+
+  .burbuja-globo li a {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    border-top: 1px solid #f4e6d6;
+    color: #333;
+    text-decoration: none;
+  }
+
+  .burbuja-globo li a:hover { color: #b54708; }
+  .burbuja-globo li b { color: #b42318; }
+  .burbuja-globo li.mas { padding-top: 4px; color: #777; }
+
+  .burbuja-x {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    border: 0;
+    background: none;
+    color: #999;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .burbuja-x:hover { color: #333; }
+
+  @keyframes burbuja-pulso {
+    0%, 100% { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 0 rgba(181,71,8,.45); }
+    50%      { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 10px rgba(181,71,8,0); }
+  }
+
+  @media print { .burbuja-inc { display: none; } }
+</style>
+
+<script>
+(function () {
+  var cont = document.getElementById("burbuja-inc");
+  if (!cont) return;
+
+  var total = cont.getAttribute("data-total");
+  var globo = document.getElementById("burbuja-globo");
+  var clave = "burbuja_inc_total_oculta";
+
+  // Si el usuario ocultó el detalle con este mismo total, sigue oculto.
+  // Si aparecen inconsistencias nuevas (el total cambia), vuelve a mostrarse.
+  try {
+    if (sessionStorage.getItem(clave) === total) globo.classList.add("oculto");
+  } catch (e) {}
+
+  document.getElementById("burbuja-x").addEventListener("click", function () {
+    globo.classList.add("oculto");
+    try { sessionStorage.setItem(clave, total); } catch (e) {}
+  });
+
+  // Al pasar el mouse por el botón se vuelve a mostrar el detalle.
+  document.getElementById("burbuja-boton").addEventListener("mouseenter", function () {
+    globo.classList.remove("oculto");
+  });
+})();
+</script>
+{% endif %}

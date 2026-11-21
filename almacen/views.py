@@ -80,15 +80,7 @@ from io import BytesIO
 from operaciones.models import CargaSAP, RegistroSAP
 from django.db.models import Sum
 from django.db.models import Min, Max
-ETIQUETAS_ERRORES = {
-    "NO_ASIGNADO": "INSTALADO NO ASIGNADO A ESTE TECNICO",
-    "OTRO_TECNICO": "INSTALADO ASIGNADO A OTRO TECNICO",
-    "NO_REGISTRADO": "SERIAL INEXISTENTE",
-    "YA_INSTALADO": "YA INSTALADO",
-    "NO_UTILIZABLE": "DAÑADO / BAJA",
-    "EXCEDE_CANTIDAD": "EXCEDE CANTIDAD ASIGNADA",
-    "SIN_STOCK": "SIN STOCK",
-}
+from .etiquetas import ETIQUETAS_ERRORES
 
 def tecnicos_queryset():
     return (
@@ -1026,8 +1018,14 @@ class UnidadDetailView(RolRequeridoMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["asignaciones"] = self.object.asignaciones.select_related("tecnico")
+        ctx["asignaciones"] = self.object.asignaciones.select_related("tecnico", "operacion")
         ctx["movimientos"] = self.object.movimientos.select_related("usuario")
+        ctx["registros_sap"] = (
+            RegistroSAP.objects
+            .filter(unidad_serializada=self.object)
+            .select_related("carga")
+            .order_by("-pk")
+        )
         return ctx
 
 
@@ -1629,7 +1627,78 @@ class AsignacionUpdateView(
 # ============================================================
 # INSTALAR / DEVOLVER · PANTALLA DEL TÉCNICO (varios materiales)
 # ============================================================
+def _datos_pendientes_tecnico(tecnico, operacion=None):
+    """
+    Devuelve (cantidad, seriales) para el formulario de instalación.
 
+    cantidad: TODOS los materiales por cantidad activos, con lo que el
+              técnico tiene pendiente (0 si no tiene nada asignado).
+              Si instala más de lo pendiente, el servicio lo registra
+              como inconsistencia.
+    seriales: unidades serializadas que el técnico tiene asignadas.
+
+    Si se pasa `operacion` (modo edición), lo ya instalado en esa orden
+    cuenta como disponible para que no se marque como excedente.
+    """
+    pendientes = (
+        Asignacion.objects
+        .filter(tecnico=tecnico, estado=Asignacion.Estado.ASIGNADA)
+        .select_related("producto", "unidad_serializada")
+        .order_by("producto__nombre", "producto__medida", "id")
+    )
+
+    pend = {}
+    seriales = []
+
+    for a in pendientes:
+        if a.cantidad_pendiente <= 0:
+            continue
+        if a.unidad_serializada_id:
+            u = a.unidad_serializada
+            seriales.append({
+                "id": u.pk,
+                "serial": u.numero_serie or u.codigo,
+                "codigo": u.codigo,
+                "producto": a.producto_id,
+                "categoria": a.producto.categoria_id,
+                "nombre": a.producto.nombre_completo,
+            })
+        else:
+            pend[a.producto_id] = pend.get(a.producto_id, 0) + a.cantidad_pendiente
+
+    if operacion is not None:
+        instaladas = (
+            Asignacion.objects
+            .filter(operacion=operacion, estado=Asignacion.Estado.INSTALADA)
+            .select_related("producto", "unidad_serializada")
+        )
+        for a in instaladas:
+            if a.unidad_serializada_id:
+                u = a.unidad_serializada
+                seriales.append({
+                    "id": u.pk,
+                    "serial": u.numero_serie or u.codigo,
+                    "codigo": u.codigo,
+                    "producto": a.producto_id,
+                    "categoria": a.producto.categoria_id,
+                    "nombre": a.producto.nombre_completo,
+                })
+            else:
+                pend[a.producto_id] = pend.get(a.producto_id, 0) + a.cantidad
+
+    cantidad = [
+        {
+            "id": p.pk,
+            "nombre": p.nombre_completo,
+            "pendiente": pend.get(p.pk, 0),
+            "asignado": pend.get(p.pk, 0) > 0,
+        }
+        for p in Producto.objects.filter(
+            estado=True,
+            tipo_inventario=Producto.TipoInventario.CANTIDAD,
+        ).order_by("nombre", "medida")
+    ]
+    return cantidad, seriales
 
 import json  # arriba del archivo
 @method_decorator(never_cache, name="dispatch")
@@ -1642,49 +1711,19 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
             User.objects.select_related("supervisor").filter(rol="TECNICO"),
             pk=self.kwargs["pk"],
         )
-        pendientes = (
-            Asignacion.objects
-            .filter(tecnico=self.tecnico, estado=Asignacion.Estado.ASIGNADA)
-            .select_related("producto", "unidad_serializada", "operacion")
-            .order_by("producto__nombre", "producto__medida", "id")
-        )
-        self.pendientes = [a for a in pendientes if a.cantidad_pendiente > 0]
-
-    def _datos_pendientes(self):
-        """Todos los materiales por cantidad (con lo pendiente) y los seriales asignados."""
-        pend = {}
-        seriales = []
-        for a in self.pendientes:
-            if a.unidad_serializada_id:
-                u = a.unidad_serializada
-                seriales.append({
-                    "id": u.pk,
-                    "serial": u.numero_serie or u.codigo,
-                    "codigo": u.codigo,
-                    "producto": a.producto_id,
-                    "categoria": a.producto.categoria_id,
-                    "nombre": a.producto.nombre_completo,
-                })
-            else:
-                pend[a.producto_id] = pend.get(a.producto_id, 0) + a.cantidad_pendiente
-
-        cantidad = [
-            {"id": p.pk, "nombre": p.nombre_completo, "pendiente": pend.get(p.pk, 0)}
-            for p in Producto.objects.filter(
-                estado=True, tipo_inventario=Producto.TipoInventario.CANTIDAD
-            ).order_by("nombre", "medida")
-        ]
-        return cantidad, seriales
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         self._cargar()
-        
-        pend_cantidad, pend_seriales = self._datos_pendientes()
+
+        pend_cantidad, pend_seriales = _datos_pendientes_tecnico(self.tecnico)
 
         payload_previo = []
         try:
             crudo = json.loads(self.request.POST.get("payload", "[]"))
+            if not isinstance(crudo, list):
+                crudo = []
+
             nombres = {
                 p.pk: p.nombre_completo
                 for p in Producto.objects.filter(
@@ -1695,23 +1734,19 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     ]
                 )
             }
-            for l in crudo if isinstance(crudo, list) else []:
+            for l in crudo:
                 pid = int(l.get("producto_id"))
-                seriales = l.get("seriales") or []
+                seriales_previos = l.get("seriales") or []
                 payload_previo.append({
                     "producto": pid,
                     "nombre": nombres.get(pid, "Material"),
-                    "serializado": bool(seriales),
-                    "cantidad": 0 if seriales else int(l.get("cantidad") or 0),
-                    "unidades": [
-                        {"id": None, "serial": s} for s in seriales
-                    ],
+                    "serializado": bool(seriales_previos),
+                    "cantidad": 0 if seriales_previos else int(l.get("cantidad") or 0),
+                    "unidades": [{"id": None, "serial": s} for s in seriales_previos],
                 })
         except (ValueError, TypeError):
             payload_previo = []
-        except ValueError:
-            payload_previo = []
-            
+
         cancelar_url = (
             self.request.GET.get("next")
             or self.request.POST.get("next")
@@ -1729,7 +1764,6 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
             )
 
         ctx["cancelar_url"] = cancelar_url
-
         ctx["tecnico"] = self.tecnico
         ctx["pend_cantidad"] = pend_cantidad
         ctx["pend_seriales"] = pend_seriales
@@ -1744,7 +1778,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         self._cargar()
-        
+
         form = InstalacionMasivaForm(request.POST, request.FILES, tecnico=self.tecnico)
 
         try:
@@ -1784,20 +1818,25 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     observaciones=d["observaciones"],
                     archivo=d.get("archivo_soporte"),
                 )
-                
-                if instala:
-                    services.vincular_ivt(
-                        numero=d["numero_ivt"], operacion=op,
-                        tecnico=self.tecnico, usuario=request.user)
 
                 if instala:
-                    novedades = services.sincronizar_materiales_operacion(
+                    n_ivt = services.vincular_ivt_o_reportar(
+                        numero=d.get("numero_ivt"),
+                        operacion=op,
+                        tecnico=self.tecnico,
+                        usuario=request.user,
+                    )
+                    if n_ivt:
+                        novedades.append(n_ivt)
+
+                    novedades += services.sincronizar_materiales_operacion(
                         operacion=op,
                         payload=lineas,
                         usuario=request.user,
                     )
                     piezas = sum(
-                        int(l.get("cantidad") or 0) for l in lineas
+                        len(l.get("seriales") or []) or int(l.get("cantidad") or 0)
+                        for l in lineas
                     )
         except services.ErrorInventario as e:
             messages.error(request, str(e))
@@ -1939,10 +1978,13 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
 import json
 
 def _payload_desde_bd(operacion):
-    """Lo que hoy esta instalado en la orden, en el formato del formulario."""
+    """
+    Lo que hoy tiene la orden, en el formato del formulario:
+    lo instalado + lo reportado como inconsistencia (no instalado).
+    """
     asignaciones = (
         Asignacion.objects
-        .filter(operacion=operacion, estado=Asignacion.Estado.INSTALADA)  # antes incluia devueltas
+        .filter(operacion=operacion, estado=Asignacion.Estado.INSTALADA)
         .select_related("producto", "unidad_serializada")
         .order_by("pk")
     )
@@ -1974,6 +2016,47 @@ def _payload_desde_bd(operacion):
                 "unidades": [],
             })
             item["cantidad"] += a.cantidad
+
+    # Lo reportado pero NO instalado (inconsistencias pendientes)
+    reportadas = (
+        Inconsistencia.objects
+        .filter(
+            operacion=operacion,
+            estado=Inconsistencia.Estado.PENDIENTE,
+            instalado=False,
+            producto__isnull=False,
+        )
+        .exclude(tipo__in=services.TIPOS_IVT)
+        .select_related("producto")
+    )
+
+    for n in reportadas:
+        p = n.producto
+        if n.serial_reportado:
+            item = seriales.setdefault(p.pk, {
+                "producto": p.pk,
+                "categoria": p.categoria_id,
+                "nombre": p.nombre_completo,
+                "serializado": True,
+                "cantidad": 0,
+                "unidades": [],
+            })
+            item["unidades"].append({
+                "id": n.unidad_serializada_id,
+                "serial": n.serial_reportado,
+                "tipo": n.tipo,
+                "instala": False,
+                "aviso": n.detalle,
+            })
+        else:
+            item = cantidades.setdefault(p.pk, {
+                "producto": p.pk,
+                "nombre": p.nombre_completo,
+                "serializado": False,
+                "cantidad": 0,
+                "unidades": [],
+            })
+            item["cantidad"] += n.cantidad
 
     return list(seriales.values()) + list(cantidades.values())
 
@@ -2012,76 +2095,140 @@ def _leer_payload(request):
             "cantidad": item.get("cantidad") or 0,
         })
     return normalizado
+def _previo_desde_post(request):
+    """Reconstruye lo que el usuario escribió para repintar el formulario."""
+    try:
+        payload = _leer_payload(request)
+    except services.ErrorInventario:
+        return None
+    nombres = {
+        p.pk: p.nombre_completo
+        for p in Producto.objects.filter(
+            pk__in=[int(p["producto_id"]) for p in payload
+                    if str(p["producto_id"]).isdigit()]
+        )
+    }
+    return [
+        {
+            "producto": p["producto_id"],
+            "nombre": nombres.get(int(p["producto_id"]), "Material"),
+            "serializado": bool(p["seriales"]),
+            "cantidad": 0 if p["seriales"] else p["cantidad"],
+            "unidades": [{"id": None, "serial": s} for s in p["seriales"]],
+        }
+        for p in payload if str(p["producto_id"]).isdigit()
+    ]
 
-@login_required   # idealmente tambien RolRequeridoMixin / decorador de roles
+
+@login_required   # idealmente también RolRequeridoMixin / decorador de roles
 def editar_instalacion(request, pk):
     operacion = get_object_or_404(
-        Operacion.objects.select_related("tecnico"),
-        pk=pk,
-        tipo_operacion=Operacion.TipoOperacion.INSTALACION,
+        Operacion.objects.select_related("tecnico"), pk=pk,
     )
-
     payload_previo = _payload_desde_bd(operacion)
+    form = None
 
     if request.method == "POST":
-        try:
-            payload = _leer_payload(request)
+        form = InstalacionMasivaForm(
+            request.POST, request.FILES, tecnico=operacion.tecnico
+        )
+        previo = _previo_desde_post(request)
+        if previo is not None:
+            payload_previo = previo
 
-            with transaction.atomic():
-                novedades = services.sincronizar_materiales_operacion(
-                    operacion=operacion,
-                    payload=payload,
-                    usuario=request.user,
-                )
-
-                # IVT opcional: una orden = un IVT
-                ivt_numero = (request.POST.get("ivt") or "").strip()
-                if ivt_numero:
-                    services.vincular_ivt(
-                        numero=ivt_numero,
-                        operacion=operacion,
-                        tecnico=operacion.tecnico,
-                        usuario=request.user,
+        if form.is_valid():
+            d = form.cleaned_data
+            instala = d["estado"] in Operacion.ESTADOS_QUE_INSTALAN
+            try:
+                payload = _leer_payload(request) if instala else []
+                if instala and not payload:
+                    raise services.ErrorInventario(
+                        "Agregue al menos un material o serial para instalar."
                     )
 
-        except services.ErrorInventario as e:
-            # Nada se guardo (rollback). Se muestra el error y se
-            # conserva lo que el usuario habia escrito.
-            messages.error(request, str(e))
-            try:
-                payload_previo = [
-                    {
-                        "producto": p["producto_id"],
-                        "nombre": "",
-                        "serializado": bool(p["seriales"]),
-                        "cantidad": p["cantidad"],
-                        "unidades": [{"id": None, "serial": s} for s in p["seriales"]],
-                    }
-                    for p in _leer_payload(request)
-                ]
-            except services.ErrorInventario:
-                pass
-        else:
-            if novedades:
-                messages.warning(
-                    request,
-                    f"Orden actualizada con {len(novedades)} novedad(es) "
-                    "pendiente(s) de revisar.",
-                )
-            else:
-                messages.success(request, "Instalación actualizada.")
-            return redirect("operaciones:detalle", pk=operacion.pk)   # ajusta a tu URL
+                with transaction.atomic():
+                    operacion = services.actualizar_operacion(
+                        operacion=operacion,
+                        numero_orden=d["numero_orden"],
+                        cuenta_contrato=d["numero_cuenta_contrato"],
+                        tipo=d["tipo_operacion"],
+                        estado=d["estado"],
+                        anomalia=d["anomalia"],
+                        observaciones=d["observaciones"],
+                        fecha=d["fecha_instalacion"],
+                        archivo=d.get("archivo_soporte"),
+                    )
 
-    # TODO: aqui reutiliza tu logica existente para construir
-    # pend_cantidad, pend_seriales, estados_instalan y tipos_inconsistencia
-    # y agregalos al context.
+                    # Si el estado ya no instala, payload=[] revierte todo
+                    novedades = services.sincronizar_materiales_operacion(
+                        operacion=operacion, payload=payload, usuario=request.user,
+                    )
+
+                    ivt_numero = str(d.get("numero_ivt") or "").strip()
+                    if instala and ivt_numero:
+                        n_ivt = services.vincular_ivt_o_reportar(
+                            numero=ivt_numero, operacion=operacion,
+                            tecnico=operacion.tecnico, usuario=request.user,
+                        )
+                        if n_ivt:
+                            novedades.append(n_ivt)
+                    else:
+                        # IVT vacío (o estado sin instalación): se libera
+                        services.liberar_ivt_operacion(
+                            operacion=operacion, usuario=request.user,
+                            motivo="IVT quitado al editar la orden",
+                        )
+            except services.ErrorInventario as e:
+                operacion.refresh_from_db()
+                messages.error(request, str(e))
+            else:
+                if novedades:
+                    messages.warning(
+                        request,
+                        f"Orden actualizada con {len(novedades)} novedad(es) "
+                        "pendiente(s) de revisar.",
+                    )
+                else:
+                    messages.success(request, "Orden actualizada.")
+                return redirect("operaciones:detalle", pk=operacion.pk)
+        else:
+            messages.error(request, "Revise los campos señalados.")
+
+    pend_cantidad, pend_seriales = _datos_pendientes_tecnico(
+        operacion.tecnico, operacion=operacion
+    )
+    ivt_actual = operacion.ivts.filter(estado=IVT.Estado.INSTALADO).first()
+
+    if form is None:
+        form = InstalacionMasivaForm(
+            tecnico=operacion.tecnico,
+            initial={
+                "numero_orden": operacion.numero_orden,
+                "numero_cuenta_contrato": operacion.numero_cuenta_contrato,
+                "tipo_operacion": operacion.tipo_operacion,
+                "estado": operacion.estado,
+                "anomalia": operacion.anomalia,
+                "observaciones": operacion.observaciones,
+                "fecha_instalacion": operacion.fecha_ejecucion or operacion.fecha_operacion,
+                "numero_ivt": ivt_actual.numero if ivt_actual else "",
+            },
+        )
+
     context = {
         "operacion": operacion,
         "tecnico": operacion.tecnico,
         "payload_previo": payload_previo,
         "modo_edicion": True,
+        "pend_cantidad": pend_cantidad,
+        "pend_seriales": pend_seriales,
+        "productos_serializados": Producto.objects.filter(
+            estado=True, tipo_inventario=Producto.TipoInventario.SERIALIZADO
+        ).order_by("nombre", "medida"),
+        "cancelar_url": reverse("operaciones:detalle", kwargs={"pk": operacion.pk}),
+        "tipos_inconsistencia": dict(Inconsistencia.Tipo.choices),
+        "estados_instalan": sorted(e.value for e in Operacion.ESTADOS_QUE_INSTALAN),
+        "form": form,
     }
-
     return render(request, "operaciones/registrar_operacion.html", context)
 
 # ============================================================
@@ -2730,14 +2877,21 @@ class ValidarSerialInstalacionJson(RolRequeridoMixin, View):
             return JsonResponse({"tipo": "VACIO", "mensaje": "Escriba el serial."})
 
         tipo, unidad, _a, detalle = services.clasificar_serial(serial=serial, tecnico=tecnico)
+
+        # Solo se instala si está todo bien, o si se regulariza automáticamente.
+        instala = tipo is None or (
+            services.REGULARIZAR_AUTOMATICO
+            and tipo not in services.TIPOS_SOLO_REPORTE
+        )
+
         return JsonResponse({
             "tipo": tipo or "OK",
             "mensaje": detalle or "Lo tiene asignado.",
-            "instala": tipo not in services.TIPOS_SOLO_REPORTE,
+            "instala": instala,
             "id": unidad.pk if unidad else None,
             "serial": (unidad.numero_serie or unidad.codigo) if unidad else serial,
             "producto": unidad.producto_id if unidad else None,
-            "categoria": unidad.producto.categoria_id if unidad else None,   # <- NUEVO
+            "categoria": unidad.producto.categoria_id if unidad else None,
             "nombre": unidad.producto.nombre_completo if unidad else "",
         })
 
@@ -3225,24 +3379,13 @@ class EntregaPdfView(RolRequeridoMixin, View):
 
         for i, it in enumerate(e.items.all(), 1):
 
-            producto = it.producto
-
-            # Proteger referencias a productos inexistentes.
-            if producto:
-                codigo = producto.codigo_producto or ""
-                nombre = producto.nombre_completo or "Sin nombre"
-            else:
-                codigo = ""
-                nombre = "PRODUCTO NO DISPONIBLE"
+            detalle = it.rango_ivt if it.es_ivt else (it.serial or "—")
 
             fila = [
                 str(i),
-                escape(str(codigo)),
-                Paragraph(
-                    escape(str(nombre)),
-                    normal,
-                ),
-                escape(str(it.serial or "—")),
+                escape(str(it.codigo_material)),
+                Paragraph(escape(str(it.nombre_material)), normal),
+                escape(str(detalle)),
                 str(it.cantidad),
             ]
 
@@ -3464,9 +3607,9 @@ class EntregaExcelView(RolRequeridoMixin, View):
 
             valores = [
                 i,
-                it.producto.codigo_producto or "",
-                it.producto.nombre_completo,
-                it.serial or "",
+                it.codigo_material,
+                it.nombre_material,
+                it.rango_ivt if it.es_ivt else (it.serial or ""),
                 it.cantidad,
             ]
 
@@ -3538,6 +3681,17 @@ class EntregaExcelView(RolRequeridoMixin, View):
         return response
 
 
+class _ColumnaIVT:
+    """Columna ficticia para mostrar el IVT junto a los materiales."""
+    pk = "IVT"
+    nombre = "Informe de Visita Técnica (IVT)"
+    nombre_completo = "Informe de Visita Técnica (IVT)"
+    medida = ""
+    codigo_producto = "IVT"
+
+
+COLUMNA_IVT = _ColumnaIVT()
+
 
 def _matriz_entregas(request):
     qs = (
@@ -3587,14 +3741,15 @@ def _matriz_entregas(request):
 
         for item in documento.items.all():
 
-            if item.producto is None:
+            if item.es_ivt:
+                clave, columna = "IVT", COLUMNA_IVT
+            elif item.producto_id:
+                clave, columna = item.producto_id, item.producto
+            else:
                 continue
 
-            columnas.setdefault(item.producto_id, item.producto)
-
-            cantidades[item.producto_id] = (
-                cantidades.get(item.producto_id, 0) + item.cantidad
-            )
+            columnas.setdefault(clave, columna)
+            cantidades[clave] = cantidades.get(clave, 0) + item.cantidad
 
         filas.append({
             "entrega": documento,
@@ -3602,20 +3757,18 @@ def _matriz_entregas(request):
             "total": sum(cantidades.values()),
         })
 
+    # El IVT siempre va de último
     cols = sorted(
-        (p for p in columnas.values() if p is not None),
-        key=lambda p: (p.nombre or "", p.medida or ""),
+        columnas.values(),
+        key=lambda p: (p is COLUMNA_IVT, p.nombre or "", p.medida or ""),
     )
 
     for fila in filas:
-        fila["celdas"] = [
-            fila["cants"].get(producto.pk, 0)
-            for producto in cols
-        ]
+        fila["celdas"] = [fila["cants"].get(c.pk, 0) for c in cols]
 
     totales = [
-        sum(fila["cants"].get(producto.pk, 0) for fila in filas)
-        for producto in cols
+        sum(fila["cants"].get(c.pk, 0) for fila in filas)
+        for c in cols
     ]
 
     return {
@@ -3629,7 +3782,6 @@ def _matriz_entregas(request):
         "q": q,
         "tipo_sel": tipo,
     }
-
 
 class EntregaListView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_ALMACEN
@@ -4027,10 +4179,27 @@ class ValidarIVTJson(RolRequeridoMixin, View):
 
     def get(self, request):
         tecnico = get_object_or_404(User, pk=request.GET.get("tecnico"), rol="TECNICO")
-        op = Operacion.objects.filter(pk=request.GET.get("operacion") or 0).first()
-        try:
-            ivt = services.validar_ivt_para_operacion(
-                numero=request.GET.get("numero", ""), tecnico=tecnico, operacion=op)
-        except services.ErrorInventario as e:
-            return JsonResponse({"ok": False, "mensaje": "✗ " + str(e)})
-        return JsonResponse({"ok": True, "mensaje": f"✓ IVT {ivt.codigo} asignado a este técnico."})
+
+        numero = (request.GET.get("numero") or "").strip()
+        if not numero:
+            return JsonResponse({"ok": False, "mensaje": "Escriba el número del IVT."})
+
+        op_id = request.GET.get("operacion") or ""
+        op = Operacion.objects.filter(pk=op_id).first() if op_id.isdigit() else None
+
+        tipo, ivt, detalle = services.clasificar_ivt(
+            numero=numero, tecnico=tecnico, operacion=op,
+        )
+
+        if tipo is None:
+            return JsonResponse({
+                "ok": True,
+                "mensaje": f"✓ IVT {ivt.codigo} asignado a este técnico.",
+            })
+
+        return JsonResponse({
+            "ok": False,
+            "inconsistencia": True,
+            "tipo": tipo,
+            "mensaje": f"⚠ {detalle} La orden se registrará con una inconsistencia.",
+        })

@@ -101,18 +101,36 @@
     </td>
 
     <!-- OBSERVACIONES -->
-    <td>
-      <div class="observaciones-mov">
-        {% if m.observacion %}
-          <div class="observacion-item">
-            <span class="observacion-etiqueta">{{ m.get_tipo_movimiento_display }}</span>
-            {{ m.observacion|linebreaksbr }}
-          </div>
-        {% else %}
-          <span class="sin-observacion">Sin observaciones</span>
-        {% endif %}
+<td>
+  <div class="observaciones-mov">
+    {% if m.observacion %}
+      <div class="observacion-item">
+        <span class="observacion-etiqueta">{{ m.get_tipo_movimiento_display }}</span>
+        {{ m.observacion|linebreaksbr }}
       </div>
-    </td>
+    {% endif %}
+
+    {% if m.tipo_movimiento == "INSTALACION" %}
+      {% if m.asignacion.observaciones_instalacion %}
+        <div class="observacion-item">
+          <span class="observacion-etiqueta">Observación de la instalación</span>
+          {{ m.asignacion.observaciones_instalacion|linebreaksbr }}
+        </div>
+      {% elif m.asignacion.operacion.observaciones %}
+        <div class="observacion-item">
+          <span class="observacion-etiqueta">Observación de la orden {{ m.asignacion.operacion.numero_orden }}</span>
+          {{ m.asignacion.operacion.observaciones|linebreaksbr }}
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {% if not m.observacion and m.tipo_movimiento != "INSTALACION" %}
+      <span class="sin-observacion">Sin observaciones</span>
+    {% elif not m.observacion and not m.asignacion.observaciones_instalacion and not m.asignacion.operacion.observaciones %}
+      <span class="sin-observacion">Sin observaciones</span>
+    {% endif %}
+  </div>
+</td>
   </tr>
   {% endfor %}
 </tbody>

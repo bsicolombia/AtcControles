@@ -2,11 +2,7 @@
 {% load static %}
 
 {% block titulo %}
-  {% if modo_edicion %}
-    Editar operación
-  {% else %}
-    Registrar operación
-  {% endif %}
+  {% if modo_edicion %}Editar operación{% else %}Registrar operación{% endif %}
   · {{ tecnico.get_full_name|default:tecnico.username }}
 {% endblock %}
 
@@ -16,7 +12,13 @@
   .ent { --ok:#2d6a4f; --err:#b42318; --warn:#b54708; --line:#d9dee7; --bg:#f6f8fb; --ac:#1f3a5f; font-size:13px; }
   .ent h2 { margin:0 0 8px; font-size:17px; }
   .ent .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+  .ent .card.msg-success { border-color:#2d6a4f; }
+  .ent .card.msg-warning { border-color:#b54708; }
+  .ent .card.msg-error { border-color:#b42318; }
+  .ent .card.msg-info { border-color:#1f3a5f; }
+  .ent .card.errores { border-color:#b42318; background:#fdecea; }
   .ent .top { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; }
+  .ent .bloqueado { pointer-events:none; opacity:.7; }
   .ent label { display:block; font-weight:600; font-size:12px; margin-bottom:3px; color:#444; }
   .ent input, .ent select, .ent textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; box-sizing:border-box; }
   .ent textarea { resize:vertical; }
@@ -52,23 +54,21 @@
   .ent .campo-error input, .ent .campo-error select, .ent .campo-error textarea { border:2px solid #b42318; background:#fff5f4; }
   .ent .campo-error label { color:#b42318; }
   .ent .msg.err { font-size:12px; }
-    /* Bloques de captura diferenciados */
   .ent .bloque { border:1px solid var(--line); border-left-width:5px; border-radius:8px; padding:10px 12px; margin-bottom:12px; background:#fff; }
   .ent .bloque:last-of-type { margin-bottom:0; }
   .ent .bloque h3 { margin:0 0 8px; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; display:flex; align-items:center; gap:6px; }
   .ent .bloque h3 small { font-weight:500; text-transform:none; letter-spacing:0; color:#666; font-size:11px; }
   .ent .bloque label { font-weight:700; }
-
   .ent .bloque.cant { border-left-color:#1f3a5f; background:#f3f7fc; }
   .ent .bloque.cant h3 { color:#1f3a5f; }
   .ent .bloque.cant .btn { background:#1f3a5f; }
-
   .ent .bloque.ser { border-left-color:#7a3db8; background:#f8f4fd; }
   .ent .bloque.ser h3 { color:#7a3db8; }
   .ent .bloque.ser .btn { background:#7a3db8; }
-
   .ent .bloque.cant input:focus, .ent .bloque.cant select:focus { outline:2px solid #1f3a5f55; }
   .ent .bloque.ser input:focus, .ent .bloque.ser select:focus { outline:2px solid #7a3db855; }
+  .ent .campo-ivt input { border-color:#1f3a5f; background:#f3f7fc; font-weight:700; }
+  .ent .campo-ivt label { color:#1f3a5f; }
   @media(max-width:900px){ .ent .main { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
@@ -76,19 +76,18 @@
 {% block contenido %}
 <div class="ent">
   <h2>
-  {% if modo_edicion %}
-    Editar operación
-  {% else %}
-    Registrar operación
-  {% endif %}
-  · {{ tecnico.get_full_name|default:tecnico.username }}
-</h2>
+    {% if modo_edicion %}Editar operación{% else %}Registrar operación{% endif %}
+    · {{ tecnico.get_full_name|default:tecnico.username }}
+  </h2>
 
-  {% if messages %}{% for m in messages %}
-    <div class="card" style="border-color:{% if m.tags == 'error' %}#b42318{% elif m.tags == 'warning' %}#b54708{% else %}#2d6a4f{% endif %}">{{ m }}</div>
-  {% endfor %}{% endif %}
-    {% if form.errors %}
-    <div class="card" style="border-color:#b42318;background:#fdecea">
+  {% if messages %}
+    {% for m in messages %}
+      <div class="card msg-{{ m.level_tag }}">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {% if form.errors %}
+    <div class="card errores">
       <b style="color:#b42318">No se pudo guardar. Revise estos campos:</b>
       <ul style="margin:6px 0 0 18px;color:#b42318">
         {% for campo in form %}
@@ -111,15 +110,22 @@
     {% csrf_token %}
     <input type="hidden" name="payload" id="payload">
 
-    <!-- Datos de la operación -->
         <!-- Datos de la operación -->
     <div class="card top">
-      {% for campo in form %}{% if campo.name != "observaciones" %}
+      {% for campo in form %}{% if campo.name != "observaciones" and campo.name != "numero_ivt" %}
         <div class="{% if campo.errors %}campo-error{% endif %}">
           {{ campo.label_tag }}{{ campo }}
           {% for error in campo.errors %}<div class="msg err">⚠ {{ error }}</div>{% endfor %}
         </div>
       {% endif %}{% endfor %}
+
+      {% if form.numero_ivt %}
+        <div class="campo-ivt {% if form.numero_ivt.errors %}campo-error{% endif %}">
+          <label for="{{ form.numero_ivt.id_for_label }}">N.º de IVT</label>
+          {{ form.numero_ivt }}
+          {% for error in form.numero_ivt.errors %}<div class="msg err">⚠ {{ error }}</div>{% endfor %}
+        </div>
+      {% endif %}
     </div>
 
     <div class="card {% if form.observaciones.errors %}campo-error{% endif %}">
@@ -133,58 +139,56 @@
       <div class="main">
         <div class="card">
 
-    <!-- BLOQUE 1: POR CANTIDAD -->
-    <div class="bloque cant">
-        <h3>📦 Material por cantidad <small>codos, niples, etc.</small></h3>
+          <!-- BLOQUE 1: POR CANTIDAD -->
+          <div class="bloque cant">
+            <h3>📦 Material por cantidad <small>codos, niples, etc.</small></h3>
 
-        <label for="sel-producto">Material</label>
-        <select id="sel-producto">
-        <option value="">Seleccione material…</option>
-        {% for p in pend_cantidad %}
-            <option value="{{ p.id }}">{{ p.nombre }}{% if p.pendiente %} · asignado: {{ p.pendiente }}{% endif %}</option>
-        {% endfor %}
-        </select>
-        <div class="msg" id="stock"></div>
+            <label for="sel-producto">Material</label>
+            <select id="sel-producto">
+              <option value="">Seleccione material…</option>
+              {% for p in pend_cantidad %}
+                <option value="{{ p.id }}">{{ p.nombre }}{% if p.pendiente %} · asignado: {{ p.pendiente }}{% else %} · sin asignar{% endif %}</option>
+              {% endfor %}
+            </select>
+            <div class="msg" id="stock"></div>
 
-        <div class="row">
-        <div>
-            <label for="in-cantidad">Cantidad</label>
-            <input type="number" min="1" id="in-cantidad" value="1">
+            <div class="row">
+              <div>
+                <label for="in-cantidad">Cantidad</label>
+                <input type="number" min="1" id="in-cantidad" value="1">
+              </div>
+              <button type="button" class="btn" id="btn-add-cant">Agregar</button>
+            </div>
+          </div>
+
+          <!-- BLOQUE 2: POR SERIAL -->
+          <div class="bloque ser">
+            <h3>🔢 Material por serial o código <small>medidores, reguladores…</small></h3>
+
+            <div id="caja-prod" class="hidden" style="margin-bottom:8px">
+              <label for="sel-prod-serial">¿Qué material es? (el serial no existe en el sistema)</label>
+              <select id="sel-prod-serial">
+                {% for p in productos_serializados %}
+                  <option
+                    value="{{ p.pk }}"
+                    data-categoria-id="{{ p.categoria_id }}"
+                    data-categoria-nombre="{{ p.categoria.nombre }}"
+                    data-max-orden="{{ p.categoria.max_por_orden|default_if_none:'' }}"
+                  >{{ p.nombre_completo }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <label for="in-serial">Serial o código</label>
+            <div class="row">
+              <div><input type="text" id="in-serial" autocomplete="off" placeholder="Escriba o escanee y Enter"></div>
+              <button type="button" class="btn" id="btn-add-serial">Validar</button>
+            </div>
+          </div>
+
+          <div class="msg" id="msg"></div>
+          <div class="pend sep" id="resumen-pend"></div>
         </div>
-        <button type="button" class="btn" id="btn-add-cant">Agregar</button>
-        </div>
-    </div>
-
-    <!-- BLOQUE 2: POR SERIAL -->
-    <div class="bloque ser">
-        <h3>🔢 Material por serial o código <small>medidores, reguladores…</small></h3>
-
-        <div id="caja-prod" class="hidden" style="margin-bottom:8px">
-        <label for="sel-prod-serial">¿Qué material es? (el serial no existe en el sistema)</label>
-        <select id="sel-prod-serial">
-            {% for p in productos_serializados %}
-            <option
-                value="{{ p.pk }}"
-                data-categoria-id="{{ p.categoria_id }}"
-                data-categoria-nombre="{{ p.categoria.nombre }}"
-                data-max-orden="{{ p.categoria.max_por_orden|default_if_none:'' }}"
-            >
-                {{ p.nombre_completo }}
-            </option>
-            {% endfor %}
-        </select>
-        </div>
-
-        <label for="in-serial">Serial o código</label>
-        <div class="row">
-        <div><input type="text" id="in-serial" autocomplete="off" placeholder="Escriba o escanee y Enter"></div>
-        <button type="button" class="btn" id="btn-add-serial">Validar</button>
-        </div>
-    </div>
-
-    <div class="msg" id="msg"></div>
-    <div class="pend sep" id="resumen-pend"></div>
-    </div>
 
         <div class="card">
           <label>Materiales de esta operación</label>
@@ -205,17 +209,14 @@
       <div class="scroll"><table id="informe"></table></div>
     </div>
 
-        <div class="foot">
-    <a href="{{ cancelar_url }}" class="btn sec">Cancelar</a>
-
-        <span>
-            <span id="n-inc"></span>
-            <b id="total-gen">0</b> pieza(s)
-            &nbsp;
-            <button class="btn" id="btn-guardar" type="submit">
-                Guardar cambios
-            </button>
-        </span>
+    <div class="foot">
+      <a href="{{ cancelar_url }}" class="btn sec">Cancelar</a>
+      <span>
+        <span id="n-inc"></span>
+        <b id="total-gen">0</b> pieza(s) a instalar
+        &nbsp;
+        <button class="btn" id="btn-guardar" type="submit">Guardar cambios</button>
+      </span>
     </div>
   </form>
 </div>
@@ -227,107 +228,63 @@
 (function () {
     "use strict";
 
-    var $ = function (id) {
-        return document.getElementById(id);
-    };
+    var $ = function (id) { return document.getElementById(id); };
 
-    /* ============================================================
-       CONFIGURACIÓN
-    ============================================================ */
+    /* ================= CONFIGURACIÓN ================= */
 
     var urlCheck = "{% url 'almacen:api_validar_serial_instalacion' %}";
     var tecnicoId = "{{ tecnico.pk }}";
     var urlIvt = "{% url 'almacen:api_validar_ivt' %}";
     var opIvt = "{% if operacion %}&operacion={{ operacion.pk }}{% endif %}";
 
-    /* ============================================================
-       LECTURA SEGURA DE LOS JSON DEL HTML
-    ============================================================ */
-
     function leerJSON(id, valorPorDefecto) {
         var elemento = $(id);
-
-        if (!elemento) {
-            console.warn("No se encontró el elemento JSON:", id);
-            return valorPorDefecto;
-        }
-
+        if (!elemento) return valorPorDefecto;
         try {
-            var resultado = JSON.parse(elemento.textContent || "");
-
-            return resultado === null ? valorPorDefecto : resultado;
-
+            var r = JSON.parse(elemento.textContent || "");
+            return r === null ? valorPorDefecto : r;
         } catch (error) {
             console.error("Error leyendo JSON:", id, error);
             return valorPorDefecto;
         }
     }
 
-    // Materiales pendientes que tiene el técnico.
     var pend = leerJSON("pend-cantidad", []);
     var seriales = leerJSON("pend-seriales", []);
     var instalan = leerJSON("estados-instalan", []);
     var tipos = leerJSON("tipos-inc", {});
-
-    // Materiales que ya pertenecen a la operación cuando se edita.
     var lineas = leerJSON("payload-previo", []);
-    function construirPayload() {
-        return lineas.map(function (l) {
-
-            return {
-                producto_id: l.producto,
-
-                cantidad: l.serializado
-                    ? l.unidades.length
-                    : l.cantidad,
-
-                seriales: l.serializado
-                    ? l.unidades.map(function (u) {
-                        return u.serial;
-                    })
-                    : [],
-
-                observaciones: ""
-            };
-        });
-    }
-
 
     if (!Array.isArray(pend)) pend = [];
     if (!Array.isArray(seriales)) seriales = [];
     if (!Array.isArray(instalan)) instalan = [];
     if (!Array.isArray(lineas)) lineas = [];
 
-    /*
-     * Normalizar los materiales existentes.
-     * Esto evita errores cuando se carga el payload de edición.
-     */
+    function construirPayload() {
+        return lineas.map(function (l) {
+            return {
+                producto_id: l.producto,
+                cantidad: l.serializado ? l.unidades.length : l.cantidad,
+                seriales: l.serializado
+                    ? l.unidades.map(function (u) { return u.serial; })
+                    : [],
+                observaciones: ""
+            };
+        });
+    }
+
     lineas.forEach(function (l) {
-        if (!Array.isArray(l.unidades)) {
-            l.unidades = [];
-        }
-
+        if (!Array.isArray(l.unidades)) l.unidades = [];
         l.serializado = !!l.serializado;
-
-        if (l.serializado) {
-            l.cantidad = 0;
-        } else {
-            l.cantidad = parseInt(l.cantidad, 10) || 0;
-        }
+        l.cantidad = l.serializado ? 0 : (parseInt(l.cantidad, 10) || 0);
     });
 
-    /* ============================================================
-       CONFIGURACIÓN DE PRODUCTOS
-    ============================================================ */
+    /* ================= PRODUCTOS ================= */
 
     var mapa = {};
-
-    pend.forEach(function (p) {
-        mapa[String(p.id)] = p;
-    });
+    pend.forEach(function (p) { mapa[String(p.id)] = p; });
 
     var tsProd = null;
-
     if ($("sel-producto") && typeof TomSelect !== "undefined") {
         tsProd = new TomSelect($("sel-producto"), {
             placeholder: "Buscar material…",
@@ -337,77 +294,55 @@
 
     var serialPendiente = "";
 
-    /* ============================================================
-       UTILIDADES
-    ============================================================ */
+    /* ================= UTILIDADES ================= */
 
     function msg(txt, nivel) {
         var m = $("msg");
-
         if (!m) return;
-
         m.textContent = txt || "";
         m.className = "msg " + (txt ? (nivel || "err") : "");
     }
 
     function enLinea(pid, ser) {
         return lineas.find(function (l) {
-            return (
-                String(l.producto) === String(pid) &&
-                !!l.serializado === !!ser
-            );
+            return String(l.producto) === String(pid) && !!l.serializado === !!ser;
         });
     }
 
     function pendDe(pid) {
         var p = mapa[String(pid)];
-
         return p ? (parseInt(p.pendiente, 10) || 0) : 0;
     }
 
     function disponible(pid) {
         var l = enLinea(pid, false);
-
         return pendDe(pid) - (l ? l.cantidad : 0);
     }
 
     function exceso(l) {
         if (l.serializado) return 0;
-
-        return Math.max(
-            l.cantidad - pendDe(l.producto),
-            0
-        );
+        return Math.max(l.cantidad - pendDe(l.producto), 0);
     }
 
-    // Determina si una unidad serializada se instala.
-    function instalaU(u) {
-        return !u.tipo || !!u.instala;
-    }
+    function instalaU(u) { return !u.tipo || !!u.instala; }
 
-    // Cantidad total agregada a la lista.
     function cantLinea(l) {
-        return l.serializado
-            ? l.unidades.length
-            : l.cantidad;
+        return l.serializado ? l.unidades.length : l.cantidad;
     }
 
-    // Cantidad que realmente se instala.
+    // Lo que realmente se instala: el excedente solo se reporta.
     function cantInstala(l) {
         return l.serializado
             ? l.unidades.filter(instalaU).length
-            : l.cantidad;
+            : l.cantidad - exceso(l);
     }
 
     function totalInstala() {
-        return lineas.reduce(function (a, l) {
-            return a + cantInstala(l);
-        }, 0);
+        return lineas.reduce(function (a, l) { return a + cantInstala(l); }, 0);
     }
 
     function serialUsado(txt) {
         txt = String(txt).trim().toLowerCase();
-
         return lineas.some(function (l) {
             return l.serializado && l.unidades.some(function (u) {
                 return String(u.serial || "").trim().toLowerCase() === txt;
@@ -415,22 +350,11 @@
         });
     }
 
-    /*
-     * Comparar los ID como texto evita problemas cuando
-     * uno viene como número y otro como cadena.
-     */
     function idUsado(id) {
-        if (id === null || id === undefined || id === "") {
-            return false;
-        }
-
+        if (id === null || id === undefined || id === "") return false;
         return lineas.some(function (l) {
             return l.serializado && l.unidades.some(function (u) {
-                return (
-                    u.id !== null &&
-                    u.id !== undefined &&
-                    String(u.id) === String(id)
-                );
+                return u.id !== null && u.id !== undefined && String(u.id) === String(id);
             });
         });
     }
@@ -445,103 +369,64 @@
         }, 0);
     }
 
-    /* ============================================================
-       ESTADO DE LA OPERACIÓN
-    ============================================================ */
+    /* ================= ESTADO DE LA OPERACIÓN ================= */
 
     var estadoSel = $("id_estado");
+    var anomaliaSel = $("id_anomalia");
 
-var anomaliaSel = $("id_anomalia");
+    function filtrarAnomalias() {
+        if (!estadoSel || !anomaliaSel) return;
 
-function filtrarAnomalias() {
-    if (!estadoSel || !anomaliaSel) return;
+        var estado = estadoSel.value;
+        var ejecutada = ["EJECUTADA", "EJECUTADA_SUSPENDIDA"].indexOf(estado) !== -1;
+        var noEjecutada = estado === "NO_EJECUTADA";
+        var seleccionActual = anomaliaSel.value;
+        var seleccionValida = false;
 
-    var estado = estadoSel.value;
+        Array.from(anomaliaSel.options).forEach(function (opcion) {
+            if (!opcion.value) {
+                opcion.hidden = false;
+                opcion.disabled = false;
+                return;
+            }
 
-    var ejecutada = [
-        "EJECUTADA",
-        "EJECUTADA_SUSPENDIDA"
-    ].indexOf(estado) !== -1;
-
-    var noEjecutada = estado === "NO_EJECUTADA";
-
-    var seleccionActual = anomaliaSel.value;
-
-    var opciones = Array.from(anomaliaSel.options);
-    var seleccionValida = false;
-
-    opciones.forEach(function(opcion, index) {
-        if (!opcion.value) {
-            opcion.hidden = false;
-            opcion.disabled = false;
-            return;
-        }
-
-        var aplicaEjecutada =
-            opcion.dataset.ejecutada === "1";
-
-        var aplicaNoEjecutada =
-            opcion.dataset.noEjecutada === "1";
-
-        var aplica =
-            ejecutada
-                ? aplicaEjecutada
+            var aplica = ejecutada
+                ? opcion.dataset.ejecutada === "1"
                 : noEjecutada
-                    ? aplicaNoEjecutada
+                    ? opcion.dataset.noEjecutada === "1"
                     : false;
 
-        opcion.hidden = !aplica;
-        opcion.disabled = !aplica;
+            opcion.hidden = !aplica;
+            opcion.disabled = !aplica;
 
-        if (
-            opcion.value === seleccionActual &&
-            aplica
-        ) {
-            seleccionValida = true;
-        }
-    });
+            if (opcion.value === seleccionActual && aplica) {
+                seleccionValida = true;
+            }
+        });
 
-    if (!seleccionValida) {
-        anomaliaSel.value = "";
+        if (!seleccionValida) anomaliaSel.value = "";
     }
-}
-
 
     function evaluarEstado() {
         if (!estadoSel) return;
 
         var instala = instalan.indexOf(estadoSel.value) !== -1;
-
-        /*
-         * IMPORTANTE:
-         * En edición no se eliminan los materiales existentes
-         * cuando se cambia el estado.
-         */
         var mostrar = instala || lineas.length > 0;
 
-        if ($("bloque-materiales")) {
-            $("bloque-materiales").style.display = mostrar ? "" : "none";
-        }
-
-        if ($("card-informe")) {
-            $("card-informe").style.display = mostrar ? "" : "none";
-        }
+        if ($("bloque-materiales")) $("bloque-materiales").style.display = mostrar ? "" : "none";
+        if ($("card-informe")) $("card-informe").style.display = mostrar ? "" : "none";
     }
 
     if (estadoSel) {
-    estadoSel.addEventListener("change", function() {
-        evaluarEstado();
-        filtrarAnomalias();
-    });
-}
+        estadoSel.addEventListener("change", function () {
+            evaluarEstado();
+            filtrarAnomalias();
+        });
+    }
 
-if (anomaliaSel) {
-    filtrarAnomalias();
-}
+    if (anomaliaSel) filtrarAnomalias();
 
-    /* ============================================================
-       MATERIALES POR CANTIDAD
-    ============================================================ */
+    /* ================= MATERIALES POR CANTIDAD ================= */
 
     function pintarStock() {
         if (!tsProd || !$("stock")) return;
@@ -561,9 +446,7 @@ if (anomaliaSel) {
             s.textContent = "Asignado pendiente: " + d;
             s.className = "msg ok";
         } else {
-            s.textContent =
-                "⚠ Sin asignación pendiente: lo que agregue quedará como inconsistencia.";
-
+            s.textContent = "⚠ Sin asignación pendiente: lo que agregue quedará como inconsistencia.";
             s.className = "msg warn";
         }
     }
@@ -580,7 +463,6 @@ if (anomaliaSel) {
             if (!tsProd) return;
 
             var pid = tsProd.getValue();
-
             if (!pid) return;
 
             var n = parseInt(this.value, 10);
@@ -588,13 +470,9 @@ if (anomaliaSel) {
 
             if (!isNaN(n) && n > d) {
                 $("stock").textContent =
-                    "⚠ Solo tiene " + d +
-                    " asignado(s); " +
-                    (n - d) +
+                    "⚠ Solo tiene " + d + " asignado(s); " + (n - d) +
                     " quedará(n) como inconsistencia.";
-
                 $("stock").className = "msg warn";
-
             } else {
                 pintarStock();
             }
@@ -602,29 +480,19 @@ if (anomaliaSel) {
     }
 
     function agregarCantidad() {
-        if (!tsProd) {
-            return msg("No se pudo cargar el selector de materiales.");
-        }
+        if (!tsProd) return msg("No se pudo cargar el selector de materiales.");
 
         var pid = tsProd.getValue();
-
-        if (!pid) {
-            return msg("Seleccione un material.");
-        }
+        if (!pid) return msg("Seleccione un material.");
 
         var n = parseInt($("in-cantidad").value, 10);
-
-        if (!n || n <= 0) {
-            return msg("Cantidad inválida.");
-        }
+        if (!n || n <= 0) return msg("Cantidad inválida.");
 
         var d = Math.max(disponible(pid), 0);
         var ex = n - Math.min(n, d);
         var p = mapa[String(pid)];
 
-        if (!p) {
-            return msg("No se encontró el material seleccionado.");
-        }
+        if (!p) return msg("No se encontró el material seleccionado.");
 
         var l = enLinea(pid, false);
 
@@ -636,7 +504,6 @@ if (anomaliaSel) {
                 cantidad: 0,
                 unidades: []
             };
-
             lineas.push(l);
         }
 
@@ -644,16 +511,12 @@ if (anomaliaSel) {
 
         if (ex > 0) {
             msg(
-                "⚠ Agregado, pero " + ex +
-                " de " + n +
+                "⚠ Agregado, pero " + ex + " de " + n +
                 " no estaban asignados: se reportará como inconsistencia.",
                 "warn"
             );
         } else {
-            msg(
-                "✓ Agregado: " + n + " × " + p.nombre,
-                "ok"
-            );
+            msg("✓ Agregado: " + n + " × " + p.nombre, "ok");
         }
 
         $("in-cantidad").value = 1;
@@ -662,9 +525,7 @@ if (anomaliaSel) {
         pintarStock();
     }
 
-    if ($("btn-add-cant")) {
-        $("btn-add-cant").addEventListener("click", agregarCantidad);
-    }
+    if ($("btn-add-cant")) $("btn-add-cant").addEventListener("click", agregarCantidad);
 
     if ($("in-cantidad")) {
         $("in-cantidad").addEventListener("keydown", function (e) {
@@ -675,58 +536,32 @@ if (anomaliaSel) {
         });
     }
 
-    /* ============================================================
-       MATERIALES SERIALIZADOS
-    ============================================================ */
+    /* ================= MATERIALES SERIALIZADOS ================= */
 
     function ocultarCajaProd() {
-        if ($("caja-prod")) {
-            $("caja-prod").classList.add("hidden");
-        }
-
-        if ($("sel-prod-serial")) {
-            $("sel-prod-serial").value = "";
-        }
-
+        if ($("caja-prod")) $("caja-prod").classList.add("hidden");
+        if ($("sel-prod-serial")) $("sel-prod-serial").value = "";
         serialPendiente = "";
     }
 
-    /* ============================================================
-    VALIDAR MÁXIMO DE SERIALIZADOS POR CATEGORÍA
-    ============================================================ */
-
     function obtenerReglaCategoria(pid) {
         var selector = $("sel-prod-serial");
-
         if (!selector) return null;
 
-        var opcion = Array.from(selector.options).find(function(op) {
+        var opcion = Array.from(selector.options).find(function (op) {
             return String(op.value) === String(pid);
         });
-
         if (!opcion) return null;
 
         var categoriaId = opcion.getAttribute("data-categoria-id");
         var categoriaNombre = opcion.getAttribute("data-categoria-nombre");
-        var maximo = opcion.getAttribute("data-max-orden");
+        var maximo = parseInt(opcion.getAttribute("data-max-orden"), 10);
 
-        if (!categoriaId || !categoriaNombre) {
-            return null;
-        }
+        if (!categoriaId || !categoriaNombre) return null;
+        if (isNaN(maximo)) maximo = 1;
 
-        maximo = parseInt(maximo, 10);
-
-        if (isNaN(maximo)) {
-            maximo = 1;
-        }
-
-        return {
-            id: String(categoriaId),
-            nombre: categoriaNombre,
-            maximo: maximo
-        };
+        return { id: String(categoriaId), nombre: categoriaNombre, maximo: maximo };
     }
-
 
     function validarMaximoCategoria(pid) {
         var regla = obtenerReglaCategoria(pid);
@@ -738,21 +573,15 @@ if (anomaliaSel) {
             };
         }
 
-        // Si no hay límite configurado, por defecto solo se permite 1.
         var maximo = regla.maximo > 0 ? regla.maximo : 1;
-
         var cantidadActual = 0;
 
         for (var i = 0; i < lineas.length; i++) {
             var l = lineas[i];
-
             if (!l.serializado) continue;
 
             var otraRegla = obtenerReglaCategoria(l.producto);
-
-            if (!otraRegla) {
-                continue;
-            }
+            if (!otraRegla) continue;
 
             if (String(otraRegla.id) === String(regla.id)) {
                 cantidadActual += l.unidades.length;
@@ -763,36 +592,26 @@ if (anomaliaSel) {
             return {
                 valido: false,
                 mensaje:
-                    "✗ Categoría '" + regla.nombre +
-                    "': ya tiene " + cantidadActual +
-                    " material(es) agregado(s) en esta ODS. " +
-                    "El máximo permitido es " + maximo + "."
+                    "✗ Categoría '" + regla.nombre + "': ya tiene " + cantidadActual +
+                    " material(es) agregado(s) en esta ODS. El máximo permitido es " + maximo + "."
             };
         }
 
-        return {
-            valido: true
-        };
+        return { valido: true };
     }
 
     function agregarUnidad(pid, nombre, unidad) {
-
-        // VALIDACIÓN INMEDIATA POR CATEGORÍA
         var validacion = validarMaximoCategoria(pid);
 
         if (!validacion.valido) {
-
             msg(validacion.mensaje, "err");
-
             $("in-serial").select();
-
             return false;
         }
 
         var l = enLinea(pid, true);
 
         if (!l) {
-
             l = {
                 producto: pid,
                 nombre: nombre,
@@ -800,7 +619,6 @@ if (anomaliaSel) {
                 cantidad: 0,
                 unidades: []
             };
-
             lineas.push(l);
         }
 
@@ -810,7 +628,6 @@ if (anomaliaSel) {
         $("in-serial").focus();
 
         ocultarCajaProd();
-
         render();
 
         return true;
@@ -819,9 +636,7 @@ if (anomaliaSel) {
     function validarSerial() {
         var txt = $("in-serial").value.trim();
 
-        if (!txt) {
-            return msg("Escriba o escanee un serial.");
-        }
+        if (!txt) return msg("Escriba o escanee un serial.");
 
         var low = txt.toLowerCase();
 
@@ -831,10 +646,7 @@ if (anomaliaSel) {
             return;
         }
 
-        /*
-         * 1. Buscar si el técnico tiene el serial asignado.
-         * Si lo tiene, no es necesario consultar al servidor.
-         */
+        // 1. Lo tiene asignado el técnico: no hace falta consultar al servidor.
         var u = seriales.find(function (s) {
             return (
                 String(s.serial || "").toLowerCase() === low ||
@@ -849,30 +661,13 @@ if (anomaliaSel) {
                 return;
             }
 
-            if (!agregarUnidad(
-                u.producto,
-                u.nombre,
-                {
-                    id: u.id,
-                    serial: u.serial
-                }
-            )) {
-                return;
-            }
+            if (!agregarUnidad(u.producto, u.nombre, { id: u.id, serial: u.serial })) return;
 
-            msg(
-                "✓ " + u.serial + " · " + u.nombre +
-                " — lo tiene asignado.",
-                "ok"
-            );
-
+            msg("✓ " + u.serial + " · " + u.nombre + " — lo tiene asignado.", "ok");
             return;
         }
 
-        /*
-         * 2. Serial inexistente.
-         * Se solicita seleccionar el material al que pertenece.
-         */
+        // 2. Serial inexistente: el usuario elige a qué material pertenece.
         var prodSel = $("sel-prod-serial");
 
         if (serialPendiente === low) {
@@ -885,27 +680,18 @@ if (anomaliaSel) {
 
             var nom = prodSel.options[prodSel.selectedIndex].text;
 
-            if (!agregarUnidad(
-                prodSel.value,
-                nom,
-                {
-                    id: null,
-                    serial: txt,
-                    tipo: "NO_REGISTRADO",
-                    instala: false,
-                    aviso: "El serial no existe en el sistema."
-                }
-            )) {
-                return;
-            }
+            agregarUnidad(prodSel.value, nom, {
+                id: null,
+                serial: txt,
+                tipo: "NO_REGISTRADO",
+                instala: false,
+                aviso: "El serial no existe en el sistema."
+            });
 
             return;
         }
 
-        /*
-         * 3. El técnico no tiene asignado el serial.
-         * Consultar al servidor para determinar su situación.
-         */
+        // 3. Consultar al servidor.
         msg("Validando…", "ok");
 
         fetch(
@@ -914,17 +700,13 @@ if (anomaliaSel) {
             "&serial=" + encodeURIComponent(txt)
         )
             .then(function (r) {
-                if (!r.ok) {
-                    throw new Error("Error HTTP " + r.status);
-                }
-
+                if (!r.ok) throw new Error("Error HTTP " + r.status);
                 return r.json();
             })
             .then(function (d) {
 
                 if (d.tipo === "NO_REGISTRADO") {
                     serialPendiente = low;
-
                     $("caja-prod").classList.remove("hidden");
 
                     msg(
@@ -932,7 +714,6 @@ if (anomaliaSel) {
                         " Elija el material y pulse Validar otra vez para reportarlo.",
                         "warn"
                     );
-
                     return;
                 }
 
@@ -945,57 +726,32 @@ if (anomaliaSel) {
                 }
 
                 if (d.tipo === "OK") {
-                    if (!agregarUnidad(
-                        d.producto,
-                        d.nombre,
-                        {
-                            id: d.id,
-                            serial: d.serial
-                        }
-                    )) {
-                        return;
-                    }
+                    if (!agregarUnidad(d.producto, d.nombre, { id: d.id, serial: d.serial })) return;
 
-                    msg(
-                        "✓ " + d.serial +
-                        " — lo tiene asignado.",
-                        "ok"
-                    );
-
+                    msg("✓ " + d.serial + " — lo tiene asignado.", "ok");
                     return;
                 }
 
-                if (!agregarUnidad(
-                    d.producto,
-                    d.nombre,
-                    {
-                        id: d.id,
-                        serial: d.serial,
-                        tipo: d.tipo,
-                        instala: d.instala,
-                        aviso: d.mensaje
-                    }
-                )) {
-                    return;
-                }
+                if (!agregarUnidad(d.producto, d.nombre, {
+                    id: d.id,
+                    serial: d.serial,
+                    tipo: d.tipo,
+                    instala: d.instala,
+                    aviso: d.mensaje
+                })) return;
 
                 msg(
-                    "⚠ " + d.serial +
-                    " — " + (tipos[d.tipo] || d.tipo) +
-                    ". " + d.mensaje,
+                    "⚠ " + d.serial + " — " + (tipos[d.tipo] || d.tipo) + ". " + d.mensaje,
                     "warn"
                 );
             })
             .catch(function (error) {
                 console.error("Error validando serial:", error);
-
                 msg("No se pudo validar el serial. Intente de nuevo.");
             });
     }
 
-    if ($("btn-add-serial")) {
-        $("btn-add-serial").addEventListener("click", validarSerial);
-    }
+    if ($("btn-add-serial")) $("btn-add-serial").addEventListener("click", validarSerial);
 
     if ($("in-serial")) {
         $("in-serial").addEventListener("keydown", function (e) {
@@ -1005,41 +761,25 @@ if (anomaliaSel) {
             }
         });
 
-        /*
-         * Si cambia el texto del serial, se descarta
-         * la selección pendiente de material.
-         */
         $("in-serial").addEventListener("input", function () {
-            if (
-                serialPendiente &&
-                this.value.trim().toLowerCase() !== serialPendiente
-            ) {
+            if (serialPendiente && this.value.trim().toLowerCase() !== serialPendiente) {
                 ocultarCajaProd();
             }
         });
     }
 
-    /* ============================================================
-       FUNCIONES PARA PINTAR LA TABLA
-    ============================================================ */
+    /* ================= TABLA ================= */
 
     function celda(tr, txt, cls) {
         var td = document.createElement("td");
-
         td.textContent = txt;
-
-        if (cls) {
-            td.className = cls;
-        }
-
+        if (cls) td.className = cls;
         tr.appendChild(td);
-
         return td;
     }
 
     function render() {
         var tb = $("lineas");
-
         if (!tb) return;
 
         tb.innerHTML = "";
@@ -1056,33 +796,18 @@ if (anomaliaSel) {
                 l.unidades.forEach(function (u, j) {
                     var c = document.createElement("span");
 
-                    c.className =
-                        "chip" +
-                        (u.tipo
-                            ? (instalaU(u) ? " warn" : " bad")
-                            : ""
-                        );
-
+                    c.className = "chip" + (u.tipo ? (instalaU(u) ? " warn" : " bad") : "");
                     c.title = u.aviso || "";
 
-                    c.appendChild(
-                        document.createTextNode(
-                            (u.tipo ? "⚠ " : "✓ ") + u.serial
-                        )
-                    );
+                    c.appendChild(document.createTextNode((u.tipo ? "⚠ " : "✓ ") + u.serial));
 
                     var b = document.createElement("button");
-
                     b.type = "button";
                     b.textContent = "×";
 
                     b.onclick = function () {
                         l.unidades.splice(j, 1);
-
-                        if (!l.unidades.length) {
-                            lineas.splice(i, 1);
-                        }
-
+                        if (!l.unidades.length) lineas.splice(i, 1);
                         render();
                         pintarStock();
                     };
@@ -1092,17 +817,12 @@ if (anomaliaSel) {
 
                     if (u.tipo) {
                         var a = document.createElement("div");
-
                         a.className = "aviso";
-
                         a.textContent =
                             (tipos[u.tipo] || u.tipo) +
-                            (
-                                instalaU(u)
-                                    ? " — se regulariza al guardar."
-                                    : " — NO se instala, solo se reporta."
-                            );
-
+                            (instalaU(u)
+                                ? " — se regulariza al guardar."
+                                : " — NO se instala, solo se reporta.");
                         det.appendChild(a);
                     }
                 });
@@ -1112,15 +832,11 @@ if (anomaliaSel) {
 
                 if (ex > 0) {
                     var a2 = document.createElement("div");
-
                     a2.className = "aviso";
-
                     a2.textContent =
-                        "⚠ " + ex +
-                        " sin asignación previa — se reportará como inconsistencia.";
-
+                        "⚠ " + ex + " sin asignación previa — se reportará como inconsistencia (" +
+                        (l.cantidad - ex) + " se instalan).";
                     det.appendChild(a2);
-
                 } else {
                     det.textContent = "—";
                 }
@@ -1131,38 +847,28 @@ if (anomaliaSel) {
             celda(tr, cantLinea(l), "n");
 
             var tdx = document.createElement("td");
-
             tdx.className = "n";
 
             var x = document.createElement("button");
-
             x.type = "button";
             x.className = "x";
             x.textContent = "🗑";
 
             x.onclick = function () {
                 lineas.splice(i, 1);
-
                 render();
                 pintarStock();
             };
 
             tdx.appendChild(x);
             tr.appendChild(tdx);
-
             tb.appendChild(tr);
         });
 
-        if ($("vacio")) {
-            $("vacio").style.display = lineas.length ? "none" : "";
-        }
+        if ($("vacio")) $("vacio").style.display = lineas.length ? "none" : "";
 
         informe();
         resumen();
-
-        if ($("total-gen")) {
-            $("total-gen").textContent = totalInstala();
-        }
 
         var k = nInc();
         var total = lineas.reduce(function (a, l) { return a + cantLinea(l); }, 0);
@@ -1172,35 +878,23 @@ if (anomaliaSel) {
                 ? "✓ " + (total - k) + " correcta(s) · ⚠ " + k + " inconsistente(s) · "
                 : "";
         }
-        if ($("total-gen")) {
-            $("total-gen").textContent = total;
-        }
 
-        // Mantener actualizado el payload.
-        if ($("payload")) {
-            $("payload").value = JSON.stringify(
-            construirPayload()
-        );
-        }
+        if ($("total-gen")) $("total-gen").textContent = totalInstala();
+
+        if ($("payload")) $("payload").value = JSON.stringify(construirPayload());
     }
 
-    /* ============================================================
-       RESUMEN DE MATERIALES PENDIENTES
-    ============================================================ */
+    /* ================= RESUMEN PENDIENTES ================= */
 
     function resumen() {
         var box = $("resumen-pend");
-
         if (!box) return;
 
         box.innerHTML = "";
 
         var t = document.createElement("div");
-
         var titulo = document.createElement("b");
-
         titulo.textContent = "En poder del técnico (pendiente)";
-
         t.appendChild(titulo);
         box.appendChild(t);
 
@@ -1212,29 +906,20 @@ if (anomaliaSel) {
             hay = true;
 
             var rest = Math.max(disponible(p.id), 0);
-
             var s = document.createElement("span");
 
-            if (!rest) {
-                s.className = "cero";
-            }
+            if (!rest) s.className = "cero";
 
             s.textContent = p.nombre + ": " + rest;
-
             box.appendChild(s);
         });
 
-        /*
-         * Seriales pendientes que todavía no se han agregado.
-         */
         var usados = {};
 
         lineas.forEach(function (l) {
             if (l.serializado) {
                 l.unidades.forEach(function (u) {
-                    if (u.id !== null && u.id !== undefined) {
-                        usados[String(u.id)] = 1;
-                    }
+                    if (u.id !== null && u.id !== undefined) usados[String(u.id)] = 1;
                 });
             }
         });
@@ -1249,30 +934,22 @@ if (anomaliaSel) {
 
         Object.keys(porProd).forEach(function (n) {
             hay = true;
-
             var s = document.createElement("span");
-
             s.textContent = n + ": " + porProd[n];
-
             box.appendChild(s);
         });
 
         if (!hay) {
             var v = document.createElement("div");
-
             v.textContent = "Sin material pendiente.";
-
             box.appendChild(v);
         }
     }
 
-    /* ============================================================
-       INFORME DE MATERIALES
-    ============================================================ */
+    /* ================= INFORME ================= */
 
     function informe() {
         var t = $("informe");
-
         if (!t) return;
 
         t.innerHTML = "";
@@ -1282,127 +959,78 @@ if (anomaliaSel) {
         var head = document.createElement("tr");
 
         ["Concepto"]
-            .concat(
-                lineas.map(function (l) {
-                    return l.nombre;
-                }),
-                ["Total"]
-            )
+            .concat(lineas.map(function (l) { return l.nombre; }), ["Total"])
             .forEach(function (h, k) {
                 var th = document.createElement("th");
-
                 th.textContent = h;
-
-                if (k) {
-                    th.className = "n";
-                }
-
+                if (k) th.className = "n";
                 head.appendChild(th);
             });
 
         t.appendChild(head);
 
-        /*
-         * Fila de cantidades instaladas.
-         */
         var r1 = document.createElement("tr");
-
         celda(r1, "Cantidad instalada");
 
-        lineas.forEach(function (l) {
-            celda(r1, cantInstala(l), "n");
-        });
+        lineas.forEach(function (l) { celda(r1, cantInstala(l), "n"); });
 
         celda(r1, totalInstala(), "n").style.fontWeight = "700";
-
         t.appendChild(r1);
 
-        /*
-         * Fila de seriales.
-         */
-        if (lineas.some(function (l) {
-            return l.serializado;
-        })) {
+        if (lineas.some(function (l) { return l.serializado; })) {
             var r2 = document.createElement("tr");
-
             celda(r2, "Seriales");
 
             lineas.forEach(function (l) {
                 celda(
                     r2,
                     l.serializado
-                        ? l.unidades.map(function (u) {
-                            return u.serial;
-                        }).join(", ")
+                        ? l.unidades.map(function (u) { return u.serial; }).join(", ")
                         : "—"
                 );
             });
 
             celda(r2, "");
-
             t.appendChild(r2);
         }
 
-        /*
-         * Fila de inconsistencias.
-         */
         if (nInc() > 0) {
             var r3 = document.createElement("tr");
-
             celda(r3, "⚠ Inconsistencias");
 
             var ti = 0;
 
             lineas.forEach(function (l) {
                 var c = l.serializado
-                    ? l.unidades.filter(function (u) {
-                        return !!u.tipo;
-                    }).length
+                    ? l.unidades.filter(function (u) { return !!u.tipo; }).length
                     : exceso(l);
 
                 ti += c;
 
                 var td = celda(r3, c || "—", "n");
-
                 td.style.color = c ? "#b54708" : "";
             });
 
             celda(r3, ti, "n").style.fontWeight = "700";
-
             t.appendChild(r3);
         }
     }
 
-    /* ============================================================
-       ENVÍO DEL FORMULARIO
-    ============================================================ */
+    /* ================= ENVÍO ================= */
 
     var formulario = $("form-instalar");
 
     if (formulario) {
         formulario.addEventListener("submit", function (e) {
 
-            var instala = estadoSel
-                ? instalan.indexOf(estadoSel.value) !== -1
-                : true;
+            var instala = estadoSel ? instalan.indexOf(estadoSel.value) !== -1 : true;
 
-            /*
-             * Si el estado requiere instalación,
-             * debe existir al menos un material.
-             */
             if (instala && !lineas.length) {
                 e.preventDefault();
-
-                msg(
-                    "✗ Agregue al menos un material o serial antes de registrar."
-                );
-
+                msg("✗ Agregue al menos un material o serial antes de registrar.");
                 return;
             }
 
-            /*
-             * Confirmar inconsistencias.
-             */
             var k = nInc();
 
             if (
@@ -1416,44 +1044,23 @@ if (anomaliaSel) {
                 return;
             }
 
-            /*
-             * IMPORTANTE:
-             * Siempre enviar lineas.
-             *
-             * No usar:
-             * JSON.stringify(instala ? lineas : [])
-             *
-             * Porque eso eliminaría los materiales existentes
-             * cuando se edita una operación y se cambia el estado.
-             */
-            $("payload").value = JSON.stringify(
-                construirPayload()
-            );
+            $("payload").value = JSON.stringify(construirPayload());
 
-            /*
-             * Evitar doble envío.
-             */
-            if ($("btn-guardar")) {
-                $("btn-guardar").disabled = true;
-            }
+            if ($("btn-guardar")) $("btn-guardar").disabled = true;
         });
     }
 
-    /* ============================================================
-       INICIALIZACIÓN
-    ============================================================ */
+    /* ================= INICIALIZACIÓN ================= */
 
     evaluarEstado();
-
-    // Pintar los materiales existentes al abrir la edición.
     render();
-
     pintarStock();
 
-    var resumenErr = document.querySelector(".campo-error, .card[style*='fdecea']");
+    var resumenErr = document.querySelector(".campo-error, .card.errores");
     if (resumenErr) resumenErr.scrollIntoView({ behavior: "smooth", block: "center" });
 
-        var campoIvt = $("id_numero_ivt");
+    var campoIvt = $("id_numero_ivt");
+
     if (campoIvt) {
         var avisoIvt = document.createElement("div");
         avisoIvt.className = "msg";
@@ -1461,9 +1068,16 @@ if (anomaliaSel) {
 
         campoIvt.addEventListener("blur", function () {
             var n = campoIvt.value.trim();
-            if (!n) { avisoIvt.textContent = ""; return; }
-            fetch(urlIvt + "?tecnico=" + encodeURIComponent(tecnicoId) +
-                  "&numero=" + encodeURIComponent(n) + opIvt)
+
+            if (!n) {
+                avisoIvt.textContent = "";
+                return;
+            }
+
+            fetch(
+                urlIvt + "?tecnico=" + encodeURIComponent(tecnicoId) +
+                "&numero=" + encodeURIComponent(n) + opIvt
+            )
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     avisoIvt.textContent = d.mensaje;

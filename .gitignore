@@ -19,3 +19,7 @@ venv/
 .env
 
 media/
+
+# Logs del sistema
+logs/
+*.log
