@@ -3,13 +3,13 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 import json
 User = get_user_model()
-from operaciones.models import Operacion
+from operaciones.models import CargaSAP, Operacion, contexto_tipos
 from . import services
 from .models import Categoria, Inventario, Producto, UnidadSerializada
 from django.core.validators import FileExtensionValidator
 from operaciones.models import (
     Anomalia, Operacion, SIN_ANOMALIA,
-    EXTENSIONES_SOPORTE, validar_tamano_archivo,
+    EXTENSIONES_SOPORTE, validar_tamano_archivo, TipoOperacion
 )
 
 class EstiloMixin:
@@ -599,28 +599,31 @@ class AnomaliaSelect(forms.Select):
             })
 
         return option
-
+    
+def _estados_orden():
+    validos = {e.value for e in (Operacion.ESTADOS_EJECUTADOS | Operacion.ESTADOS_NEGATIVOS)}
+    return [(v, l) for v, l in Operacion.Estado.choices if v in validos]
 
 class DatosOperacionForm(EstiloMixin, forms.Form):
     """Datos comunes de una operación."""
 
-    tipo_operacion = forms.ChoiceField(
+    tipo_operacion = forms.ModelChoiceField(
         label="Tipo de operación",
-        choices=Operacion.TipoOperacion.choices,
+        queryset=TipoOperacion.objects.filter(activo=True),
+        empty_label="Seleccione un tipo de operación",
+        required=True,
     )
 
     estado = forms.ChoiceField(
         label="Estado de la operación",
-        choices=Operacion.Estado.choices,
+        choices=_estados_orden,
         initial=Operacion.Estado.EJECUTADA,
     )
 
     numero_orden = forms.CharField(
         label="Número de orden",
         max_length=10,
-        error_messages={
-            "required": "Este campo es obligatorio."
-        },
+        required=False,      # el servidor decide si es obligatorio
     )
 
     numero_cuenta_contrato = forms.CharField(
@@ -682,6 +685,7 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
     ]
 
     def __init__(self, *args, **kwargs):
+        self.operacion = kwargs.pop("operacion", None)     # NUEVO
         super().__init__(*args, **kwargs)
 
         self.fields["anomalia"].queryset = (
@@ -713,33 +717,48 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
         data = super().clean()
 
         estado = data.get("estado")
-        anomalia = data.get("anomalia")
+        tipo = data.get("tipo_operacion")
+        orden = (data.get("numero_orden") or "").strip().upper()
+        data["numero_orden"] = orden
 
-        # Validar que la anomalía corresponda al estado.
         validar_anomalia_por_estado(self, data)
 
-                # Orden ya registrada / soporte
-        orden = data.get("numero_orden")
+        if tipo and estado and estado not in {e.value for e in tipo.estados_validos()}:
+            self.add_error("estado", f"«{tipo.nombre}» no admite este estado.")
 
-        if orden:
-            op = Operacion.objects.filter(numero_orden=orden).first()
+        previos = (
+            Operacion.Estado.CREADA,
+            Operacion.Estado.PENDIENTE,
+            Operacion.Estado.ASIGNADA,
+        )
 
-            if op and op.estado not in (
-                Operacion.Estado.CREADA,
-                Operacion.Estado.PENDIENTE,
-                Operacion.Estado.ASIGNADA,
-            ):
+        # ---- Sin número de orden ----
+        if not orden:
+            # Solo se permite vacío al crear, y con un tipo que genere ODS (RSO)
+            if self.operacion is not None or (tipo and not tipo.prefijo_sin_ods):
+                self.add_error("numero_orden", "Indique el número de orden.")
+            return data
+
+        # ---- Con número de orden ----
+        ops = Operacion.objects.filter(numero_orden=orden)
+        existente = self.operacion
+
+        if self.operacion is not None:                    # edición
+            if ops.exclude(pk=self.operacion.pk).exists():
+                self.add_error("numero_orden", f"Ya existe otra orden con el número {orden}.")
+                return data
+        else:                                             # creación
+            existente = ops.first()
+            if existente and existente.estado not in previos:
                 self.add_error(
                     "numero_orden",
-                    f"La orden {orden} ya existe (estado: "
-                    f"{op.get_estado_display()}). Si necesita corregirla, "
-                    "solicítelo al administrador.",
+                    f"La orden {orden} ya existe (estado: {existente.get_estado_display()}). "
+                    "Si necesita corregirla, solicítelo al administrador.",
                 )
-            elif not data.get("archivo_soporte") and not (op and op.archivo_soporte):
-                self.add_error(
-                    "archivo_soporte",
-                    "Adjunte el soporte (PDF o imagen) de la orden.",
-                )
+                return data
+
+        if not data.get("archivo_soporte") and not (existente and existente.archivo_soporte):
+            self.add_error("archivo_soporte", "Adjunte el soporte (PDF o imagen) de la orden.")
 
         return data
 
@@ -757,35 +776,22 @@ def configurar_campo_anomalia(form):
 
     form.fields["anomalia"].widget = AnomaliaSelect()
 
-
 def validar_anomalia_por_estado(form, data):
-    """Valida la relación entre estado y anomalía."""
-
     estado = data.get("estado")
     anomalia = data.get("anomalia")
-
     if not estado or not anomalia:
         return
 
-    if estado in (
-        Operacion.Estado.EJECUTADA,
-        Operacion.Estado.EJECUTADA_SUSPENDIDA,
-    ):
+    if estado in {e.value for e in Operacion.ESTADOS_EJECUTADOS}:
         permitida = anomalia.aplica_ejecutada
-
-    elif estado == Operacion.Estado.NO_EJECUTADA:
+    elif estado in {e.value for e in Operacion.ESTADOS_NEGATIVOS}:
         permitida = anomalia.aplica_no_ejecutada
-
     else:
         permitida = False
 
     if not permitida:
-        form.add_error(
-            "anomalia",
-            "La anomalía seleccionada no corresponde "
-            "al estado de la operación."
-        )
-
+        form.add_error("anomalia",
+            "La anomalía seleccionada no corresponde al estado de la operación.")
 
 class InstalacionForm(DatosOperacionForm):
     """Instalación de una asignación."""
@@ -873,32 +879,13 @@ class InstalacionMasivaForm(DatosOperacionForm):
 
         super().__init__(*args, **kwargs)
 
-        self.fields["estado"].choices = [
-            (
-                Operacion.Estado.EJECUTADA,
-                "Ejecutado",
-            ),
-            (
-                Operacion.Estado.NO_EJECUTADA,
-                "No ejecutado",
-            ),
-            (
-                Operacion.Estado.EJECUTADA_SUSPENDIDA,
-                "Ejecutado suspendido",
-            ),
-        ]
 
     def clean(self):
         data = super().clean()
-
-        estado = data.get("estado")
-
-        if estado in Operacion.ESTADOS_QUE_REQUIEREN_IVT:
-            if not data.get("numero_ivt"):
-                self.add_error("numero_ivt", "Indique el IVT de la visita.")
-
+        tipo, estado = data.get("tipo_operacion"), data.get("estado")
+        if tipo and estado and tipo.pide_ivt(estado) and not data.get("numero_ivt"):
+            self.add_error("numero_ivt", "Indique el IVT de la visita.")
         return data
-
 # ---------------------------------------------------------
 # IVT
 # ---------------------------------------------------------

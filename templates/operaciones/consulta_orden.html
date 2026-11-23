@@ -429,8 +429,11 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
             <label for="tipo">Tipo de operación</label>
             <select id="tipo" name="tipo">
                 <option value="">Todos los tipos</option>
-                {% for valor, etiqueta in tipos_operacion %}
-                    <option value="{{ valor }}" {% if tipo_sel == valor|stringformat:"s" %}selected{% endif %}>{{ etiqueta }}</option>
+                {% for tipo in tipos_operacion %}
+                    <option value="{{ tipo.pk }}"
+                        {% if tipo_sel == tipo.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ tipo.etiqueta }}
+                    </option>
                 {% endfor %}
             </select>
         </div>

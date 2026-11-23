@@ -7,6 +7,14 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
+from operaciones.models import (
+    Anomalia,
+    Operacion,
+    RegistroSAP,
+    CargaSAP,
+    TipoOperacion,
+    contexto_tipos,
+)
 from django.utils.dateparse import parse_date
 from .resumen import MESES, url_con, resumen_ejecucion
 from django.utils import timezone
@@ -51,7 +59,7 @@ import os
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.views import View
-from operaciones.models import Anomalia, Operacion, RegistroSAP, CargaSAP
+from operaciones.models import Anomalia, Operacion, RegistroSAP, CargaSAP, TipoOperacion
 from .forms import OperacionEditarForm
 
 E = RegistroSAP.Estado
@@ -60,37 +68,34 @@ E = RegistroSAP.Estado
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from django.db.models import Count, Q
 
-# Ajusta si tu "ejecutada / no ejecutada" se define distinto
-ESTADOS_EJECUTADA = set(Operacion.ESTADOS_QUE_INSTALAN)
-ESTADOS_NO_EJECUTADA = {"NO_EJECUTADA"}
-
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
-from django.db.models import Count, Q
 
-# Estados que cuentan como "ejecutada" / "no ejecutada"
-ESTADOS_EJECUTADA = {getattr(e, "value", e) for e in Operacion.ESTADOS_QUE_INSTALAN}
-ESTADOS_NO_EJECUTADA = {"NO_EJECUTADA"}
+# Todos los estados "ejecutada" (incluye con fuga / sin fugas) y "no ejecutada"
+ESTADOS_EJECUTADA = {e.value for e in Operacion.ESTADOS_EJECUTADOS}
+ESTADOS_NO_EJECUTADA = {e.value for e in Operacion.ESTADOS_NEGATIVOS}
+
+
+def _etiquetas_tipos():
+    """{id_del_tipo: 'ZSCO · Nombre'}; reemplaza a Operacion.TipoOperacion.choices."""
+    return {t.pk: t.etiqueta for t in TipoOperacion.objects.all()}
 
 
 def _get(obj, clave, defecto=None):
-    """Lee de dict u objeto indistintamente."""
     if isinstance(obj, dict):
         return obj.get(clave, defecto)
     return getattr(obj, clave, defecto)
 
 
 def _con_tipo(url, tipo):
-    """Toma una URL del resumen y le pone/reemplaza ?tipo=..."""
     if not url:
         return ""
     p = urlsplit(url)
     params = [(k, v) for k, v in parse_qsl(p.query) if k != "tipo"]
-    params.append(("tipo", tipo))
+    params.append(("tipo", str(tipo)))
     return urlunsplit((p.scheme, p.netloc, p.path, urlencode(params), p.fragment))
 
 
 def _tecnico_id_de_fila(fila):
-    """id del técnico: de la fila, o sacado de la URL de sus enlaces."""
     tid = _get(fila, "tecnico_id")
     if tid:
         return int(tid)
@@ -104,16 +109,11 @@ def _tecnico_id_de_fila(fila):
 
 
 def agregar_tipos_resumen(resumen, qs, anio, mes):
-    """
-    A cada técnico del resumen le agrega `tipos`: una fila por tipo de
-    operación con sus celdas (ejecutadas / no ejecutadas) por columna.
-
-    Supone columnas en orden: meses 1..12 (nivel "mes") o días 1..N (nivel "dia").
-    """
+    """A cada técnico del resumen le agrega `tipos`: una fila por tipo de operación."""
     if not resumen:
         return resumen
 
-    etiquetas = dict(Operacion.TipoOperacion.choices)
+    etiquetas = _etiquetas_tipos()
 
     qs = qs.filter(fecha_operacion__year=anio)
     if resumen["nivel"] == "dia" and mes:
@@ -129,7 +129,7 @@ def agregar_tipos_resumen(resumen, qs, anio, mes):
         )
     )
 
-    datos = {}   # (tecnico, tipo) -> {columna: (ej, no)}
+    datos = {}
     for r in filas_db:
         datos.setdefault((r["tecnico_id"], r["tipo_operacion"]), {})[r[campo]] = (r["ej"], r["no"])
 
@@ -141,7 +141,7 @@ def agregar_tipos_resumen(resumen, qs, anio, mes):
 
         tipos = []
         claves = {t for (tec, t) in datos if tec == tid}
-        for tipo in sorted(claves, key=lambda t: etiquetas.get(t, t)):
+        for tipo in sorted(claves, key=lambda t: etiquetas.get(t, str(t))):
             por_col = datos[(tid, tipo)]
             celdas, tot_ej, tot_no = [], 0, 0
 
@@ -158,7 +158,7 @@ def agregar_tipos_resumen(resumen, qs, anio, mes):
 
             tipos.append({
                 "tipo": tipo,
-                "label": etiquetas.get(tipo, tipo),
+                "label": etiquetas.get(tipo, str(tipo)),
                 "celdas": celdas,
                 "total_ej": tot_ej,
                 "total_no": tot_no,
@@ -176,11 +176,8 @@ def agregar_tipos_resumen(resumen, qs, anio, mes):
 
 
 def contadores_tipos(qs_sin_tipo, request):
-    """
-    Contadores por tipo de operación (clicables como filtro).
-    Devuelve (items, url_todos, total).
-    """
-    etiquetas = dict(Operacion.TipoOperacion.choices)
+    """Contadores por tipo de operación (clicables). Devuelve (items, url_todos, total)."""
+    etiquetas = _etiquetas_tipos()
     tipo_sel = request.GET.get("tipo", "").strip()
 
     base = request.GET.copy()
@@ -200,19 +197,20 @@ def contadores_tipos(qs_sin_tipo, request):
     items, total = [], 0
     for f in sorted(filas, key=lambda x: etiquetas.get(x["tipo_operacion"], "")):
         params = base.copy()
-        params["tipo"] = f["tipo_operacion"]
+        params["tipo"] = str(f["tipo_operacion"])
         total += f["total"]
         items.append({
             "tipo": f["tipo_operacion"],
-            "label": etiquetas.get(f["tipo_operacion"], f["tipo_operacion"]),
+            "label": etiquetas.get(f["tipo_operacion"], str(f["tipo_operacion"])),
             "total": f["total"],
             "ej": f["ej"],
             "no": f["no"],
-            "activo": tipo_sel == f["tipo_operacion"],
+            "activo": tipo_sel == str(f["tipo_operacion"]),
             "url": "?" + params.urlencode(),
         })
 
     return items, "?" + base.urlencode(), total
+
 def _con_label(qs):
     return [
         {"codigo": x["tipo_error"],
@@ -585,24 +583,23 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
     def _n(valor):
         return str(valor or "").strip().upper()
 
-    # ---------- filtros comunes (listado + resumen) ----------
     @staticmethod
     def _filtrar(qs, q, estado, tipo, tecnico, anomalia):
         """Búsqueda, estado, tipo, técnico y anomalía. NO toca fechas."""
         if q:
             qs = qs.filter(
-                Q(numero_orden__icontains=q)
-                | Q(numero_cuenta_contrato__icontains=q)
+                Q(numero_orden__icontains=q) | Q(numero_cuenta_contrato__icontains=q)
             )
         if estado:
             qs = qs.filter(estado=estado)
-        if tipo:
-            qs = qs.filter(tipo_operacion=tipo)
+        if tipo.isdigit():
+            qs = qs.filter(tipo_operacion_id=int(tipo))
         if tecnico.isdigit():
             qs = qs.filter(tecnico_id=int(tecnico))
         if anomalia.isdigit():
             qs = qs.filter(anomalia_id=int(anomalia))
         return qs
+
 
     # ---------- detalle de una orden ----------
     def _detalle(self, ctx, operacion):
@@ -696,7 +693,6 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             })
         return bloques
 
-    # ---------- contexto ----------
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -714,24 +710,21 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
         mes_param = g.get("mes", "").strip()
         fecha_param = g.get("fecha", "").strip()
 
-        # parse_date lanza ValueError con fechas imposibles (2026-02-31)
         try:
             fecha_dt = parse_date(fecha_param) if fecha_param else None
         except ValueError:
             fecha_dt = None
 
-        # --- Año y mes efectivos del resumen ---
         anio = (int(anio_param)
                 if anio_param.isdigit() and 1900 <= int(anio_param) <= 2100
                 else hoy.year)
         mes = (int(mes_param)
                if mes_param.isdigit() and 1 <= int(mes_param) <= 12
                else None)
-        if fecha_dt:                      # si eligió un día, el resumen se ubica en su mes
+        if fecha_dt:
             anio = fecha_dt.year
             mes = fecha_dt.month
 
-        # --- Años disponibles (chips del resumen y select del filtro) ---
         anios_db = sorted(
             {d.year for d in Operacion.objects.dates("fecha_operacion", "year")},
             reverse=True,
@@ -758,20 +751,19 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             meses=MESES,
             anomalias=Anomalia.objects.filter(activa=True),
             estados_orden=Operacion.Estado.choices,
-            tipos_operacion=Operacion.TipoOperacion.choices,
+            tipos_operacion=TipoOperacion.objects.all(),
             tecnicos=User.objects.filter(is_active=True, rol="TECNICO")
                          .order_by("first_name", "last_name", "username"),
             mostrar_listado=True,
         )
 
-        # Una orden escrita exacta en el buscador abre el detalle directo
         if not detalle and q and Operacion.objects.filter(numero_orden=q).exists():
             detalle = q
 
         # ---------------- Detalle de una orden ----------------
         if detalle:
             ctx["mostrar_listado"] = False
-            op = (Operacion.objects.select_related("tecnico", "anomalia")
+            op = (Operacion.objects.select_related("tecnico", "anomalia", "tipo_operacion")
                   .filter(numero_orden=detalle).first())
             if op:
                 self._detalle(ctx, op)
@@ -787,9 +779,8 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
                 return ctx
 
         # ---------------- Resumen + listado ----------------
-        # 1) Base sin filtro de tipo (para los contadores)
         base_sin_tipo = self._filtrar(
-            Operacion.objects.select_related("tecnico", "anomalia"),
+            Operacion.objects.select_related("tecnico", "anomalia", "tipo_operacion"),
             q, estado, "", tecnico, anomalia,
         )
 
@@ -798,16 +789,14 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
         elif resultado == "NO_EJECUTADAS":
             base_sin_tipo = base_sin_tipo.filter(estado__in=ESTADOS_NO_EJECUTADA)
 
-        # 2) Base con filtro de tipo (resumen y listado)
-        base = base_sin_tipo.filter(tipo_operacion=tipo) if tipo else base_sin_tipo
+        base = (base_sin_tipo.filter(tipo_operacion_id=int(tipo))
+                if tipo.isdigit() else base_sin_tipo)
 
-        # 3) Resumen por técnico + filas por tipo
         resumen = resumen_ejecucion(base, g, anio, mes)
         if resumen:
             agregar_tipos_resumen(resumen, base, anio, mes)
         ctx["resumen"] = resumen
 
-        # 4) Contadores por tipo (respetan año/mes/día)
         def con_fechas(qs_):
             if fecha_dt:
                 return qs_.filter(fecha_operacion=fecha_dt)
@@ -823,7 +812,6 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
         ctx["url_todos_tipos"] = url_todos_tipos
         ctx["total_tipos"] = total_tipos
 
-        # 5) Listado: fechas + annotate de inconsistencias
         qs = con_fechas(base).annotate(
             n_inc=Count(
                 "inconsistencias",
@@ -832,7 +820,6 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             )
         ).order_by("-fecha_operacion", "-pk")
 
-        # 6) Migas de pan (cada una quita su filtro)
         migas = []
         if anio_param.isdigit() or mes or fecha_dt:
             migas.append({"label": f"Año {anio}",
@@ -848,16 +835,15 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             if tec:
                 migas.append({"label": tec.get_full_name() or tec.username,
                               "quitar": url_con(g, tecnico=None)})
-        if tipo:
-            etiqueta_tipo = dict(Operacion.TipoOperacion.choices).get(tipo, tipo)
-            migas.append({"label": etiqueta_tipo, "quitar": url_con(g, tipo=None)})
+        if tipo.isdigit():
+            migas.append({"label": _etiquetas_tipos().get(int(tipo), tipo),
+                          "quitar": url_con(g, tipo=None)})
         if resultado:
             migas.append({
                 "label": "Solo ejecutadas" if resultado == "EJECUTADAS" else "Solo no ejecutadas",
                 "quitar": url_con(g, resultado=None),
             })
 
-        # 7) Paginación (el querystring conserva todos los filtros)
         params = g.copy()
         params.pop("page", None)
         params.pop("detalle", None)
@@ -870,7 +856,6 @@ class ConsultaOrdenView(RolRequeridoMixin, TemplateView):
             querystring=params.urlencode(),
         )
 
-        # Sugerencias si la búsqueda no trajo nada
         if q and paginator.count == 0:
             ctx["candidatas"] = Operacion.objects.filter(
                 numero_orden__startswith=q[:6]
@@ -974,60 +959,46 @@ class OperacionUpdateView(
         )
 
     def form_valid(self, form):
-
         try:
-            # ------------------------------------------------
-            # VALIDAR PAYLOAD
-            # ------------------------------------------------
-
-            payload_raw = self.request.POST.get(
-                "payload",
-                "[]",
-            )
-
+            # ---- validar payload ----
             try:
-                payload = json.loads(payload_raw)
+                payload = json.loads(self.request.POST.get("payload", "[]"))
             except json.JSONDecodeError:
-                raise ValidationError(
-                    "Los materiales enviados no tienen "
-                    "un formato JSON válido."
-                )
+                raise ValidationError("Los materiales enviados no tienen un formato JSON válido.")
+            if not isinstance(payload, list) or not all(isinstance(i, dict) for i in payload):
+                raise ValidationError("El formato de materiales no es válido.")
 
-            if not isinstance(payload, list):
-                raise ValidationError(
-                    "El formato de materiales no es válido."
-                )
-
-            if not all(
-                isinstance(item, dict)
-                for item in payload
-            ):
-                raise ValidationError(
-                    "Cada material debe tener un formato válido."
-                )
-
-            # ------------------------------------------------
-            # TRANSACCIÓN COMPLETA
-            # ------------------------------------------------
+            # Normaliza "producto"/"unidades" -> "producto_id"/"seriales"
+            normalizado = []
+            for item in payload:
+                seriales = item.get("seriales")
+                if seriales is None:
+                    seriales = [
+                        (u.get("serial") if isinstance(u, dict) else u)
+                        for u in (item.get("unidades") or [])
+                    ]
+                normalizado.append({
+                    "producto_id": item.get("producto_id", item.get("producto")),
+                    "seriales": seriales,
+                    "cantidad": item.get("cantidad") or 0,
+                })
+            payload = normalizado
 
             with transaction.atomic():
+                Operacion.objects.select_for_update().get(pk=self.get_object().pk)
 
-                # Bloquear operación.
-                operacion = (
-                    Operacion.objects
-                    .select_for_update()
-                    .get(pk=self.get_object().pk)
-                )
-
-                # Guardar datos anteriores antes de actualizar.
-                self.object = operacion
-
-                # Guardar los datos generales.
                 self.object = form.save()
-                
-                if form.cleaned_data["estado"] in Operacion.ESTADOS_QUE_INSTALAN:
-                    services_inventario.vincular_ivt(
-                        numero=form.cleaned_data["numero_ivt"],
+                tipo = self.object.tipo_operacion
+                estado = self.object.estado
+                instala = tipo.instala(estado)
+                pide_ivt = tipo.pide_ivt(estado)
+
+                if not instala:
+                    payload = []          # revierte lo instalado si ya no instala
+
+                if pide_ivt:
+                    services_inventario.vincular_ivt_o_reportar(
+                        numero=form.cleaned_data.get("numero_ivt"),
                         operacion=self.object,
                         tecnico=self.object.tecnico,
                         usuario=self.request.user,
@@ -1036,59 +1007,33 @@ class OperacionUpdateView(
                     services_inventario.liberar_ivt_operacion(
                         operacion=self.object,
                         usuario=self.request.user,
-                        motivo="La orden dejó de estar ejecutada",
+                        motivo="La orden no requiere IVT con este tipo/estado",
                     )
-                
-                logging.warning(
-                    "EDITANDO OPERACION %s | PAYLOAD: %s",
-                    self.object.pk,
-                    json.dumps(payload, ensure_ascii=False)
-                )
 
-                # Sincronizar materiales.
                 services_inventario.sincronizar_materiales_operacion(
                     operacion=self.object,
                     payload=payload,
                     usuario=self.request.user,
                 )
 
-            # ------------------------------------------------
-            # CONFIRMACIÓN
-            # ------------------------------------------------
-
             messages.success(
                 self.request,
-                "La operación y sus materiales "
-                "fueron actualizados correctamente."
+                "La operación y sus materiales fueron actualizados correctamente.",
             )
+            return HttpResponseRedirect(self.get_success_url())
 
-            return HttpResponseRedirect(
-                self.get_success_url()
-            )
-
-        except (
-            ValidationError,
-            ValueError,
-            TypeError,
-            services_inventario.ErrorInventario,
-        ) as exc:
-
-            logging.exception(
-                "ERROR VALIDANDO MATERIALES DE OPERACION %s",
-                getattr(self.object, "pk", None)
-            )
-
-            form.add_error(None, str(exc))
+        except (ValidationError, ValueError, TypeError,
+                services_inventario.ErrorInventario) as exc:
+            logging.getLogger(__name__).warning("Error validando operación: %s", exc)
+            form.add_error(None, "; ".join(getattr(exc, "messages", [str(exc)])))
             return self.form_invalid(form)
 
         except Exception as exc:
-            logging.getLogger(__name__).exception(
-                "Error actualizando operación y materiales."
-            )
+            logging.getLogger(__name__).exception("Error actualizando operación y materiales.")
             form.add_error(
                 None,
                 f"No fue posible actualizar la operación ({type(exc).__name__}: {exc}). "
-                "No se confirmaron los cambios de inventario."
+                "No se confirmaron los cambios de inventario.",
             )
             return self.form_invalid(form)
 
@@ -1243,57 +1188,39 @@ class OperacionUpdateView(
 
         operacion = self.object
 
-        pend_cantidad, pend_seriales = (
-            self._datos_pendientes()
-        )
+        pend_cantidad, pend_seriales = self._datos_pendientes()
 
         ctx.update({
-
             "operacion": operacion,
-
             "tecnico": operacion.tecnico,
-
             "payload_previo": self._payload_existente(),
-
             "pend_cantidad": pend_cantidad,
-
             "pend_seriales": pend_seriales,
 
-            "productos_serializados": (
-                Producto.objects.filter(
-                    estado=True,
-                    tipo_inventario=(
-                        Producto.TipoInventario.SERIALIZADO
-                    ),
-                ).order_by(
-                    "nombre",
-                    "medida",
-                )
-            ),
+            "productos_serializados": Producto.objects.filter(
+                estado=True,
+                tipo_inventario=Producto.TipoInventario.SERIALIZADO,
+            ).order_by("nombre", "medida"),
 
             "estados_instalan": sorted(
-                estado.value
-                for estado in Operacion.ESTADOS_QUE_INSTALAN
+                estado.value for estado in Operacion.ESTADOS_QUE_INSTALAN
             ),
 
             "tipos_inconsistencia": dict(
                 Inconsistencia.Tipo.choices
             ),
 
-            "instalaciones": (
-                operacion.materiales.select_related(
-                    "producto",
-                    "unidad_serializada",
-                    "tecnico",
-                )
+            "instalaciones": operacion.materiales.select_related(
+                "producto",
+                "unidad_serializada",
+                "tecnico",
             ),
 
-            "cancel_url": reverse_lazy(
-                "operaciones:consulta_orden"
-            ),
-
+            "cancel_url": reverse_lazy("operaciones:consulta_orden"),
             "modo_edicion": True,
         })
+
+        ctx.update(contexto_tipos())
 
         return ctx
 

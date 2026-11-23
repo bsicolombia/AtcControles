@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('almacen', '0011_entregaitem_ivt_final_entregaitem_ivt_inicial_and_more'),
-        ('operaciones', '0006_operacion_op_fecha_idx_operacion_op_tec_fecha_idx'),
+        ('operaciones', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

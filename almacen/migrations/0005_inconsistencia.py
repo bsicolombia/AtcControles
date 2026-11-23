@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('almacen', '0004_alter_remisioningreso_recogido_por_entregamaterial_and_more'),
-        ('operaciones', '0005_anomalia_alter_operacion_options_and_more'),
+        ('operaciones', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

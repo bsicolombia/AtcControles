@@ -1,116 +1,1124 @@
+
 {% extends "base.html" %}
 {% load sap_extras %}
-{% block titulo %}Errores de Consolidacion{% endblock %}
+
+{% block titulo %}Errores de Consolidación{% endblock %}
 
 {% block contenido %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+
+<style>
+    /* =====================================================
+       CONSOLIDACIÓN SAP
+       Diseño compacto, limpio y profesional
+    ===================================================== */
+
+    .sap-page {
+        --sap-primary: #2563eb;
+        --sap-primary-light: #eff6ff;
+        --sap-border: #e2e8f0;
+        --sap-text: #334155;
+        --sap-muted: #64748b;
+        --sap-bg: #f8fafc;
+
+        color: var(--sap-text);
+        font-size: 13px;
+    }
+
+    .sap-page a {
+        text-decoration: none;
+    }
+
+    .sap-page .sap-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .sap-page .sap-title {
+        color: #1e293b;
+        font-size: 1.45rem;
+        font-weight: 700;
+        letter-spacing: -.04em;
+        margin-bottom: .35rem;
+    }
+
+    .sap-page .sap-description {
+        color: var(--sap-muted);
+        font-size: .82rem;
+        margin-bottom: 0;
+        line-height: 1.6;
+    }
+
+    .sap-page .btn {
+        font-size: .79rem;
+        font-weight: 500;
+        padding: .48rem .8rem;
+        border-radius: .45rem;
+        transition: all .15s ease;
+    }
+
+    .sap-page .btn-primary {
+        background: var(--sap-primary);
+        border-color: var(--sap-primary);
+    }
+
+    .sap-page .btn-primary:hover {
+        background: #1d4ed8;
+        border-color: #1d4ed8;
+    }
+
+    .sap-page .btn-outline-secondary {
+        color: #475569;
+        border-color: #cbd5e1;
+    }
+
+    .sap-page .btn-outline-secondary:hover {
+        background: #f1f5f9;
+        color: #1e293b;
+        border-color: #cbd5e1;
+    }
+
+    /* Tarjetas */
+
+    .sap-page .sap-card {
+        background: #fff;
+        border: 1px solid var(--sap-border);
+        border-radius: .65rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .025);
+    }
+
+    /* Navegación */
+
+    .sap-page .sap-tabs {
+        display: flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .3rem;
+        margin-bottom: 1.15rem;
+        background: #f1f5f9;
+        border: 1px solid #e8edf3;
+        border-radius: .6rem;
+        overflow-x: auto;
+    }
+
+    .sap-page .sap-tabs .nav-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: .58rem .9rem;
+        border-radius: .42rem;
+        color: #64748b;
+        font-size: .8rem;
+        font-weight: 500;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        transition: all .15s ease;
+    }
+
+    .sap-page .sap-tabs .nav-link:hover {
+        color: #334155;
+        background: rgba(255, 255, 255, .65);
+    }
+
+    .sap-page .sap-tabs .nav-link.active {
+        color: #1d4ed8;
+        background: #fff;
+        border-color: #e2e8f0;
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    }
+
+    /* Indicadores */
+
+    .sap-page .sap-stat {
+        display: block;
+        height: 100%;
+        padding: .85rem 1rem;
+        position: relative;
+        overflow: hidden;
+        transition: all .15s ease;
+    }
+
+    .sap-page .sap-stat:hover {
+        border-color: #cbd5e1;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(15, 23, 42, .045);
+    }
+
+    .sap-page .sap-stat::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--stat-color);
+    }
+
+    .sap-page .sap-stat-label {
+        color: #64748b;
+        font-size: .76rem;
+        font-weight: 500;
+        margin-bottom: .35rem;
+    }
+
+    .sap-page .sap-stat-value {
+        color: var(--stat-color);
+        font-size: 1.55rem;
+        line-height: 1.2;
+        font-weight: 700;
+        letter-spacing: -.04em;
+    }
+
+    .sap-page .sap-stat-note {
+        color: #94a3b8;
+        font-size: .7rem;
+        margin-top: .35rem;
+    }
+
+    .sap-page .stat-high {
+        --stat-color: #dc2626;
+    }
+
+    .sap-page .stat-medium {
+        --stat-color: #d97706;
+    }
+
+    .sap-page .stat-low {
+        --stat-color: #64748b;
+    }
+
+    /* Resumen */
+
+    .sap-page .sap-summary {
+        padding: .9rem 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .sap-page .sap-section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: .65rem;
+    }
+
+    .sap-page .sap-section-title {
+        color: #334155;
+        font-size: .8rem;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .sap-page .sap-section-caption {
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .sap-page .sap-error-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+    }
+
+    .sap-page .sap-error-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        padding: .38rem .6rem;
+        border: 1px solid #e2e8f0;
+        border-radius: .4rem;
+        background: #fff;
+        color: #475569;
+        font-size: .74rem;
+        font-weight: 500;
+        transition: all .15s ease;
+    }
+
+    .sap-page .sap-error-tag:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+        color: #1e293b;
+    }
+
+    .sap-page .sap-error-tag .tag-count {
+        color: #64748b;
+        font-weight: 700;
+        font-size: .72rem;
+    }
+
+    .sap-page .tag-high {
+        border-left: 2px solid #ef4444;
+    }
+
+    .sap-page .tag-medium {
+        border-left: 2px solid #f59e0b;
+    }
+
+    .sap-page .tag-low {
+        border-left: 2px solid #94a3b8;
+    }
+
+    /* Buscador */
+
+    .sap-page .sap-search {
+        padding: .85rem 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .sap-page .sap-search-label {
+        display: block;
+        color: #475569;
+        font-size: .76rem;
+        font-weight: 600;
+        margin-bottom: .45rem;
+    }
+
+    .sap-page .sap-search .form-control {
+        min-height: 36px;
+        font-size: .8rem;
+        border-color: #dbe2ea;
+        border-radius: .45rem;
+        box-shadow: none;
+    }
+
+    .sap-page .sap-search .form-control:focus {
+        border-color: #93c5fd;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, .08);
+    }
+
+    .sap-page .sap-search .input-group .form-control {
+        border-radius: .45rem 0 0 .45rem;
+    }
+
+    .sap-page .sap-search .input-group .btn {
+        border-radius: 0;
+    }
+
+    .sap-page .sap-search .input-group .btn:last-child {
+        border-radius: 0 .45rem .45rem 0;
+    }
+
+    /* Tabla */
+
+    .sap-page .sap-table-card {
+        overflow: hidden;
+    }
+
+    .sap-page .sap-table-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .85rem 1rem;
+        border-bottom: 1px solid var(--sap-border);
+        background: #fff;
+    }
+
+    .sap-page .sap-table-title {
+        color: #334155;
+        font-size: .82rem;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .sap-page .sap-table-subtitle {
+        color: #94a3b8;
+        font-size: .72rem;
+        margin-top: .2rem;
+    }
+
+    .sap-page .sap-table {
+        width: 100%;
+        margin-bottom: 0;
+        font-size: .78rem;
+        color: #475569;
+    }
+
+    .sap-page .sap-table thead th {
+        padding: .72rem .75rem;
+        background: #f8fafc;
+        color: #64748b;
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .045em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        border-bottom: 1px solid #e2e8f0;
+        border-top: 0;
+    }
+
+    .sap-page .sap-table tbody td {
+        padding: .72rem .75rem;
+        vertical-align: middle;
+        border-color: #edf2f7;
+        line-height: 1.5;
+    }
+
+    .sap-page .sap-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .sap-page .sap-table tbody tr:hover td {
+        background: #fafcff;
+    }
+
+    .sap-page .sap-table a {
+        color: #2563eb;
+        font-weight: 500;
+    }
+
+    .sap-page .sap-table a:hover {
+        color: #1d4ed8;
+        text-decoration: underline;
+    }
+
+    .sap-page .sap-primary-text {
+        color: #334155;
+        font-weight: 600;
+    }
+
+    .sap-page .sap-muted-text {
+        color: #94a3b8;
+    }
+
+    .sap-page .sap-diagnostico {
+        min-width: 230px;
+        max-width: 380px;
+        color: #475569;
+        line-height: 1.55;
+    }
+
+    .sap-page .sap-accion {
+        min-width: 200px;
+        max-width: 320px;
+        color: #64748b;
+        line-height: 1.55;
+    }
+
+    /* Estados */
+
+    .sap-page .sap-status {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .32rem .5rem;
+        border-radius: .35rem;
+        font-size: .68rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .sap-page .sap-status-high {
+        color: #b91c1c;
+        background: #fef2f2;
+    }
+
+    .sap-page .sap-status-medium {
+        color: #a16207;
+        background: #fffbeb;
+    }
+
+    .sap-page .sap-status-low {
+        color: #475569;
+        background: #f1f5f9;
+    }
+
+    .sap-page .sap-status-pending {
+        color: #64748b;
+        background: #f1f5f9;
+    }
+
+    .sap-page .sap-status-missing {
+        color: #b91c1c;
+        background: #fef2f2;
+    }
+
+    /* Estado vacío */
+
+    .sap-page .sap-empty {
+        padding: 2.5rem 1rem !important;
+        text-align: center;
+        color: #94a3b8;
+        background: #fff;
+    }
+
+    .sap-page .sap-empty-title {
+        color: #475569;
+        font-size: .85rem;
+        font-weight: 600;
+        margin-bottom: .3rem;
+    }
+
+    .sap-page .sap-empty-text {
+        font-size: .76rem;
+        margin-bottom: 0;
+    }
+
+    /* Paginación */
+
+    .sap-page .sap-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+
+    .sap-page .sap-pagination-info {
+        color: #94a3b8;
+        font-size: .75rem;
+    }
+
+    .sap-page .pagination {
+        gap: .25rem;
+        margin-bottom: 0;
+    }
+
+    .sap-page .page-link {
+        padding: .4rem .7rem;
+        border: 1px solid #e2e8f0;
+        border-radius: .4rem !important;
+        color: #475569;
+        font-size: .76rem;
+        background: #fff;
+    }
+
+    .sap-page .page-link:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+    }
+
+    .sap-page .page-item.active .page-link {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+    }
+
+    /* Responsive */
+
+    @media (max-width: 768px) {
+        .sap-page .sap-title {
+            font-size: 1.25rem;
+        }
+
+        .sap-page .sap-header {
+            margin-bottom: 1.15rem;
+        }
+
+        .sap-page .sap-tabs {
+            margin-bottom: 1rem;
+        }
+
+        .sap-page .sap-stat {
+            padding: .75rem;
+        }
+
+        .sap-page .sap-stat-value {
+            font-size: 1.35rem;
+        }
+
+        .sap-page .sap-summary,
+        .sap-page .sap-search {
+            padding: .75rem;
+        }
+
+        .sap-page .sap-table-top {
+            padding: .75rem;
+        }
+
+        .sap-page .sap-pagination {
+            justify-content: center;
+        }
+    }
+</style>
+
+<div class="container-fluid py-3 sap-page">
+
+    <!-- Encabezado principal -->
+    <div class="sap-header d-flex justify-content-between align-items-start flex-wrap gap-3">
+
         <div>
-            <h1 class="h3">Errores de Consolidacion</h1>
-            <p class="text-muted mb-0">Qué está mal hoy, qué se corrigió y qué instalamos que SAP aún no reporta.</p>
+            <h1 class="sap-title">
+                Errores de Consolidación
+            </h1>
+
+            <p class="sap-description">
+                Control y seguimiento de inconsistencias SAP, errores resueltos y equipos pendientes de reporte.
+            </p>
         </div>
-        <div class="d-flex gap-2 align-self-start">
-            <a href="{% url 'operaciones:carga_sap' %}" class="btn btn-primary">Nueva carga SAP</a>
-            <a href="{% url 'operaciones:carga_sap_historial' %}" class="btn btn-outline-secondary">Historial</a>
+
+        <div class="d-flex gap-2 flex-wrap">
+
+            <a href="{% url 'operaciones:carga_sap' %}"
+               class="btn btn-primary">
+                + Nueva carga SAP
+            </a>
+
+            <a href="{% url 'operaciones:carga_sap_historial' %}"
+               class="btn btn-outline-secondary">
+                Historial
+            </a>
+
         </div>
     </div>
 
-    <ul class="nav nav-tabs mb-3">
-        <li class="nav-item"><a class="nav-link {% if vista == 'actuales' %}active{% endif %}" href="?vista=actuales">Errores actuales</a></li>
-        <li class="nav-item"><a class="nav-link {% if vista == 'resueltos' %}active{% endif %}" href="?vista=resueltos">Resueltos</a></li>
-        <li class="nav-item"><a class="nav-link {% if vista == 'falta_sap' %}active{% endif %}" href="?vista=falta_sap">Instalado en Five, falta en SAP</a></li>
+    <!-- Navegación principal -->
+    <ul class="nav sap-tabs">
+
+        <li class="nav-item">
+            <a class="nav-link {% if vista == 'actuales' %}active{% endif %}"
+               href="?vista=actuales">
+                Errores actuales
+            </a>
+        </li>
+
+        <li class="nav-item">
+            <a class="nav-link {% if vista == 'resueltos' %}active{% endif %}"
+               href="?vista=resueltos">
+                Errores resueltos
+            </a>
+        </li>
+
+        <li class="nav-item">
+            <a class="nav-link {% if vista == 'falta_sap' %}active{% endif %}"
+               href="?vista=falta_sap">
+                Instalado · Falta en SAP
+            </a>
+        </li>
+
     </ul>
 
-    {% if vista != "falta_sap" %}
-        {% if vista == "actuales" %}
-        <div class="row g-3 mb-3">
-            <div class="col-4"><a class="text-decoration-none" href="?vista=actuales&severidad=ALTA"><div class="card card-body text-center border-danger">
-                <div class="small text-muted">Alta</div><div class="fs-3 fw-bold text-danger">{{ n_alta }}</div></div></a></div>
-            <div class="col-4"><a class="text-decoration-none" href="?vista=actuales&severidad=MEDIA"><div class="card card-body text-center border-warning">
-                <div class="small text-muted">Media</div><div class="fs-3 fw-bold text-warning">{{ n_media }}</div></div></a></div>
-            <div class="col-4"><a class="text-decoration-none" href="?vista=actuales&severidad=BAJA"><div class="card card-body text-center">
-                <div class="small text-muted">Baja</div><div class="fs-3 fw-bold text-secondary">{{ n_baja }}</div></div></a></div>
-        </div>
-        {% endif %}
+    <!-- Indicadores de severidad -->
+    {% if vista == "actuales" %}
 
-        <div class="card card-body mb-3">
-            {% for r in resumen %}
-            <a class="badge text-decoration-none me-1 mb-1 fs-6 fw-normal
-               {% if r.severidad == 'ALTA' %}text-bg-danger{% elif r.severidad == 'MEDIA' %}text-bg-warning{% else %}text-bg-secondary{% endif %}"
-               href="?vista={{ vista }}&tipo_error={{ r.codigo|urlencode }}">{{ r.etiqueta }} · {{ r.n }}</a>
-            {% empty %}<span class="text-muted">Sin registros.</span>{% endfor %}
+        <div class="row g-3 mb-3">
+
+            <div class="col-4">
+                <a href="?vista=actuales&severidad=ALTA"
+                   class="text-decoration-none">
+
+                    <div class="sap-card sap-stat stat-high">
+
+                        <div class="sap-stat-label">
+                            Errores de gravedad alta
+                        </div>
+
+                        <div class="sap-stat-value">
+                            {{ n_alta }}
+                        </div>
+
+                        <div class="sap-stat-note">
+                            Requieren atención prioritaria
+                        </div>
+
+                    </div>
+
+                </a>
+            </div>
+
+            <div class="col-4">
+                <a href="?vista=actuales&severidad=MEDIA"
+                   class="text-decoration-none">
+
+                    <div class="sap-card sap-stat stat-medium">
+
+                        <div class="sap-stat-label">
+                            Errores de gravedad media
+                        </div>
+
+                        <div class="sap-stat-value">
+                            {{ n_media }}
+                        </div>
+
+                        <div class="sap-stat-note">
+                            Requieren revisión
+                        </div>
+
+                    </div>
+
+                </a>
+            </div>
+
+            <div class="col-4">
+                <a href="?vista=actuales&severidad=BAJA"
+                   class="text-decoration-none">
+
+                    <div class="sap-card sap-stat stat-low">
+
+                        <div class="sap-stat-label">
+                            Errores de gravedad baja
+                        </div>
+
+                        <div class="sap-stat-value">
+                            {{ n_baja }}
+                        </div>
+
+                        <div class="sap-stat-note">
+                            Seguimiento operativo
+                        </div>
+
+                    </div>
+
+                </a>
+            </div>
+
         </div>
+
     {% endif %}
 
-    <form method="get" class="card card-body mb-3">
-        <input type="hidden" name="vista" value="{{ vista }}">
-        <div class="input-group">
-            <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Serie, orden o cuenta">
-            <button class="btn btn-primary">Buscar</button>
-            <a class="btn btn-outline-secondary" href="?vista={{ vista }}">Limpiar</a>
+    <!-- Resumen por tipo de error -->
+    {% if vista != "falta_sap" %}
+
+        <div class="sap-card sap-summary">
+
+            <div class="sap-section-heading">
+
+                <h2 class="sap-section-title">
+                    Errores por categoría
+                </h2>
+
+                <span class="sap-section-caption">
+                    Filtrar por tipo
+                </span>
+
+            </div>
+
+            <div class="sap-error-tags">
+
+                {% for r in resumen %}
+
+                    <a href="?vista={{ vista }}&tipo_error={{ r.codigo|urlencode }}"
+                       class="sap-error-tag
+                       {% if r.severidad == 'ALTA' %}
+                           tag-high
+                       {% elif r.severidad == 'MEDIA' %}
+                           tag-medium
+                       {% else %}
+                           tag-low
+                       {% endif %}">
+
+                        <span>
+                            {{ r.etiqueta }}
+                        </span>
+
+                        <span class="tag-count">
+                            {{ r.n }}
+                        </span>
+
+                    </a>
+
+                {% empty %}
+
+                    <span class="text-muted small">
+                        No hay categorías disponibles.
+                    </span>
+
+                {% endfor %}
+
+            </div>
+
         </div>
+
+    {% endif %}
+
+    <!-- Buscador -->
+    <form method="get" class="sap-card sap-search">
+
+        <input type="hidden"
+               name="vista"
+               value="{{ vista }}">
+
+        <label class="sap-search-label">
+            Buscar registros
+        </label>
+
+        <div class="input-group">
+
+            <input type="search"
+                   name="q"
+                   value="{{ q }}"
+                   class="form-control"
+                   placeholder="Serie, número de orden o cuenta de contrato..."
+                   aria-label="Buscar registros">
+
+            <button type="submit" class="btn btn-primary">
+                Buscar
+            </button>
+
+            <a href="?vista={{ vista }}"
+               class="btn btn-outline-secondary">
+                Limpiar
+            </a>
+
+        </div>
+
     </form>
 
-    <div class="table-responsive">
-    {% if vista == "falta_sap" %}
-        <p class="small text-muted">Gris = instalado hace menos de {{ dias }} días (SAP aún puede reportarlo). Rojo = ya debería estar en SAP.</p>
-        <table class="table table-bordered align-middle">
-            <thead class="table-dark"><tr><th>Estado</th><th>Serie</th><th>Producto</th><th>Orden</th><th>Cuenta</th><th>Técnico</th><th>Instalado</th></tr></thead>
-            <tbody>
-            {% for a in page_obj %}
-                <tr>
-                    <td>{% if a.fecha_instalacion and a.fecha_instalacion <= limite %}<span class="badge bg-danger">Falta en SAP</span>
-                        {% else %}<span class="badge bg-secondary">Pendiente SAP</span>{% endif %}</td>
-                    <td>{{ a.unidad_serializada.numero_serie|default:a.unidad_serializada.codigo }}</td>
-                    <td>{{ a.producto.nombre_completo }}</td>
-                    <td>{% if a.operacion %}<a href="{% url 'operaciones:consulta_orden' %}?q={{ a.operacion.numero_orden }}">{{ a.operacion.numero_orden }}</a>{% else %}—{% endif %}</td>
-                    <td>{{ a.operacion.numero_cuenta_contrato|default:"—" }}</td>
-                    <td>{{ a.tecnico.get_full_name|default:a.tecnico.username }}</td>
-                    <td>{{ a.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
-                </tr>
-            {% empty %}<tr><td colspan="7" class="text-center py-4">Todo lo instalado ya fue reportado por SAP.</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <table class="table table-bordered align-middle">
-            <thead class="table-dark"><tr>
-                <th>Gravedad</th><th>Error</th><th>Orden</th><th>Serie</th><th>Cuenta</th><th>Técnico</th>
-                <th style="min-width:300px">Qué pasó</th><th style="min-width:240px">Qué hacer</th>
-                <th>{% if vista == "resueltos" %}Resuelto{% else %}Carga{% endif %}</th></tr></thead>
-            <tbody>
-            {% for r in page_obj %}
-                {% with sev=r.tipo_error|sap_meta:"severidad" %}
-                <tr>
-                    <td><span class="badge {% if sev == 'ALTA' %}bg-danger{% elif sev == 'MEDIA' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ sev }}</span></td>
-                    <td>{{ r.tipo_error|sap_meta:"etiqueta" }}</td>
-                    <td><a href="{% url 'operaciones:consulta_orden' %}?q={{ r.numero_orden }}">{{ r.numero_orden|default:"—" }}</a></td>
-                    <td>{{ r.numero_serie|default:"—" }}</td>
-                    <td>{{ r.cuenta_contrato|default:"—" }}</td>
-                    <td>{% if r.tecnico %}{{ r.tecnico.get_full_name|default:r.tecnico.username }}{% else %}—{% endif %}</td>
-                    <td class="small">{{ r.diagnostico }}</td>
-                    <td class="small">{{ r.tipo_error|sap_meta:"accion" }}</td>
-                    <td class="small">
-                        {% if vista == "resueltos" %}
-                            Carga <a href="{% url 'operaciones:carga_sap_detalle' r.resuelto_en_id %}">#{{ r.resuelto_en_id }}</a><br>
-                            {{ r.get_resuelto_por_display }}
-                        {% else %}
-                            <a href="{% url 'operaciones:carga_sap_detalle' r.carga_id %}">#{{ r.carga_id }}</a> · fila {{ r.fila }}
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endwith %}
-            {% empty %}<tr><td colspan="9" class="text-center py-4">Sin registros.</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    {% endif %}
+    <!-- Tabla de resultados -->
+    <div class="sap-card sap-table-card">
+
+        <div class="sap-table-top">
+
+            <div>
+                <h2 class="sap-table-title">
+
+                    {% if vista == "falta_sap" %}
+                        Equipos pendientes de reporte SAP
+                    {% elif vista == "resueltos" %}
+                        Historial de errores resueltos
+                    {% else %}
+                        Detalle de errores actuales
+                    {% endif %}
+
+                </h2>
+
+                <div class="sap-table-subtitle">
+                    Información detallada de los registros
+                </div>
+            </div>
+
+        </div>
+
+        <div class="table-responsive">
+
+            {% if vista == "falta_sap" %}
+
+                <div class="px-3 py-2 border-bottom bg-light">
+
+                    <span class="sap-status sap-status-pending me-1">
+                        Pendiente SAP
+                    </span>
+
+                    <span class="small text-muted">
+                        Instalado hace menos de {{ dias }} días.
+                    </span>
+
+                    <span class="sap-status sap-status-missing ms-2 me-1">
+                        Falta en SAP
+                    </span>
+
+                    <span class="small text-muted">
+                        Ya debería estar reportado.
+                    </span>
+
+                </div>
+
+                <table class="table sap-table">
+
+                    <thead>
+                        <tr>
+                            <th>Estado</th>
+                            <th>Serie</th>
+                            <th>Producto</th>
+                            <th>Orden</th>
+                            <th>Cuenta</th>
+                            <th>Técnico</th>
+                            <th>Instalación</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for a in page_obj %}
+
+                            <tr>
+
+                                <td>
+                                    {% if a.fecha_instalacion and a.fecha_instalacion < limite %}
+
+                                        <span class="sap-status sap-status-missing">
+                                            Falta en SAP
+                                        </span>
+
+                                    {% else %}
+
+                                        <span class="sap-status sap-status-pending">
+                                            Pendiente SAP
+                                        </span>
+
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    <span class="sap-primary-text">
+                                        {{ a.unidad_serializada.numero_serie|default:a.unidad_serializada.codigo }}
+                                    </span>
+                                </td>
+
+                                <td>
+                                    {{ a.producto.nombre_completo }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {% if a.operacion %}
+
+                                        <a href="{% url 'operaciones:consulta_orden' %}?q={{ a.operacion.numero_orden }}">
+                                            {{ a.operacion.numero_orden }}
+                                        </a>
+
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ a.operacion.numero_cuenta_contrato|default:"—" }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ a.tecnico.get_full_name|default:a.tecnico.username }}
+                                </td>
+
+                                <td class="text-nowrap">
+                                    {{ a.fecha_instalacion|date:"d/m/Y"|default:"—" }}
+                                </td>
+
+                            </tr>
+
+                        {% empty %}
+
+                            <tr>
+                                <td colspan="7" class="sap-empty">
+
+                                    <div class="sap-empty-title">
+                                        Todo está al día
+                                    </div>
+
+                                    <p class="sap-empty-text">
+                                        No hay equipos pendientes de reporte en SAP.
+                                    </p>
+
+                                </td>
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            {% else %}
+
+                <table class="table sap-table">
+
+                    <thead>
+                        <tr>
+                            <th>Gravedad</th>
+                            <th>Error</th>
+                            <th>Orden</th>
+                            <th>Serie</th>
+                            <th>Cuenta</th>
+                            <th>Técnico</th>
+                            <th>Diagnóstico</th>
+                            <th>Acción recomendada</th>
+                            <th>
+                                {% if vista == "resueltos" %}
+                                    Resolución
+                                {% else %}
+                                    Carga
+                                {% endif %}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for r in page_obj %}
+
+                            {% with sev=r.tipo_error|sap_meta:"severidad" %}
+
+                                <tr>
+
+                                    <td class="text-nowrap">
+
+                                        {% if sev == "ALTA" %}
+
+                                            <span class="sap-status sap-status-high">
+                                                Alta
+                                            </span>
+
+                                        {% elif sev == "MEDIA" %}
+
+                                            <span class="sap-status sap-status-medium">
+                                                Media
+                                            </span>
+
+                                        {% else %}
+
+                                            <span class="sap-status sap-status-low">
+                                                Baja
+                                            </span>
+
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+                                        <span class="sap-primary-text">
+                                            {{ r.tipo_error|sap_meta:"etiqueta" }}
+                                        </span>
+                                    </td>
+
+                                    <td class="text-nowrap">
+
+                                        <a href="{% url 'operaciones:consulta_orden' %}?q={{ r.numero_orden }}">
+                                            {{ r.numero_orden|default:"—" }}
+                                        </a>
+
+                                    </td>
+
+                                    <td class="text-nowrap">
+                                        {{ r.numero_serie|default:"—" }}
+                                    </td>
+
+                                    <td class="text-nowrap">
+                                        {{ r.cuenta_contrato|default:"—" }}
+                                    </td>
+
+                                    <td class="text-nowrap">
+
+                                        {% if r.tecnico %}
+
+                                            {{ r.tecnico.get_full_name|default:r.tecnico.username }}
+
+                                        {% else %}
+
+                                            —
+
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td class="sap-diagnostico">
+                                        {{ r.diagnostico }}
+                                    </td>
+
+                                    <td class="sap-accion">
+                                        {{ r.tipo_error|sap_meta:"accion" }}
+                                    </td>
+
+                                    <td class="text-nowrap">
+
+                                        {% if vista == "resueltos" %}
+
+                                            <div class="mb-1">
+
+                                                <span class="sap-muted-text">
+                                                    Carga
+                                                </span>
+
+                                                <a href="{% url 'operaciones:carga_sap_detalle' r.resuelto_en_id %}">
+                                                    #{{ r.resuelto_en_id }}
+                                                </a>
+
+                                            </div>
+
+                                            <div class="small sap-muted-text">
+                                                {{ r.get_resuelto_por_display }}
+                                            </div>
+
+                                        {% else %}
+
+                                            <a href="{% url 'operaciones:carga_sap_detalle' r.carga_id %}">
+                                                #{{ r.carga_id }}
+                                            </a>
+
+                                            <div class="small sap-muted-text">
+                                                Fila {{ r.fila }}
+                                            </div>
+
+                                        {% endif %}
+
+                                    </td>
+
+                                </tr>
+
+                            {% endwith %}
+
+                        {% empty %}
+
+                            <tr>
+                                <td colspan="9" class="sap-empty">
+
+                                    <div class="sap-empty-title">
+                                        No se encontraron registros
+                                    </div>
+
+                                    <p class="sap-empty-text">
+                                        Intenta modificar los filtros o realizar otra búsqueda.
+                                    </p>
+
+                                </td>
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            {% endif %}
+
+        </div>
+
     </div>
 
+    <!-- Paginación -->
     {% if page_obj.paginator.num_pages > 1 %}
-    <nav class="mt-3"><ul class="pagination">
-        {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>{% endif %}
-        <li class="page-item active"><span class="page-link">{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
-        {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>{% endif %}
-    </ul></nav>
+
+        <div class="sap-pagination">
+
+            <div class="sap-pagination-info">
+                Página {{ page_obj.number }}
+                de {{ page_obj.paginator.num_pages }}
+            </div>
+
+            <nav aria-label="Paginación de resultados">
+
+                <ul class="pagination">
+
+                    {% if page_obj.has_previous %}
+
+                        <li class="page-item">
+
+                            <a class="page-link"
+                               href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                                Anterior
+                            </a>
+
+                        </li>
+
+                    {% endif %}
+
+                    <li class="page-item active">
+
+                        <span class="page-link">
+                            {{ page_obj.number }}
+                        </span>
+
+                    </li>
+
+                    {% if page_obj.has_next %}
+
+                        <li class="page-item">
+
+                            <a class="page-link"
+                               href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">
+                                Siguiente
+                            </a>
+
+                        </li>
+
+                    {% endif %}
+
+                </ul>
+
+            </nav>
+
+        </div>
+
     {% endif %}
+
 </div>
+
 {% endblock %}

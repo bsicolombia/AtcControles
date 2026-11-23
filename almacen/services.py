@@ -746,9 +746,9 @@ def obtener_o_crear_operacion(*, numero_orden, cuenta_contrato, tipo,
             f"La orden {numero_orden} pertenece a la cuenta contrato "
             f"{op.numero_cuenta_contrato}, no a {cuenta}."
         )
-    if op.tipo_operacion != tipo:
+    if op.tipo_operacion_id != tipo.pk:
         raise ErrorInventario(
-            f"La orden {numero_orden} es de tipo {op.get_tipo_operacion_display()}."
+            f"La orden {numero_orden} es de tipo {op.tipo_operacion.nombre}."
         )
     if op.tecnico_id and op.tecnico_id != tecnico.id:
         raise ErrorInventario(f"La orden {numero_orden} está asignada a {op.tecnico}.")
@@ -2534,3 +2534,21 @@ def vincular_ivt_o_reportar(*, numero, operacion, tecnico, usuario):
         estado_anterior=ivt.estado if ivt else None,
         tecnico_anterior=ivt.tecnico if ivt and ivt.tecnico_id else None,
     )
+
+def generar_orden_sin_ods(tipo):
+    """RSO0001, RSO0002… Debe llamarse dentro de transaction.atomic()."""
+    from operaciones.models import Operacion, TipoOperacion
+    prefijo = (tipo.prefijo_sin_ods or "").upper()
+    if not prefijo:
+        raise ErrorInventario("Este tipo de operación requiere número de orden.")
+
+    # Bloquea la fila del tipo: dos usuarios no toman el mismo consecutivo
+    TipoOperacion.objects.select_for_update().get(pk=tipo.pk)
+
+    ultimo = 0
+    for n in Operacion.objects.filter(numero_orden__startswith=prefijo) \
+                              .values_list("numero_orden", flat=True):
+        resto = n[len(prefijo):]
+        if resto.isdigit():
+            ultimo = max(ultimo, int(resto))
+    return f"{prefijo}{ultimo + 1:04d}"

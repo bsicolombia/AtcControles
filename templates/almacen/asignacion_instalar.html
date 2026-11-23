@@ -100,17 +100,22 @@
     </div>
   {% endif %}
 
+  {{ config_tipos|json_script:"config-tipos" }}
+  {{ estados_ejecutados|json_script:"estados-ejecutados" }}
+  {{ estados_ivt|json_script:"estados-ivt" }}
   {{ estados_instalan|json_script:"estados-instalan" }}
   {{ pend_cantidad|json_script:"pend-cantidad" }}
   {{ pend_seriales|json_script:"pend-seriales" }}
   {{ tipos_inconsistencia|json_script:"tipos-inc" }}
   {{ payload_previo|json_script:"payload-previo" }}
 
-  <form method="post" id="form-instalar" enctype="multipart/form-data">
-    {% csrf_token %}
-    <input type="hidden" name="payload" id="payload">
+  <form method="post" id="form-instalar" enctype="multipart/form-data" autocomplete="off">
+  {% csrf_token %}
+  {% if form_token %}<input type="hidden" name="form_token" value="{{ form_token }}">{% endif %}
+  <input type="hidden" name="payload" id="payload">
+  <input type="hidden" name="payload_ui" id="payload-ui">
 
-        <!-- Datos de la operación -->
+    <!-- Datos de la operación -->
     <div class="card top">
       {% for campo in form %}{% if campo.name != "observaciones" and campo.name != "numero_ivt" %}
         <div class="{% if campo.errors %}campo-error{% endif %}">
@@ -224,6 +229,7 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+{{ modo_edicion|json_script:"modo-edicion" }}
 <script>
 (function () {
     "use strict";
@@ -235,6 +241,7 @@
     var urlCheck = "{% url 'almacen:api_validar_serial_instalacion' %}";
     var tecnicoId = "{{ tecnico.pk }}";
     var urlIvt = "{% url 'almacen:api_validar_ivt' %}";
+    var urlOrden = "{% url 'almacen:api_validar_orden' %}";
     var opIvt = "{% if operacion %}&operacion={{ operacion.pk }}{% endif %}";
 
     function leerJSON(id, valorPorDefecto) {
@@ -254,6 +261,7 @@
     var instalan = leerJSON("estados-instalan", []);
     var tipos = leerJSON("tipos-inc", {});
     var lineas = leerJSON("payload-previo", []);
+    var modoEdicion = !!leerJSON("modo-edicion", false);
 
     if (!Array.isArray(pend)) pend = [];
     if (!Array.isArray(seriales)) seriales = [];
@@ -369,62 +377,109 @@
         }, 0);
     }
 
-    /* ================= ESTADO DE LA OPERACIÓN ================= */
+    /* ================= TIPO + ESTADO ================= */
 
+    var CFG = leerJSON("config-tipos", {});
+    var EJEC = leerJSON("estados-ejecutados", []);
+    var IVT_EST = leerJSON("estados-ivt", []);
+    if (!Array.isArray(EJEC)) EJEC = [];
+    if (!Array.isArray(IVT_EST)) IVT_EST = [];
+
+    var tipoSel = $("id_tipo_operacion");
     var estadoSel = $("id_estado");
     var anomaliaSel = $("id_anomalia");
+    var campoOrden = $("id_numero_orden");
+    var campoIvtBox = $("id_numero_ivt") ? $("id_numero_ivt").closest(".campo-ivt") : null;
+
+    function cfgTipo() { return (tipoSel && CFG[tipoSel.value]) || null; }
+
+    function instalaAhora() {
+        var c = cfgTipo();
+        return !!c && c.instala && !!estadoSel && instalan.indexOf(estadoSel.value) !== -1;
+    }
+
+    function pideIvtAhora() {
+        var c = cfgTipo();
+        return !!c && c.ivt && !!estadoSel && IVT_EST.indexOf(estadoSel.value) !== -1;
+    }
+
+    function ajustarEstados() {
+        var c = cfgTipo();
+        if (!c || !estadoSel) return;
+        var actual = estadoSel.value;
+        estadoSel.innerHTML = "";
+        c.estados.forEach(function (par) {
+            var o = document.createElement("option");
+            o.value = par[0];
+            o.textContent = par[1];
+            estadoSel.appendChild(o);
+        });
+        if (c.estados.some(function (p) { return p[0] === actual; })) {
+            estadoSel.value = actual;
+        }
+    }
 
     function filtrarAnomalias() {
         if (!estadoSel || !anomaliaSel) return;
 
         var estado = estadoSel.value;
-        var ejecutada = ["EJECUTADA", "EJECUTADA_SUSPENDIDA"].indexOf(estado) !== -1;
+        var ejecutada = EJEC.indexOf(estado) !== -1;
         var noEjecutada = estado === "NO_EJECUTADA";
-        var seleccionActual = anomaliaSel.value;
-        var seleccionValida = false;
+        var actual = anomaliaSel.value;
+        var valida = false;
 
-        Array.from(anomaliaSel.options).forEach(function (opcion) {
-            if (!opcion.value) {
-                opcion.hidden = false;
-                opcion.disabled = false;
-                return;
-            }
-
-            var aplica = ejecutada
-                ? opcion.dataset.ejecutada === "1"
-                : noEjecutada
-                    ? opcion.dataset.noEjecutada === "1"
-                    : false;
-
-            opcion.hidden = !aplica;
-            opcion.disabled = !aplica;
-
-            if (opcion.value === seleccionActual && aplica) {
-                seleccionValida = true;
-            }
+        Array.from(anomaliaSel.options).forEach(function (op) {
+            if (!op.value) { op.hidden = false; op.disabled = false; return; }
+            var aplica = ejecutada ? op.dataset.ejecutada === "1"
+                       : noEjecutada ? op.dataset.noEjecutada === "1" : false;
+            op.hidden = !aplica;
+            op.disabled = !aplica;
+            if (op.value === actual && aplica) valida = true;
         });
 
-        if (!seleccionValida) anomaliaSel.value = "";
+        if (!valida) anomaliaSel.value = "";
     }
 
     function evaluarEstado() {
-        if (!estadoSel) return;
-
-        var instala = instalan.indexOf(estadoSel.value) !== -1;
-        var mostrar = instala || lineas.length > 0;
-
+        var mostrar = instalaAhora() || lineas.length > 0;
         if ($("bloque-materiales")) $("bloque-materiales").style.display = mostrar ? "" : "none";
         if ($("card-informe")) $("card-informe").style.display = mostrar ? "" : "none";
+        if (campoIvtBox) campoIvtBox.style.display = pideIvtAhora() ? "" : "none";
     }
 
-    if (estadoSel) {
-        estadoSel.addEventListener("change", function () {
-            evaluarEstado();
-            filtrarAnomalias();
-        });
+    // Tipos "sin ODS" (p. ej. WM-Reparación): el número de orden puede ir vacío
+    function ajustarOrden() {
+        if (!campoOrden || modoEdicion) return;
+        var c = cfgTipo();
+        var sin = !!(c && c.sin_ods);
+        campoOrden.required = !sin;
+        campoOrden.placeholder = sin ? "Vacío = se genera " + c.sin_ods + "0001…" : "";
     }
 
-    if (anomaliaSel) filtrarAnomalias();
+    // Si el tipo/estado no instala material (p. ej. Detección de Fugas), se vacía la lista
+    function limpiarSiNoInstala() {
+        if (!instalaAhora() && lineas.length) {
+            lineas.length = 0;
+            render();
+            pintarStock();
+            msg("Este tipo de operación / estado no instala material: se vació la lista.", "warn");
+        }
+    }
+
+    function refrescarTodo() {
+        ajustarEstados();
+        filtrarAnomalias();
+        limpiarSiNoInstala();
+        evaluarEstado();
+        ajustarOrden();
+    }
+
+    if (tipoSel) tipoSel.addEventListener("change", refrescarTodo);
+    if (estadoSel) estadoSel.addEventListener("change", function () {
+        filtrarAnomalias();
+        limpiarSiNoInstala();
+        evaluarEstado();
+    });
 
     /* ================= MATERIALES POR CANTIDAD ================= */
 
@@ -882,6 +937,8 @@
         if ($("total-gen")) $("total-gen").textContent = totalInstala();
 
         if ($("payload")) $("payload").value = JSON.stringify(construirPayload());
+        // Solo para repintar la pantalla si el servidor devuelve un error
+        if ($("payload-ui")) $("payload-ui").value = JSON.stringify(lineas);
     }
 
     /* ================= RESUMEN PENDIENTES ================= */
@@ -1021,14 +1078,25 @@
     var formulario = $("form-instalar");
 
     if (formulario) {
-        formulario.addEventListener("submit", function (e) {
+        // Enter en un campo de texto NO envía el formulario
+        formulario.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "submit") {
+                e.preventDefault();
+            }
+        });
 
-            var instala = estadoSel ? instalan.indexOf(estadoSel.value) !== -1 : true;
+        formulario.addEventListener("submit", function (e) {
+            var instala = instalaAhora();
 
             if (instala && !lineas.length) {
                 e.preventDefault();
                 msg("✗ Agregue al menos un material o serial antes de registrar.");
                 return;
+            }
+
+            if (!instala && lineas.length) {
+                lineas.length = 0;
+                render();
             }
 
             var k = nInc();
@@ -1045,19 +1113,24 @@
             }
 
             $("payload").value = JSON.stringify(construirPayload());
-
-            if ($("btn-guardar")) $("btn-guardar").disabled = true;
+            if ($("payload-ui")) $("payload-ui").value = JSON.stringify(lineas);
+            // El bloqueo del botón lo hace base.html solo si el envío no fue cancelado
         });
     }
 
     /* ================= INICIALIZACIÓN ================= */
 
+    ajustarEstados();
+    filtrarAnomalias();
     evaluarEstado();
+    ajustarOrden();
     render();
     pintarStock();
 
     var resumenErr = document.querySelector(".campo-error, .card.errores");
     if (resumenErr) resumenErr.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    /* ================= VALIDAR IVT ================= */
 
     var campoIvt = $("id_numero_ivt");
 
@@ -1082,8 +1155,39 @@
                 .then(function (d) {
                     avisoIvt.textContent = d.mensaje;
                     avisoIvt.className = "msg " + (d.ok ? "ok" : "err");
-                });
+                })
+                .catch(function () {});
         });
+    }
+
+    /* ================= ORDEN YA REGISTRADA ================= */
+
+    if (campoOrden && !modoEdicion) {
+        var avisoOrden = document.createElement("div");
+        avisoOrden.className = "msg";
+        campoOrden.parentNode.appendChild(avisoOrden);
+
+        var revisarOrden = function () {
+            var n = campoOrden.value.trim();
+            if (!n) {
+                avisoOrden.textContent = "";
+                $("btn-guardar").disabled = false;
+                return;
+            }
+
+            fetch(urlOrden + "?numero=" + encodeURIComponent(n))
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    avisoOrden.textContent = d.mensaje || "";
+                    avisoOrden.className = "msg " + (d.bloquea ? "err" : (d.existe ? "warn" : ""));
+                    $("btn-guardar").disabled = !!d.bloquea;
+                })
+                .catch(function () {});
+        };
+
+        campoOrden.addEventListener("blur", revisarOrden);
+        campoOrden.addEventListener("change", revisarOrden);
+        if (campoOrden.value.trim()) revisarOrden();
     }
 })();
 </script>

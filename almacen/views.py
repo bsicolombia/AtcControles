@@ -1,3 +1,4 @@
+from .tokens import nuevo_token, token_valido, consumir_token
 from collections import OrderedDict
 from .models import RemisionIngreso
 from django.db.models import Case, When, IntegerField, Sum, F, Q
@@ -13,6 +14,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.http import HttpResponseRedirect
 from django.db.models import F, Q, Exists, OuterRef
 from django.views import View
+from .tokens import nuevo_token, token_para_render, consumir_token, devolver_token
+from operaciones.models import CargaSAP, Operacion, contexto_tipos
 from django.views.generic import (
     CreateView,
     DetailView,
@@ -685,7 +688,7 @@ class RemisionInfoJson(RolRequeridoMixin, View):
 # ============================================================
 # INGRESOS
 # ============================================================
-
+@method_decorator(never_cache, name="dispatch")
 class IngresoView(FormPageMixin, RolRequeridoMixin, FormView):
     roles_permitidos = ROLES_ALMACEN
     form_class = IngresoForm
@@ -1578,7 +1581,40 @@ class AsignacionCreateView(FormPageMixin, RolRequeridoMixin, FormView):
 
         messages.success(self.request, "Asignación registrada.")
         return super().form_valid(form)
+class ValidarOrdenJson(RolRequeridoMixin, View):
+    """Dice si una orden ya está registrada (se consulta al salir del campo)."""
+    roles_permitidos = ROLES_DIGITADOR
 
+    def get(self, request):
+        numero = (request.GET.get("numero") or "").strip().upper()
+        if not numero:
+            return JsonResponse({"vacio": True})
+
+        op = (Operacion.objects
+              .select_related("tecnico", "tipo_operacion")
+              .filter(numero_orden=numero).first())
+        if not op:
+            return JsonResponse({"existe": False, "bloquea": False,
+                                 "mensaje": ""})
+
+        previos = (Operacion.Estado.CREADA, Operacion.Estado.PENDIENTE,
+                   Operacion.Estado.ASIGNADA)
+        registrada = (
+            op.estado not in previos
+            or op.materiales.filter(estado=Asignacion.Estado.INSTALADA).exists()
+            or op.ivts.filter(estado=IVT.Estado.INSTALADO).exists()
+        )
+        if registrada:
+            return JsonResponse({
+                "existe": True, "bloquea": True,
+                "mensaje": (f"⚠ La orden {numero} ya está registrada "
+                            f"({op.get_estado_display()}, técnico {op.tecnico}). "
+                            "Si necesita corregirla, solicítelo al administrador."),
+            })
+        return JsonResponse({
+            "existe": True, "bloquea": False,
+            "mensaje": f"La orden {numero} existe pero aún está pendiente: se puede registrar.",
+        })
 # ============================================================
 # ASIGNACIONES · EDITAR
 # ============================================================
@@ -1699,8 +1735,6 @@ def _datos_pendientes_tecnico(tecnico, operacion=None):
         ).order_by("nombre", "medida")
     ]
     return cantidad, seriales
-
-import json  # arriba del archivo
 @method_decorator(never_cache, name="dispatch")
 class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_DIGITADOR
@@ -1718,49 +1752,21 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
 
         pend_cantidad, pend_seriales = _datos_pendientes_tecnico(self.tecnico)
 
-        payload_previo = []
-        try:
-            crudo = json.loads(self.request.POST.get("payload", "[]"))
-            if not isinstance(crudo, list):
-                crudo = []
-
-            nombres = {
-                p.pk: p.nombre_completo
-                for p in Producto.objects.filter(
-                    pk__in=[
-                        int(l.get("producto_id"))
-                        for l in crudo
-                        if str(l.get("producto_id", "")).isdigit()
-                    ]
-                )
-            }
-            for l in crudo:
-                pid = int(l.get("producto_id"))
-                seriales_previos = l.get("seriales") or []
-                payload_previo.append({
-                    "producto": pid,
-                    "nombre": nombres.get(pid, "Material"),
-                    "serializado": bool(seriales_previos),
-                    "cantidad": 0 if seriales_previos else int(l.get("cantidad") or 0),
-                    "unidades": [{"id": None, "serial": s} for s in seriales_previos],
-                })
-        except (ValueError, TypeError):
-            payload_previo = []
+        # Si el POST falló, se repinta lo que el usuario había agregado
+        payload_previo = _previo_desde_post(self.request) or []
 
         cancelar_url = (
             self.request.GET.get("next")
             or self.request.POST.get("next")
             or self.request.META.get("HTTP_REFERER")
         )
-
         if not cancelar_url or not url_has_allowed_host_and_scheme(
             cancelar_url,
             allowed_hosts={self.request.get_host()},
             require_https=self.request.is_secure(),
         ):
             cancelar_url = reverse(
-                "almacen:tecnico_asignaciones",
-                kwargs={"pk": self.tecnico.pk},
+                "almacen:tecnico_asignaciones", kwargs={"pk": self.tecnico.pk},
             )
 
         ctx["cancelar_url"] = cancelar_url
@@ -1769,94 +1775,95 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
         ctx["pend_seriales"] = pend_seriales
         ctx["productos_serializados"] = Producto.objects.filter(
             estado=True, tipo_inventario=Producto.TipoInventario.SERIALIZADO
-        ).order_by("nombre", "medida")
+        ).select_related("categoria").order_by("nombre", "medida")
         ctx["tipos_inconsistencia"] = dict(Inconsistencia.Tipo.choices)
         ctx["payload_previo"] = payload_previo
         ctx["estados_instalan"] = sorted(e.value for e in Operacion.ESTADOS_QUE_INSTALAN)
-        ctx["form"] = kwargs.get("form") or InstalacionMasivaForm()
+        ctx["form"] = kwargs.get("form") or InstalacionMasivaForm(tecnico=self.tecnico)
+        ctx["form_token"] = token_para_render(self.request)
+        ctx.update(contexto_tipos())                    # config_tipos, estados_ejecutados, estados_ivt
         return ctx
 
     def post(self, request, *args, **kwargs):
         self._cargar()
 
+        # 1) Validar TODO sin tocar el token
         form = InstalacionMasivaForm(request.POST, request.FILES, tecnico=self.tecnico)
-
-        try:
-            lineas = json.loads(request.POST.get("payload", "[]"))
-            if not isinstance(lineas, list):
-                lineas = []
-        except ValueError:
-            lineas = []
-
-        errores, instala = [], False
-        form_ok = form.is_valid()
-        if form_ok:
-            instala = form.cleaned_data["estado"] in Operacion.ESTADOS_QUE_INSTALAN
-            if instala and not lineas:
-                errores.append("Agregue al menos un material o serial para instalar.")
-            elif not instala and lineas:
-                errores.append("Con este estado no se instala material: deje la lista vacía.")
-
-        if errores or not form_ok:
-            for e in errores:
-                messages.error(request, e)
+        if not form.is_valid():
+            messages.error(request, "Revise los campos señalados.")
             return self.render_to_response(self.get_context_data(form=form))
 
         d = form.cleaned_data
-        novedades, piezas = [], 0
+        tipo, estado = d["tipo_operacion"], d["estado"]
+        instala = tipo.instala(estado)
+        pide_ivt = tipo.pide_ivt(estado)
+
         try:
-            with transaction.atomic():
-                op = services.obtener_o_crear_operacion(
-                    numero_orden=d["numero_orden"],
-                    cuenta_contrato=d["numero_cuenta_contrato"],
-                    tipo=d["tipo_operacion"],
-                    tecnico=self.tecnico,
-                    usuario=request.user,
-                    fecha=d["fecha_instalacion"],
-                    estado=d["estado"],
-                    anomalia=d["anomalia"],
-                    observaciones=d["observaciones"],
-                    archivo=d.get("archivo_soporte"),
-                )
-
-                if instala:
-                    n_ivt = services.vincular_ivt_o_reportar(
-                        numero=d.get("numero_ivt"),
-                        operacion=op,
-                        tecnico=self.tecnico,
-                        usuario=request.user,
-                    )
-                    if n_ivt:
-                        novedades.append(n_ivt)
-
-                    novedades += services.sincronizar_materiales_operacion(
-                        operacion=op,
-                        payload=lineas,
-                        usuario=request.user,
-                    )
-                    piezas = sum(
-                        len(l.get("seriales") or []) or int(l.get("cantidad") or 0)
-                        for l in lineas
-                    )
+            lineas = _leer_payload(request)
+            if instala and not lineas:
+                raise services.ErrorInventario(
+                    "Agregue al menos un material o serial para instalar.")
+            if not instala and lineas:
+                raise services.ErrorInventario(
+                    "Este tipo de operación / estado no permite instalar material.")
         except services.ErrorInventario as e:
             messages.error(request, str(e))
             return self.render_to_response(self.get_context_data(form=form))
 
-        if instala:
-            messages.success(
+        # 2) Todo correcto: se reclama el token (bloquea el doble envío)
+        if not consumir_token(request):
+            messages.warning(
+                request, "Este formulario ya fue procesado o expiró. No se registró nada nuevo.")
+            return redirect("almacen:tecnico_asignaciones", pk=self.tecnico.pk)
+
+        # 3) Guardar. Si falla por cualquier motivo, el token se devuelve
+        novedades, piezas = [], 0
+        try:
+            with transaction.atomic():
+                numero = d["numero_orden"] or services.generar_orden_sin_ods(tipo)
+                op = services.obtener_o_crear_operacion(
+                    numero_orden=numero,
+                    cuenta_contrato=d["numero_cuenta_contrato"],
+                    tipo=tipo, tecnico=self.tecnico, usuario=request.user,
+                    fecha=d["fecha_instalacion"], estado=estado,
+                    anomalia=d["anomalia"], observaciones=d["observaciones"],
+                    archivo=d.get("archivo_soporte"),
+                )
+                if pide_ivt:
+                    n_ivt = services.vincular_ivt_o_reportar(
+                        numero=d.get("numero_ivt"), operacion=op,
+                        tecnico=self.tecnico, usuario=request.user,
+                    )
+                    if n_ivt:
+                        novedades.append(n_ivt)
+                if instala:
+                    novedades += services.sincronizar_materiales_operacion(
+                        operacion=op, payload=lineas, usuario=request.user,
+                    )
+                    piezas = sum(
+                        len(l["seriales"] or []) or int(l["cantidad"] or 0) for l in lineas
+                    )
+        except services.ErrorInventario as e:
+            devolver_token(request)
+            messages.error(request, str(e))
+            return self.render_to_response(self.get_context_data(form=form))
+        except Exception:
+            devolver_token(request)      # error inesperado: no pierde el formulario
+            raise
+
+        if op.es_sin_ods:
+            messages.info(
                 request,
-                f"Orden {op.numero_orden} registrada ({piezas} pieza(s) reportadas).",
-            )
+                f"Orden {op.numero_orden} creada SIN ODS. Asígnele la ODS real cuando la tenga "
+                "(menú «Órdenes sin ODS»).")
+        elif instala:
+            messages.success(request, f"Orden {op.numero_orden} registrada ({piezas} pieza(s)).")
         else:
             messages.success(
                 request,
-                f"Orden {op.numero_orden} registrada como {op.get_estado_display().lower()}.",
-            )
+                f"Orden {op.numero_orden} registrada como {op.get_estado_display().lower()}.")
         if novedades:
-            messages.warning(
-                request,
-                f"⚠ Se registraron {len(novedades)} inconsistencia(s) para revisar.",
-            )
+            messages.warning(request, f"⚠ Se registraron {len(novedades)} inconsistencia(s) para revisar.")
         return redirect("almacen:tecnico_asignaciones", pk=self.tecnico.pk)
 # ============================================================
 # INSTALAR · UNA SOLA ASIGNACIÓN
@@ -1930,22 +1937,21 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
     def form_valid(self, form):
         d = form.cleaned_data
         cantidad = d.get("cantidad")
-        tecnico = self.asignacion.tecnico          # antes: self.tecnico (no existia)
+        tecnico = self.asignacion.tecnico
 
         try:
             with transaction.atomic():
                 op = services.obtener_o_crear_operacion(
-                    numero_orden=d["numero_orden"],
+                    numero_orden=d["numero_orden"] or services.generar_orden_sin_ods(d["tipo_operacion"]),
                     cuenta_contrato=d["numero_cuenta_contrato"],
                     tipo=d["tipo_operacion"],
                     tecnico=tecnico,
                     usuario=self.request.user,
                     fecha=d["fecha_instalacion"],
-                    # Eran obligatorios y faltaban (TypeError).
-                    # Ajusta los nombres a los campos reales de tu InstalacionForm.
-                    estado=d.get("estado") or Operacion.Estado.EFECTIVA,
-                    anomalia=d.get("anomalia") or "",
+                    estado=d.get("estado") or Operacion.Estado.EJECUTADA,
+                    anomalia=d.get("anomalia"),
                     observaciones=d.get("observaciones") or "",
+                    archivo=d.get("archivo_soporte"),
                 )
                 services.instalar(
                     asignacion=self.asignacion,
@@ -1956,8 +1962,6 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
                     observaciones=d.get("observaciones") or "",
                 )
         except services.ErrorInventario as e:
-            # Se queda en el formulario y muestra el motivo
-            # (ej. "Duplicado: la orden X ya tiene instalado un medidor ...")
             form.add_error(None, str(e))
             return self.form_invalid(form)
 
@@ -1966,8 +1970,7 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
             restan = self.asignacion.cantidad_pendiente
             messages.success(
                 self.request,
-                f"Instaladas {cantidad} × "
-                f"{self.asignacion.producto.nombre_completo}. "
+                f"Instaladas {cantidad} × {self.asignacion.producto.nombre_completo}. "
                 f"Al técnico le quedan {restan} por instalar.",
             )
         else:
@@ -2096,6 +2099,14 @@ def _leer_payload(request):
         })
     return normalizado
 def _previo_desde_post(request):
+    crudo = request.POST.get("payload_ui")
+    if crudo:
+        try:
+            datos = json.loads(crudo)
+            if isinstance(datos, list):
+                return datos          # solo repinta; lo que se guarda sale de "payload"
+        except ValueError:
+            pass
     """Reconstruye lo que el usuario escribió para repintar el formulario."""
     try:
         payload = _leer_payload(request)
@@ -2118,19 +2129,19 @@ def _previo_desde_post(request):
         }
         for p in payload if str(p["producto_id"]).isdigit()
     ]
-
-
-@login_required   # idealmente también RolRequeridoMixin / decorador de roles
+@never_cache
+@login_required
 def editar_instalacion(request, pk):
     operacion = get_object_or_404(
-        Operacion.objects.select_related("tecnico"), pk=pk,
+        Operacion.objects.select_related("tecnico", "tipo_operacion"), pk=pk,
     )
     payload_previo = _payload_desde_bd(operacion)
     form = None
 
     if request.method == "POST":
         form = InstalacionMasivaForm(
-            request.POST, request.FILES, tecnico=operacion.tecnico
+            request.POST, request.FILES,
+            tecnico=operacion.tecnico, operacion=operacion,   # operacion: ver forms (C2)
         )
         previo = _previo_desde_post(request)
         if previo is not None:
@@ -2138,7 +2149,9 @@ def editar_instalacion(request, pk):
 
         if form.is_valid():
             d = form.cleaned_data
-            instala = d["estado"] in Operacion.ESTADOS_QUE_INSTALAN
+            tipo, estado = d["tipo_operacion"], d["estado"]
+            instala = tipo.instala(estado)
+            pide_ivt = tipo.pide_ivt(estado)
             try:
                 payload = _leer_payload(request) if instala else []
                 if instala and not payload:
@@ -2151,21 +2164,21 @@ def editar_instalacion(request, pk):
                         operacion=operacion,
                         numero_orden=d["numero_orden"],
                         cuenta_contrato=d["numero_cuenta_contrato"],
-                        tipo=d["tipo_operacion"],
-                        estado=d["estado"],
+                        tipo=tipo,
+                        estado=estado,
                         anomalia=d["anomalia"],
                         observaciones=d["observaciones"],
                         fecha=d["fecha_instalacion"],
                         archivo=d.get("archivo_soporte"),
                     )
 
-                    # Si el estado ya no instala, payload=[] revierte todo
+                    # Si el estado/tipo ya no instala, payload=[] revierte todo
                     novedades = services.sincronizar_materiales_operacion(
                         operacion=operacion, payload=payload, usuario=request.user,
                     )
 
                     ivt_numero = str(d.get("numero_ivt") or "").strip()
-                    if instala and ivt_numero:
+                    if pide_ivt and ivt_numero:
                         n_ivt = services.vincular_ivt_o_reportar(
                             numero=ivt_numero, operacion=operacion,
                             tecnico=operacion.tecnico, usuario=request.user,
@@ -2173,7 +2186,6 @@ def editar_instalacion(request, pk):
                         if n_ivt:
                             novedades.append(n_ivt)
                     else:
-                        # IVT vacío (o estado sin instalación): se libera
                         services.liberar_ivt_operacion(
                             operacion=operacion, usuario=request.user,
                             motivo="IVT quitado al editar la orden",
@@ -2201,13 +2213,13 @@ def editar_instalacion(request, pk):
 
     if form is None:
         form = InstalacionMasivaForm(
-            tecnico=operacion.tecnico,
+            tecnico=operacion.tecnico, operacion=operacion,
             initial={
                 "numero_orden": operacion.numero_orden,
                 "numero_cuenta_contrato": operacion.numero_cuenta_contrato,
-                "tipo_operacion": operacion.tipo_operacion,
+                "tipo_operacion": operacion.tipo_operacion_id,
                 "estado": operacion.estado,
-                "anomalia": operacion.anomalia,
+                "anomalia": operacion.anomalia_id,
                 "observaciones": operacion.observaciones,
                 "fecha_instalacion": operacion.fecha_ejecucion or operacion.fecha_operacion,
                 "numero_ivt": ivt_actual.numero if ivt_actual else "",
@@ -2223,18 +2235,19 @@ def editar_instalacion(request, pk):
         "pend_seriales": pend_seriales,
         "productos_serializados": Producto.objects.filter(
             estado=True, tipo_inventario=Producto.TipoInventario.SERIALIZADO
-        ).order_by("nombre", "medida"),
+        ).select_related("categoria").order_by("nombre", "medida"),
         "cancelar_url": reverse("operaciones:detalle", kwargs={"pk": operacion.pk}),
         "tipos_inconsistencia": dict(Inconsistencia.Tipo.choices),
         "estados_instalan": sorted(e.value for e in Operacion.ESTADOS_QUE_INSTALAN),
         "form": form,
     }
+    context.update(contexto_tipos())
     return render(request, "operaciones/registrar_operacion.html", context)
 
 # ============================================================
 # DEVOLVER ASIGNACIÓN
 # ============================================================
-
+@method_decorator(never_cache, name="dispatch")
 class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
 
     roles_permitidos = ROLES_ALMACEN
@@ -3032,6 +3045,7 @@ class ValidarSerialJson(RolRequeridoMixin, View):
 
 
 # ---------- crear entrega ----------
+@method_decorator(never_cache, name="dispatch")
 class EntregaCreateView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_ALMACEN
     template_name = "almacen/entrega_form.html"
@@ -3795,77 +3809,176 @@ class EntregaListView(RolRequeridoMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx.update(_matriz_entregas(self.request))
+
+        matriz = _matriz_entregas(self.request)
+
+        tipo_devolucion = EntregaMaterial.Tipo.DEVOLUCION
+        tipo_entrega = EntregaMaterial.Tipo.ENTREGA
+
+        filas_entregas = [
+            f for f in matriz["filas"]
+            if f["entrega"].tipo == tipo_entrega
+        ]
+
+        filas_devoluciones = [
+            f for f in matriz["filas"]
+            if f["entrega"].tipo == tipo_devolucion
+        ]
+
+        def calcular_totales(filas, cols):
+            totales = [
+                sum(
+                    fila["cants"].get(
+                        "IVT" if c is COLUMNA_IVT else c.pk, 0
+                    )
+                    for fila in filas
+                )
+                for c in cols
+            ]
+
+            return {
+                "totales": totales,
+                "total_general": sum(totales),
+            }
+
+        ctx.update(matriz)
+
+        ctx["filas_entregas"] = filas_entregas
+        ctx["filas_devoluciones"] = filas_devoluciones
+
+        ctx.update({
+            "totales_entregas": calcular_totales(
+                filas_entregas, matriz["cols"]
+            )["totales"],
+
+            "total_general_entregas": calcular_totales(
+                filas_entregas, matriz["cols"]
+            )["total_general"],
+
+            "totales_devoluciones": calcular_totales(
+                filas_devoluciones, matriz["cols"]
+            )["totales"],
+
+            "total_general_devoluciones": calcular_totales(
+                filas_devoluciones, matriz["cols"]
+            )["total_general"],
+        })
+
         ctx["tecnicos_lista"] = tecnicos_queryset()
+
         return ctx
 
     def _excel(self, request):
         m = _matriz_entregas(request)
 
         wb = Workbook()
-        ws = wb.active
-        ws.title = "Entregas y devoluciones"
 
         encabezado = PatternFill("solid", fgColor="1F3A5F")
         negrita = Font(bold=True)
 
+        tipo_entrega = EntregaMaterial.Tipo.ENTREGA
+        tipo_devolucion = EntregaMaterial.Tipo.DEVOLUCION
+
         columnas = (
-            ["Código", "Tipo", "Fecha", "Técnico", "C.C.", "Responsable almacén"]
+            ["Código", "Fecha", "Técnico", "C.C.", "Responsable almacén"]
             + [p.nombre_completo for p in m["cols"]]
             + ["Total"]
         )
 
-        for c, texto in enumerate(columnas, 1):
-            celda = ws.cell(1, c, texto)
-            celda.font = Font(bold=True, color="FFFFFF")
-            celda.fill = encabezado
-            celda.alignment = Alignment(
-                horizontal="center",
-                vertical="center",
-                wrap_text=True,
-            )
+        def crear_hoja(nombre, filas, color):
+            ws = wb.create_sheet(nombre)
 
-        for r, fila in enumerate(m["filas"], 2):
-            e = fila["entrega"]
+            encabezado_local = PatternFill("solid", fgColor=color)
 
-            tipo_texto = (
-                "Devolución"
-                if e.tipo == EntregaMaterial.Tipo.DEVOLUCION
-                else "Entrega"
-            )
+            for c, texto in enumerate(columnas, 1):
+                celda = ws.cell(1, c, texto)
+                celda.font = Font(bold=True, color="FFFFFF")
+                celda.fill = encabezado_local
+                celda.alignment = Alignment(
+                    horizontal="center",
+                    vertical="center",
+                    wrap_text=True,
+                )
 
-            valores = [
-                e.codigo,
-                tipo_texto,
-                e.fecha.strftime("%d/%m/%Y"),
-                _nombre(e.tecnico),
-                _cedula(e.tecnico),
-                _nombre(e.entregado_por),
+            for r, fila in enumerate(filas, 2):
+                e = fila["entrega"]
+
+                valores = [
+                    e.codigo,
+                    e.fecha.strftime("%d/%m/%Y"),
+                    _nombre(e.tecnico),
+                    _cedula(e.tecnico),
+                    _nombre(e.entregado_por),
+                ]
+
+                valores += [v or None for v in fila["celdas"]]
+                valores.append(fila["total"])
+
+                for c, valor in enumerate(valores, 1):
+                    ws.cell(r, c, valor)
+
+            fila_total = len(filas) + 2
+
+            ws.cell(fila_total, 5, "TOTALES").font = negrita
+
+            totales = [
+                sum(
+                    fila["cants"].get(
+                        "IVT" if col is COLUMNA_IVT else col.pk, 0
+                    )
+                    for fila in filas
+                )
+                for col in m["cols"]
             ]
 
-            valores += [v or None for v in fila["celdas"]]
-            valores.append(fila["total"])
+            total_general = sum(totales)
 
-            for c, valor in enumerate(valores, 1):
-                ws.cell(r, c, valor)
+            for c, valor in enumerate(
+                totales + [total_general],
+                6,
+            ):
+                celda = ws.cell(fila_total, c, valor)
+                celda.font = negrita
 
-        fila_total = len(m["filas"]) + 2
+            ws.freeze_panes = "F2"
+            ws.sheet_view.showGridLines = False
 
-        ws.cell(fila_total, 6, "TOTALES").font = negrita
+            for c in range(1, len(columnas) + 1):
+                ws.column_dimensions[
+                    get_column_letter(c)
+                ].width = 14 if c > 5 else 22
 
-        for c, valor in enumerate(
-            m["totales"] + [m["total_general"]],
-            7,
-        ):
-            ws.cell(fila_total, c, valor).font = negrita
-
-        ws.freeze_panes = "G2"
-        ws.sheet_view.showGridLines = False
-
-        for c in range(1, len(columnas) + 1):
-            ws.column_dimensions[get_column_letter(c)].width = (
-                14 if c > 6 else 22
+            ws.auto_filter.ref = (
+                f"A1:{get_column_letter(len(columnas))}{max(1, len(filas) + 1)}"
             )
+
+            return ws
+
+        # Eliminar hoja inicial
+        ws = wb.active
+        wb.remove(ws)
+
+        filas_entregas = [
+            f for f in m["filas"]
+            if f["entrega"].tipo == tipo_entrega
+        ]
+
+        filas_devoluciones = [
+            f for f in m["filas"]
+            if f["entrega"].tipo == tipo_devolucion
+        ]
+
+        crear_hoja(
+            "Entregas",
+            filas_entregas,
+            "1F3A5F",
+        )
+
+        crear_hoja(
+            "Devoluciones",
+            filas_devoluciones,
+            "8B4513",
+        )
 
         buf = BytesIO()
         wb.save(buf)
@@ -3984,7 +4097,7 @@ class IngresoIVTView(RolRequeridoMixin, FormView):
             f"Ingresaron {total} IVT en {len(cajas)} caja(s) con la remisión {d['numero_orden']}.")
         return redirect(f"{reverse('almacen:ivt_lista')}?q={d['numero_orden']}")
 
-
+@method_decorator(never_cache, name="dispatch")
 class AsignarIVTView(RolRequeridoMixin, FormView):
     roles_permitidos = ROLES_ALMACEN
     form_class = AsignarIVTForm
@@ -4203,3 +4316,61 @@ class ValidarIVTJson(RolRequeridoMixin, View):
             "tipo": tipo,
             "mensaje": f"⚠ {detalle} La orden se registrará con una inconsistencia.",
         })
+
+from django.db.models import Count  # ya lo tienes
+from operaciones.models import TipoOperacion
+
+class OrdenesSinOdsView(RolRequeridoMixin, TemplateView):
+    roles_permitidos = ROLES_DIGITADOR
+    template_name = "almacen/ordenes_sin_ods.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+        q, tecnico = g.get("q", "").strip(), g.get("tecnico", "").strip()
+
+        prefijos = list(
+            TipoOperacion.objects.exclude(prefijo_sin_ods="")
+            .values_list("prefijo_sin_ods", flat=True).distinct()
+        )
+        cond = Q()
+        for p in prefijos:
+            cond |= Q(numero_orden__regex=rf"^{p}[0-9]+$")
+
+        qs = Operacion.objects.filter(cond) if prefijos else Operacion.objects.none()
+        qs = (qs.select_related("tecnico", "tipo_operacion")
+                .annotate(n_materiales=Count(
+                    "materiales", filter=Q(materiales__estado=Asignacion.Estado.INSTALADA)))
+                .order_by("-fecha_operacion", "-id"))
+
+        if tecnico.isdigit():
+            qs = qs.filter(tecnico_id=int(tecnico))
+        if q:
+            qs = qs.filter(Q(numero_orden__icontains=q)
+                           | Q(numero_cuenta_contrato__icontains=q))
+
+        ctx.update(ordenes=qs, total=qs.count(), q=q, tecnico_sel=tecnico,
+                   tecnicos_lista=tecnicos_queryset())
+        return ctx
+
+
+class AsignarOdsView(RolRequeridoMixin, View):
+    """Reemplaza RSO0001 por la ODS real."""
+    roles_permitidos = ROLES_DIGITADOR
+
+    def post(self, request, pk):
+        op = get_object_or_404(Operacion.objects.select_related("tipo_operacion"), pk=pk)
+        nueva = request.POST.get("numero_orden", "").strip().upper()
+
+        if not op.es_sin_ods:
+            messages.error(request, "Esta orden ya tiene ODS real.")
+        elif not nueva or len(nueva) > 10:
+            messages.error(request, "Escriba la ODS (máximo 10 caracteres).")
+        elif Operacion.objects.filter(numero_orden=nueva).exclude(pk=op.pk).exists():
+            messages.error(request, f"La ODS {nueva} ya está registrada en otra orden.")
+        else:
+            anterior = op.numero_orden
+            op.numero_orden = nueva
+            op.save(update_fields=["numero_orden", "fecha_modificacion"])
+            messages.success(request, f"{anterior} ahora es la ODS {nueva}.")
+        return redirect("almacen:ordenes_sin_ods")

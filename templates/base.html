@@ -296,6 +296,16 @@
                     C. Consultar Órdenes
                 </a>
 
+                <a href="{% url 'almacen:ordenes_sin_ods' %}"
+                   class="{% if u == 'consulta_orden' %}activo{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.8">
+                        <circle cx="10.5" cy="10.5" r="6.5"/>
+                        <path d="m16 16 5 5M8 10h5M8 13h3"/>
+                    </svg>
+                    C. Ordenes Reparacion Sin ODS
+                </a>
+
             {% endif %}
 
 
@@ -412,6 +422,21 @@
 <script src="{% static 'js/act.js' %}"></script>
 
 {% block extra_js %}{% endblock %}
+<script>
+window.addEventListener("pageshow", function (e) {
+  var nav = performance.getEntriesByType("navigation")[0];
+  if (e.persisted || (nav && nav.type === "back_forward")) window.location.reload();
+});
 
+document.addEventListener("submit", function (e) {
+  if (e.defaultPrevented) return;
+  var f = e.target;
+  if (f.dataset.enviado) { e.preventDefault(); return; }
+  f.dataset.enviado = "1";
+  f.querySelectorAll('button[type="submit"], input[type="submit"]')
+   .forEach(function (b) { b.disabled = true; });
+
+});
+</script>
 </body>
 </html>

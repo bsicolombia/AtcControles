@@ -56,6 +56,118 @@ class Anomalia(models.Model):
     @property
     def es_sin_anomalia(self):
         return self.codigo == SIN_ANOMALIA
+    @classmethod
+    def para_estado(cls, estado):
+        """Anomalías que se pueden elegir según el estado de la orden."""
+        qs = cls.objects.filter(activa=True)
+        if estado in Operacion.ESTADOS_EJECUTADOS:
+            return qs.filter(aplica_ejecutada=True)
+        if estado in Operacion.ESTADOS_NEGATIVOS:
+            return qs.filter(aplica_no_ejecutada=True)
+        return qs.none()
+
+class TipoOperacion(models.Model):
+    """
+    Una fila por cada "Descripción ODS" de la tabla de SAP.
+
+    El código ODS (ZRCM, ZSCO...) NO es único: ZSCO lo comparten
+    «WM-Reparación CM / Sustit MED» y «WM-Mtto y Eme Servihogar».
+    Lo único es el nombre.
+    """
+
+    class PerfilEstados(models.TextChoices):
+        MATERIAL = "MATERIAL", "Ejecutada / No ejecutada / Ejecutada suspendida"
+        FUGAS = "FUGAS", "Ejecutada sin fugas / Ejecutada con fuga / No ejecutada"
+
+    codigo_ods = models.CharField(
+        "Código ODS", max_length=10, blank=True, db_index=True,
+        help_text="Abreviación de SAP: ZRCM, ZSCO, etc. Puede repetirse.",
+    )
+    nombre = models.CharField("Descripción ODS", max_length=120, unique=True)
+
+    perfil_estados = models.CharField(
+        "Estados permitidos", max_length=10,
+        choices=PerfilEstados.choices, default=PerfilEstados.MATERIAL,
+    )
+    instala_material = models.BooleanField(
+        "Permite instalar material", default=True,
+        help_text="Si se desmarca, la orden solo lleva los datos del encabezado.",
+    )
+    requiere_ivt = models.BooleanField(
+        "Pide número de IVT", default=True,
+    )
+
+    prefijo_sin_ods = models.CharField(
+        "Prefijo si no hay ODS", max_length=5, blank=True,
+        help_text="Ej. RSO. Si se llena, este tipo permite registrar sin número de "
+                "orden y el sistema genera RSO0001, RSO0002…",
+    )
+
+    activo = models.BooleanField(default=True)
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Tipo de operación"
+        verbose_name_plural = "Tipos de operación"
+        ordering = ["orden", "nombre"]
+
+    def __str__(self):
+        return self.etiqueta
+
+    @property
+    def etiqueta(self):
+        return f"{self.codigo_ods} · {self.nombre}" if self.codigo_ods else self.nombre
+
+    # ---- reglas que antes estaban repartidas por todo el código ----
+    def estados_validos(self):
+        E = Operacion.Estado
+        if self.perfil_estados == self.PerfilEstados.FUGAS:
+            return [E.EJECUTADA_SIN_FUGAS, E.EJECUTADA_CON_FUGA, E.NO_EJECUTADA]
+        return [E.EJECUTADA, E.NO_EJECUTADA, E.EJECUTADA_SUSPENDIDA]
+
+    def instala(self, estado):
+        """¿Esta combinación tipo + estado instala material?"""
+        return self.instala_material and estado in Operacion.ESTADOS_QUE_INSTALAN
+
+    def pide_ivt(self, estado):
+        """¿Esta combinación tipo + estado exige IVT?"""
+        return self.requiere_ivt and estado in Operacion.ESTADOS_QUE_REQUIEREN_IVT
+
+def contexto_tipos():
+    return {
+        "config_tipos": {
+            str(t.pk): {
+                "instala": t.instala_material,
+                "ivt": t.requiere_ivt,
+                "sin_ods": t.prefijo_sin_ods,
+                "estados": [[e.value, e.label] for e in t.estados_validos()],
+            }
+            for t in TipoOperacion.objects.filter(activo=True)
+        },
+        "estados_ejecutados": sorted(e.value for e in Operacion.ESTADOS_EJECUTADOS),
+        "estados_ivt": sorted(e.value for e in Operacion.ESTADOS_QUE_REQUIEREN_IVT),
+    }
+# ---------------------------------------------------------------------
+# OPCIONAL · fase 2: "Act Mtto" y "Producto o servicio" de la tabla de SAP
+# ---------------------------------------------------------------------
+class ActividadMtto(models.Model):
+    tipo = models.ForeignKey(
+        TipoOperacion, on_delete=models.CASCADE, related_name="actividades"
+    )
+    codigo = models.CharField("Act Mtto", max_length=5)          # F10, J10, J20...
+    descripcion = models.CharField("Producto o servicio", max_length=150)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["tipo", "codigo", "descripcion"]
+        # J10 y J30 se repiten con distinto producto/servicio
+        unique_together = [("tipo", "codigo", "descripcion")]
+
+    def __str__(self):
+        return f"{self.codigo} · {self.descripcion}"
+    # Si la usa: en Operacion agregue
+    #   actividad = models.ForeignKey(ActividadMtto, null=True, blank=True,
+    #                                 on_delete=models.PROTECT, related_name="operaciones")
 
 # =====================================================================
 # Operación (orden de trabajo)
@@ -66,11 +178,6 @@ class Operacion(models.Model):
         MANUAL = "MANUAL", "Registro manual"
         CARGA_MASIVA = "CARGA_MASIVA", "Carga masiva"
 
-    class TipoOperacion(models.TextChoices):
-        INSTALACION = "INSTALACION", "Instalación"
-        RETIRO = "RETIRO", "Retiro"
-        MANTENIMIENTO = "MANTENIMIENTO", "Mantenimiento"
-
     class Estado(models.TextChoices):
         CREADA = "CREADA", "Creada"
         PENDIENTE = "PENDIENTE", "Pendiente"
@@ -78,13 +185,25 @@ class Operacion(models.Model):
         EJECUTADA = "EJECUTADA", "Ejecutada"
         NO_EJECUTADA = "NO_EJECUTADA", "No ejecutada"
         EJECUTADA_SUSPENDIDA = "EJECUTADA_SUSPENDIDA", "Ejecutada suspendida"
+        EJECUTADA_SIN_FUGAS = "EJECUTADA_SIN_FUGAS", "Ejecutada sin fugas"  
+        EJECUTADA_CON_FUGA = "EJECUTADA_CON_FUGA", "Ejecutada con fuga"     
         CANCELADA = "CANCELADA", "Cancelada"
         ANULADA = "ANULADA", "Anulada"
 
+    ESTADOS_EJECUTADOS = {
+        Estado.EJECUTADA,
+        Estado.EJECUTADA_SUSPENDIDA,
+        Estado.EJECUTADA_SIN_FUGAS,
+        Estado.EJECUTADA_CON_FUGA,
+    }
+
     # Estados en los que se instala material
+    # operaciones/models.py, dentro de Operacion
     ESTADOS_QUE_INSTALAN = {
         Estado.EJECUTADA,
         Estado.EJECUTADA_SUSPENDIDA,
+        Estado.EJECUTADA_SIN_FUGAS,
+        Estado.EJECUTADA_CON_FUGA,
     }
 
     # Estados que requieren IVT y soporte de visita
@@ -92,6 +211,8 @@ class Operacion(models.Model):
         Estado.EJECUTADA,
         Estado.NO_EJECUTADA,
         Estado.EJECUTADA_SUSPENDIDA,
+        Estado.EJECUTADA_SIN_FUGAS,
+        Estado.EJECUTADA_CON_FUGA,
     }
 
     # Estados en los que la orden NO se hizo
@@ -101,7 +222,11 @@ class Operacion(models.Model):
     # --- Identificación ---
     numero_orden = models.CharField(max_length=10, unique=True)
     numero_cuenta_contrato = models.CharField(max_length=10, db_index=True)
-    tipo_operacion = models.CharField(max_length=30, choices=TipoOperacion.choices)
+    tipo_operacion = models.ForeignKey(
+        "operaciones.TipoOperacion",
+        on_delete=models.PROTECT,
+        related_name="operaciones",
+    )
 
     # --- Responsables ---
     tecnico = models.ForeignKey(
@@ -167,35 +292,36 @@ class Operacion(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.numero_orden} - {self.get_tipo_operacion_display()}"
-    
+        return f"{self.numero_orden} - {self.tipo_operacion.nombre}"
+
     @property
-    def grupo_anomalia(self):
-        if self.estado in {
-            self.Estado.EJECUTADA,
-            self.Estado.EJECUTADA_SUSPENDIDA,
-        }:
-            return Anomalia.Grupo.EJECUTADA
-
-        if self.estado == self.Estado.NO_EJECUTADA:
-            return Anomalia.Grupo.NO_EJECUTADA
-
-        return None
+    def es_sin_ods(self):
+        p = (self.tipo_operacion.prefijo_sin_ods or "")
+        return bool(p) and self.numero_orden.startswith(p) and self.numero_orden[len(p):].isdigit()
 
     def clean(self):
         super().clean()
         errores = {}
-        if self.estado in self.ESTADOS_QUE_INSTALAN and not self.fecha_ejecucion:
+
+        if self.estado in self.ESTADOS_EJECUTADOS and not self.fecha_ejecucion:
             errores["fecha_ejecucion"] = "Indique la fecha de ejecución."
-        if (
-            self.estado in self.ESTADOS_NEGATIVOS
-            and self.anomalia_id
-            and self.anomalia.es_sin_anomalia
-        ):
+
+        if (self.estado in self.ESTADOS_NEGATIVOS
+                and self.anomalia_id and self.anomalia.es_sin_anomalia):
             errores["anomalia"] = "Indique la anomalía que explica este estado."
+
+        if (self.tipo_operacion_id
+                and self.estado in (self.ESTADOS_EJECUTADOS | self.ESTADOS_NEGATIVOS)):
+            validos = {e.value for e in self.tipo_operacion.estados_validos()}
+            if self.estado not in validos:
+                errores["estado"] = (
+                    f"«{self.tipo_operacion.nombre}» no admite el estado "
+                    f"{self.get_estado_display()}."
+                )
+
         if errores:
             raise ValidationError(errores)
-
+        
     def save(self, *args, **kwargs):
         # Si suben un archivo nuevo, borra el anterior: sin huérfanos ni
         # nombres con sufijos aleatorios.

@@ -1,121 +1,294 @@
+
 {% extends "base.html" %}
 
 {% block contenido %}
 
 <style>
-  .tabla-entregas-contenedor {
-      width: 100%;
-      max-height: 70vh;
-      overflow: auto;
-      position: relative;
-      border: 1px solid #d7dee8;
-      border-radius: 8px;
-      background: #fff;
-  }
+/* =========================================================
+   CONTENEDOR DE TABLAS
+========================================================= */
+.tabla-entregas-contenedor {
+    width: 100%;
+    max-height: 65vh;
+    overflow: auto;
+    position: relative;
+    border: 1px solid #d7dee8;
+    border-radius: 8px;
+    background: #fff;
+    margin-bottom: 25px;
+    scrollbar-gutter: stable;
+}
 
-  .tabla-entregas {
-      border-collapse: separate;
-      border-spacing: 0;
-      width: max-content;
-      min-width: 100%;
-      font-size: 13px;
-  }
+/* =========================================================
+   TABLAS
+========================================================= */
+.tabla-entregas {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+    font-size: 13px;
+}
 
-  .tabla-entregas th,
-  .tabla-entregas td {
-      padding: 9px 10px;
-      border-right: 1px solid #d7dee8;
-      border-bottom: 1px solid #d7dee8;
-      white-space: nowrap;
-  }
+.tabla-entregas th,
+.tabla-entregas td {
+    padding: 9px 10px;
+    border-right: 1px solid #d7dee8;
+    border-bottom: 1px solid #d7dee8;
+    white-space: nowrap;
+}
 
-  /* Encabezado fijo */
-  .tabla-entregas thead th {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      background: #1f3a5f !important;
-      color: #fff !important;
-      text-align: center;
-      vertical-align: middle;
-      font-weight: 700;
-  }
+/* =========================================================
+   ENCABEZADO FIJO
+========================================================= */
+.tabla-entregas thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #1f3a5f !important;
+    color: #fff !important;
+    text-align: center;
+    vertical-align: middle;
+    font-weight: 800;
+}
 
-  /* Primera columna fija horizontalmente */
-  .tabla-entregas th:first-child,
-  .tabla-entregas td:first-child {
-      position: sticky;
-      left: 0;
-      z-index: 3;
-      background: #fff;
-  }
+/* =========================================================
+   PRIMERA COLUMNA FIJA
+========================================================= */
+.tabla-entregas th:first-child,
+.tabla-entregas td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #fff;
+}
 
-  .tabla-entregas thead th:first-child {
-      z-index: 7;
-      background: #1f3a5f !important;
-  }
+.tabla-entregas thead th:first-child {
+    z-index: 7;
+    background: #1f3a5f !important;
+}
 
-  .tabla-entregas tbody tr:nth-child(even) td {
-      background: #f7f9fc;
-  }
+/* =========================================================
+   FILAS ALTERNAS
+========================================================= */
+.tabla-entregas tbody tr:nth-child(even) td {
+    background: #f7f9fc;
+}
 
-  .tabla-entregas tbody tr:nth-child(even) td:first-child {
-      background: #f7f9fc;
-  }
+.tabla-entregas tbody tr:nth-child(even) td:first-child {
+    background: #f7f9fc;
+}
 
-  .tabla-entregas tbody tr:hover td {
-      background: #edf3fa;
-  }
+/* =========================================================
+   HOVER
+========================================================= */
+.tabla-entregas tbody tr:hover td {
+    background: #edf3fa;
+}
 
-  .tabla-entregas tbody tr:hover td:first-child {
-      background: #edf3fa;
-  }
+.tabla-entregas tbody tr:hover td:first-child {
+    background: #edf3fa;
+}
 
-  .tabla-entregas tfoot td {
-      position: sticky;
-      bottom: 0;
-      z-index: 4;
-      background: #eef2f7;
-      font-weight: 700;
-  }
+/* =========================================================
+   TOTALES FIJOS
+========================================================= */
+.tabla-entregas tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    background: #eef2f7;
+    font-weight: 800;
+    color: #1e293b;
+    border-top: 2px solid #cbd5e1;
+}
 
-  .tabla-entregas tfoot td:first-child {
-      z-index: 6;
-  }
+.tabla-entregas tfoot td:first-child {
+    z-index: 6;
+}
 
-  .tabla-entregas th.material {
-      width: 110px;
-      min-width: 110px;
-      max-width: 110px;
-      white-space: normal;
-      overflow-wrap: anywhere;
-  }
+/* =========================================================
+   COLUMNAS DE MATERIALES
+========================================================= */
+.tabla-entregas th.material {
+    width: 110px;
+    min-width: 110px;
+    max-width: 110px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
 
-  .filtros-entregas {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: 12px;
-  }
+/* =========================================================
+   TODOS LOS ENLACES CLICABLES
+========================================================= */
+.tabla-entregas a {
+    display: inline-block;
+    color: #1d4ed8 !important;
+    font-weight: 800 !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1.5px !important;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    transition: color .15s ease,
+                background-color .15s ease,
+                transform .15s ease;
+}
 
-  .filtros-entregas input,
-  .filtros-entregas select {
-      padding: 8px 10px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-  }
+/* Hover de enlaces */
+.tabla-entregas a:hover {
+    color: #1e40af !important;
+    text-decoration-thickness: 2.5px !important;
+    text-underline-offset: 4px;
+    background: #dbeafe;
+    border-radius: 3px;
+    transform: translateY(-1px);
+}
 
-  .filtros-entregas button,
-  .filtros-entregas a {
-      padding: 8px 12px;
-      border-radius: 6px;
-      text-decoration: none;
-      cursor: pointer;
-  }
+/* Enlaces de la primera columna */
+.tabla-entregas td:first-child a {
+    color: #166534 !important;
+    font-weight: 900 !important;
+    text-decoration-thickness: 2px !important;
+}
+
+/* Hover del código */
+.tabla-entregas td:first-child a:hover {
+    color: #14532d !important;
+    background: #dcfce7;
+}
+
+/* Enlaces de acciones: Detalle y PDF */
+.tabla-entregas td:last-child a {
+    color: #1d4ed8 !important;
+    font-weight: 900 !important;
+    padding: 2px 3px;
+}
+
+/* =========================================================
+   FILTROS
+========================================================= */
+.filtros-entregas {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.filtros-entregas input,
+.filtros-entregas select {
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.filtros-entregas input:focus,
+.filtros-entregas select:focus {
+    outline: 2px solid #a7c5b2;
+    border-color: #166534;
+}
+
+/* Botones y enlaces de filtros */
+.filtros-entregas button,
+.filtros-entregas a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+
+.filtros-entregas button {
+    background: #166534;
+    border: 1px solid #166534;
+    color: #fff;
+}
+
+.filtros-entregas button:hover {
+    background: #14532d;
+}
+
+.filtros-entregas a {
+    background: #fff;
+    border: 1px solid #166534;
+    color: #166534;
+}
+
+.filtros-entregas a:hover {
+    background: #eaf3ed;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* =========================================================
+   TÍTULOS
+========================================================= */
+.titulo-tabla {
+    padding: 12px 15px;
+    border-radius: 7px;
+    margin: 25px 0 12px;
+    color: white;
+    font-size: 17px;
+    font-weight: 800;
+}
+
+.titulo-entregas {
+    background: #1f3a5f;
+}
+
+.titulo-devoluciones {
+    background: #a04d27;
+}
+
+/* =========================================================
+   SIN REGISTROS
+========================================================= */
+.sin-registros {
+    text-align: center;
+    padding: 18px !important;
+    color: #64748b;
+    font-weight: 700;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 768px) {
+    .filtros-entregas {
+        gap: 6px;
+    }
+
+    .filtros-entregas input,
+    .filtros-entregas select {
+        flex: 1 1 140px;
+        min-width: 0;
+    }
+
+    .tabla-entregas {
+        font-size: 12px;
+    }
+
+    .tabla-entregas th,
+    .tabla-entregas td {
+        padding: 7px 8px;
+    }
+}
 </style>
 
+
+
 <h2>Informe de Entregas y Devoluciones</h2>
+
+
+<!-- ================================================ -->
+<!-- FILTROS -->
+<!-- ================================================ -->
 
 <form method="get" class="filtros-entregas">
 
@@ -127,6 +300,7 @@
 
     <select name="tecnico">
         <option value="">Todos los técnicos</option>
+
         {% for t in tecnicos_lista %}
             <option value="{{ t.pk }}"
                 {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>
@@ -135,10 +309,21 @@
         {% endfor %}
     </select>
 
-    <input type="date" name="desde" value="{{ desde }}">
-    <input type="date" name="hasta" value="{{ hasta }}">
+    <input
+        type="date"
+        name="desde"
+        value="{{ desde }}"
+    >
 
-    <button type="submit">Filtrar</button>
+    <input
+        type="date"
+        name="hasta"
+        value="{{ hasta }}"
+    >
+
+    <button type="submit">
+        Filtrar
+    </button>
 
     <a href="?{{ request.GET.urlencode }}&export=xlsx">
         📥 Excel
@@ -149,6 +334,15 @@
     </a>
 
 </form>
+
+
+<!-- ================================================ -->
+<!-- TABLA DE ENTREGAS -->
+<!-- ================================================ -->
+
+<h3 class="titulo-tabla titulo-entregas">
+    📦 ENTREGAS
+</h3>
 
 <div class="tabla-entregas-contenedor">
 
@@ -175,7 +369,8 @@
 
         <tbody>
 
-            {% for f in filas %}
+            {% for f in filas_entregas %}
+
                 <tr>
 
                     <td>
@@ -184,13 +379,17 @@
                         </a>
                     </td>
 
-                    <td>{{ f.entrega.fecha|date:"d/m/Y" }}</td>
+                    <td>
+                        {{ f.entrega.fecha|date:"d/m/Y" }}
+                    </td>
 
                     <td>
                         {{ f.entrega.tecnico.get_full_name|default:f.entrega.tecnico.username }}
                     </td>
 
-                    <td>{{ f.entrega.tecnico.cedula }}</td>
+                    <td>
+                        {{ f.entrega.tecnico.cedula }}
+                    </td>
 
                     <td>
                         {{ f.entrega.entregado_por.get_full_name|default:f.entrega.entregado_por.username }}
@@ -219,24 +418,159 @@
                 </tr>
 
             {% empty %}
+
                 <tr>
-                    <td colspan="8">Sin entregas ni devoluciones.</td>
+                    <td colspan="{{ cols|length|add:7 }}" class="sin-registros">
+                        No hay entregas registradas.
+                    </td>
                 </tr>
+
             {% endfor %}
 
         </tbody>
 
-        {% if filas %}
+        {% if filas_entregas %}
             <tfoot>
                 <tr>
-                    <td colspan="5" align="right">TOTALES</td>
 
-                    {% for t in totales %}
-                        <td align="center">{{ t }}</td>
+                    <td colspan="5" align="right">
+                        TOTALES
+                    </td>
+
+                    {% for t in totales_entregas %}
+                        <td align="center">
+                            {{ t }}
+                        </td>
                     {% endfor %}
 
-                    <td align="center">{{ total_general }}</td>
+                    <td align="center">
+                        {{ total_general_entregas }}
+                    </td>
+
                     <td></td>
+
+                </tr>
+            </tfoot>
+        {% endif %}
+
+    </table>
+
+</div>
+
+
+<!-- ================================================ -->
+<!-- TABLA DE DEVOLUCIONES -->
+<!-- ================================================ -->
+
+<h3 class="titulo-tabla titulo-devoluciones">
+    ↩️ DEVOLUCIONES
+</h3>
+
+<div class="tabla-entregas-contenedor">
+
+    <table class="tabla-entregas">
+
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Fecha</th>
+                <th>Técnico</th>
+                <th>C.C.</th>
+                <th>Recibió</th>
+
+                {% for p in cols %}
+                    <th class="material">
+                        {{ p.nombre_completo }}
+                    </th>
+                {% endfor %}
+
+                <th>Total</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for f in filas_devoluciones %}
+
+                <tr>
+
+                    <td>
+                        <a href="{% url 'almacen:entrega_detalle' f.entrega.pk %}">
+                            {{ f.entrega.codigo }}
+                        </a>
+                    </td>
+
+                    <td>
+                        {{ f.entrega.fecha|date:"d/m/Y" }}
+                    </td>
+
+                    <td>
+                        {{ f.entrega.tecnico.get_full_name|default:f.entrega.tecnico.username }}
+                    </td>
+
+                    <td>
+                        {{ f.entrega.tecnico.cedula }}
+                    </td>
+
+                    <td>
+                        {{ f.entrega.entregado_por.get_full_name|default:f.entrega.entregado_por.username }}
+                    </td>
+
+                    {% for c in f.celdas %}
+                        <td align="center">
+                            {% if c %}{{ c }}{% else %}—{% endif %}
+                        </td>
+                    {% endfor %}
+
+                    <td align="center">
+                        <b>{{ f.total }}</b>
+                    </td>
+
+                    <td>
+                        <a href="{% url 'almacen:entrega_detalle' f.entrega.pk %}">
+                            Detalle
+                        </a>
+                        |
+                        <a href="{% url 'almacen:entrega_pdf' f.entrega.pk %}" target="_blank">
+                            PDF
+                        </a>
+                    </td>
+
+                </tr>
+
+            {% empty %}
+
+                <tr>
+                    <td colspan="{{ cols|length|add:7 }}" class="sin-registros">
+                        No hay devoluciones registradas.
+                    </td>
+                </tr>
+
+            {% endfor %}
+
+        </tbody>
+
+        {% if filas_devoluciones %}
+            <tfoot>
+                <tr>
+
+                    <td colspan="5" align="right">
+                        TOTALES
+                    </td>
+
+                    {% for t in totales_devoluciones %}
+                        <td align="center">
+                            {{ t }}
+                        </td>
+                    {% endfor %}
+
+                    <td align="center">
+                        {{ total_general_devoluciones }}
+                    </td>
+
+                    <td></td>
+
                 </tr>
             </tfoot>
         {% endif %}

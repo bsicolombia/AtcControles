@@ -810,7 +810,42 @@
 .vacio-icono { font-size: 25px; }
 .vacio strong { font-size: 12px; color: #334155; }
 .vacio span { max-width: 350px; font-size: 10px; line-height: 1.4; }
+/* =========================================================
+   SUBRAYADO DE ELEMENTOS CLICABLES QUE NO SON BOTONES
+========================================================= */
 
+/* Enlaces generales */
+.pagina-asig a:not(.btn):not(.btn-gestionar-nuevo) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
+}
+
+/* Cantidades clicables de la tabla */
+.tabla-consolidada a.enlace-cantidad,
+.tabla-consolidada a.enlace-error {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+/* Enlaces del resumen IVT */
+.tabla-consolidada a.ivt-num,
+.tabla-consolidada a.ivt-enlace {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* Mantener los botones sin subrayado */
+.pagina-asig a.btn,
+.pagina-asig a.btn-gestionar-nuevo {
+    text-decoration: none;
+}
+
+/* Mantener el subrayado al pasar el cursor */
+.pagina-asig a:not(.btn):not(.btn-gestionar-nuevo):hover {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+}
 /* =========================================================
    RESPONSIVE
 ========================================================= */

@@ -24,7 +24,7 @@ urlpatterns = [
     path("unidades/<int:pk>/", views.UnidadDetailView.as_view(), name="unidad_detalle"),
     path("unidades/<int:pk>/editar/", views.UnidadUpdateView.as_view(), name="unidad_editar"),
     path("unidades/<int:pk>/estado/", views.UnidadEstadoView.as_view(), name="unidad_estado"),
-
+    path("api/validar-orden/", views.ValidarOrdenJson.as_view(), name="api_validar_orden"),
     path("asignaciones/", views.AsignacionListView.as_view(), name="asignaciones"),
     path("asignaciones/nueva/", views.EntregaCreateView.as_view(), name="asignacion_crear"),
     path("asignaciones/<int:pk>/instalar/", views.AsignacionInstalarView.as_view(), name="asignacion_instalar"),
@@ -49,4 +49,7 @@ urlpatterns = [
     path("ivt/asignar/", views.AsignarIVTView.as_view(), name="ivt_asignar"),
     path("ivt/cambiar-estado/", views.IVTCambiarEstadoView.as_view(), name="ivt_cambiar_estado"),
     path("api/validar-ivt/", views.ValidarIVTJson.as_view(), name="api_validar_ivt"),
+
+    path("ordenes-sin-ods/", views.OrdenesSinOdsView.as_view(), name="ordenes_sin_ods"),
+    path("ordenes-sin-ods/<int:pk>/asignar/", views.AsignarOdsView.as_view(), name="asignar_ods"),
 ]
