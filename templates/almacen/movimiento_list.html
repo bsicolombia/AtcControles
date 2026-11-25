@@ -9,6 +9,9 @@
         <h1>Movimientos</h1>
         <p>Historial completo de entradas, asignaciones, instalaciones y devoluciones.</p>
     </div>
+    {% if puede_consola %}
+        <a class="btn btn-primario" href="{% url 'almacen:consola' %}">🖥 Consola de actividad</a>
+    {% endif %}
 </div>
 
 <form class="filtros filtros-inventario" method="get">

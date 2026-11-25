@@ -538,6 +538,20 @@ a.cant:hover { filter: brightness(.95); text-decoration: underline; }
     text-decoration: none !important;
 }
 
+.c-observaciones {
+    width: 280px;
+    min-width: 280px;
+}
+
+.observaciones {
+    min-width: 280px;
+    max-width: 350px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    color: #475569;
+    line-height: 1.5;
+}
+
 /* =========================================================
    RESPONSIVE
 ========================================================= */
@@ -800,6 +814,7 @@ a.cant:hover { filter: brightness(.95); text-decoration: underline; }
                             <th class="c-fecha">ASIGNADO</th>
                             <th class="c-fecha">INSTALADO</th>
                             <th class="c-remis">REMISIÓN / CAJA</th>
+                            <th class="c-observaciones">OBSERVACIONES</th>
                         </tr>
                     </thead>
 
@@ -821,9 +836,20 @@ a.cant:hover { filter: brightness(.95); text-decoration: underline; }
                             <td>{{ i.fecha_asignacion|date:"d/m/Y"|default:"—" }}</td>
                             <td>{{ i.fecha_instalacion|date:"d/m/Y"|default:"—" }}</td>
                             <td>{{ i.caja.remision.numero_remision|default:"—" }} · caja {{ i.caja.numero_caja }}</td>
+                            <td class="observaciones">
+                                {% if i.observaciones %}
+                                    {{ i.observaciones|linebreaksbr }}
+                                {% else %}
+                                    <span style="color:#94a3b8;">—</span>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% empty %}
-                        <tr><td class="sin-datos" colspan="8">No hay IVT con esos filtros.</td></tr>
+                        <tr>
+                            <td class="sin-datos" colspan="9">
+                                No hay IVT con esos filtros.
+                            </td>
+                        </tr>
                     {% endfor %}
                     </tbody>
                 </table>

@@ -103,6 +103,8 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'usuarios.context_processors.roles',
                 "almacen.context_processors.inconsistencias_burbuja",
+                "almacen.context_processors.sap_burbuja",
+                "almacen.context_processors.almacen_burbuja",
             ],
         },
     },

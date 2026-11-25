@@ -608,6 +608,26 @@
 
     </select>
 
+    <!-- CATEGORÍA -->
+    <select
+        class="input"
+        name="categoria"
+        onchange="this.form.submit()"
+    >
+        <option value="">Todas las categorías</option>
+
+        {% for categoria in categorias %}
+            <option
+                value="{{ categoria.pk }}"
+                {% if categoria_sel == categoria.pk|stringformat:"s" %}
+                    selected
+                {% endif %}
+            >
+                {{ categoria.nombre }}
+            </option>
+        {% endfor %}
+    </select>
+
 
     <!-- ESTADO -->
 
@@ -668,7 +688,7 @@
 
     <!-- LIMPIAR -->
 
-    {% if request.GET.q or tecnico_sel or producto_sel or estado_sel or comparacion_sel %}
+    {% if request.GET.q or tecnico_sel or producto_sel or categoria_sel or estado_sel or comparacion_sel %}
 
         <a
             class="btn btn-secundario"

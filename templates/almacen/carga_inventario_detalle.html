@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block titulo %}Comparación de inventario #{{ carga.pk }}{% endblock %}
+
+{% block contenido %}
+
+<style>
+.cinv-page .veredicto {
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1px solid;
+    font-size: .95rem;
+    margin-bottom: 18px;
+}
+
+.cinv-page .veredicto-ok {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #14532d;
+}
+
+.cinv-page .veredicto-alerta {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #7c2d12;
+}
+
+.cinv-page .grupo {
+    display: block;
+    text-decoration: none;
+    padding: 18px 20px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    height: 100%;
+    transition: .15s;
+}
+
+.cinv-page .grupo:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(15,23,42,.1);
+}
+
+.cinv-page .grupo .num {
+    font-size: 2.4rem;
+    font-weight: 850;
+    line-height: 1;
+}
+
+.cinv-page .grupo .titulo {
+    font-weight: 800;
+    font-size: .95rem;
+    margin-top: 6px;
+}
+
+.cinv-page .grupo .desc {
+    font-size: .78rem;
+    opacity: .85;
+    margin-top: 2px;
+}
+
+.cinv-page .g-ok {
+    background: #e8f7ee;
+    color: #14532d;
+}
+
+.cinv-page .g-ok.activo {
+    border-color: #16a34a;
+}
+
+.cinv-page .g-error {
+    background: #fdecee;
+    color: #991b1b;
+}
+
+.cinv-page .g-error.activo {
+    border-color: #dc2626;
+}
+
+.cinv-page .g-falta {
+    background: #fff6d6;
+    color: #854d0e;
+}
+
+.cinv-page .g-falta.activo {
+    border-color: #d97706;
+}
+
+.cinv-page table {
+    font-size: .8rem;
+    margin-bottom: 0;
+}
+
+.cinv-page thead th {
+    white-space: nowrap;
+    font-size: .74rem;
+}
+
+.cinv-page .fila-ok td:first-child {
+    border-left: 4px solid #16a34a;
+}
+
+.cinv-page .fila-error td:first-child {
+    border-left: 4px solid #dc2626;
+}
+
+.cinv-page .fila-falta td:first-child {
+    border-left: 4px solid #d97706;
+}
+
+.cinv-page .fila-error {
+    background: #fffafa;
+}
+
+.cinv-page .fila-falta {
+    background: #fffdf3;
+}
+
+.cinv-page .problema {
+    font-weight: 800;
+    color: #b42332;
+}
+
+.cinv-page .que-hacer {
+    color: #475569;
+    max-width: 320px;
+}
+
+/* Tabla con scroll vertical */
+.cinv-page .tabla-scroll {
+    max-height: 70vh;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+}
+
+.cinv-page .tabla-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.cinv-page .tabla-scroll thead.table-success th {
+    background: #d1e7dd;
+}
+
+.cinv-page .tabla-scroll thead.table-danger th {
+    background: #f8d7da;
+}
+
+.cinv-page .tabla-scroll thead.table-warning th {
+    background: #fff3cd;
+}
+
+@media (max-width: 768px) {
+    .cinv-page .grupo {
+        padding: 14px;
+    }
+
+    .cinv-page .grupo .num {
+        font-size: 2rem;
+    }
+
+    .cinv-page .tabla-scroll {
+        max-height: 65vh;
+    }
+}
+</style>
+
+<div class="container-fluid py-4 cinv-page">
+
+    <!-- Encabezado -->
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-1">
+                Comparación de inventario · {{ carga.categoria.nombre }}
+            </h1>
+
+            <p class="text-muted small mb-0">
+                Carga #{{ carga.pk }} ·
+                {{ carga.fecha|date:"d/m/Y H:i" }} ·
+                {{ carga.usuario }} ·
+                {{ carga.nombre_original }}
+
+                {% if carga.archivo %}
+                    <a href="{{ carga.archivo.url }}">
+                        (descargar original)
+                    </a>
+                {% endif %}
+            </p>
+
+            {% if carga.observaciones %}
+                <p class="small mb-0">
+                    Observaciones: {{ carga.observaciones }}
+                </p>
+            {% endif %}
+        </div>
+
+        <div class="d-flex gap-2 align-items-start flex-wrap">
+            <a class="btn btn-outline-success btn-sm"
+               href="?export=xlsx">
+                ↓ Excel completo
+            </a>
+
+            <a class="btn btn-outline-success btn-sm"
+               href="?{{ qs_base }}&export=xlsx">
+                ↓ Excel de esta pestaña
+            </a>
+
+            <a class="btn btn-outline-primary btn-sm"
+               href="{% url 'almacen:carga_inventario_historial' %}">
+                Historial
+            </a>
+
+            <a class="btn btn-primary btn-sm"
+               href="{% url 'almacen:carga_inventario' %}">
+                Nueva carga
+            </a>
+        </div>
+    </div>
+
+    <!-- Veredicto -->
+    {% if carga.coincide_todo %}
+        <div class="veredicto veredicto-ok">
+            <strong>✔ Todo coincide.</strong>
+            Los {{ carga.filas_ok }} elementos del archivo están en el sistema y no falta ninguno.
+        </div>
+    {% else %}
+        <div class="veredicto veredicto-alerta">
+            <strong>Se encontraron diferencias.</strong>
+
+            El archivo trae <b>{{ carga.total_filas }}</b> filas:
+
+            <b>{{ carga.filas_ok }}</b> coinciden con el sistema y
+            <b>{{ carga.filas_error }}</b> tienen algún problema.
+
+            Además, el sistema tiene
+            <b>{{ carga.disponibles_sistema }}</b> disponibles en almacén y
+            <b>{{ carga.faltantes_archivo }}</b> de ellos no aparecen en el archivo.
+
+            {% if carga.faltantes_archivo and carga.total_filas < carga.disponibles_sistema %}
+                <div class="small mt-2">
+                    ℹ El archivo trae menos filas ({{ carga.total_filas }})
+                    que las unidades disponibles en el sistema
+                    ({{ carga.disponibles_sistema }}). Si subió un archivo parcial,
+                    es normal que aparezcan muchos «faltantes»; para una comparación
+                    completa suba el export completo del almacén.
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <!-- Los tres grupos -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-12 col-md-4">
+            <a href="?ver=ok"
+               class="grupo g-ok {% if ver == 'ok' %}activo{% endif %}">
+                <div class="num">✔ {{ carga.filas_ok }}</div>
+                <div class="titulo">Coinciden</div>
+                <div class="desc">
+                    Están en el archivo y en el sistema. Todo bien.
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <a href="?ver=errores"
+               class="grupo g-error {% if ver == 'errores' %}activo{% endif %}">
+                <div class="num">✖ {{ carga.filas_error }}</div>
+                <div class="titulo">En el archivo, con problema</div>
+                <div class="desc">
+                    Vienen en el Excel pero no cuadran con el sistema
+                    (no existe, otro material, no disponible…).
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <a href="?ver=faltantes"
+               class="grupo g-falta {% if ver == 'faltantes' %}activo{% endif %}">
+                <div class="num">⚠ {{ carga.faltantes_archivo }}</div>
+                <div class="titulo">Faltan en el archivo</div>
+                <div class="desc">
+                    Disponibles en el sistema pero no vinieron en el Excel.
+                </div>
+            </a>
+        </div>
+
+    </div>
+
+    <!-- Tipos de problema -->
+    {% if ver == 'errores' and resumen_errores %}
+        <div class="card card-body mb-3">
+            <div class="fw-bold small mb-2">
+                Filtrar por tipo de problema
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-sm {% if not tipo_error_sel %}btn-dark{% else %}btn-outline-dark{% endif %}"
+                   href="?ver=errores{% if q %}&q={{ q|urlencode }}{% endif %}">
+                    Todos
+                </a>
+
+                {% for r in resumen_errores %}
+                    <a class="btn btn-sm {% if tipo_error_sel == r.codigo %}btn-danger{% else %}btn-outline-danger{% endif %}"
+                       href="?ver=errores&tipo_error={{ r.codigo|urlencode }}{% if q %}&q={{ q|urlencode }}{% endif %}">
+                        {{ r.label }}
+                        <span class="badge bg-secondary">{{ r.n }}</span>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Búsqueda -->
+    <form method="get" class="row g-2 mb-3">
+        <input type="hidden" name="ver" value="{{ ver }}">
+        <input type="hidden" name="tipo_error" value="{{ tipo_error_sel }}">
+
+        <div class="col-md-5">
+            <input
+                type="text"
+                class="form-control form-control-sm"
+                name="q"
+                value="{{ q }}"
+                placeholder="Buscar serie, material, descripción u orden"
+            >
+        </div>
+
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-sm">
+                Buscar
+            </button>
+
+            <a class="btn btn-outline-secondary btn-sm"
+               href="?ver={{ ver }}">
+                Limpiar
+            </a>
+        </div>
+
+        <div class="col text-end small text-muted align-self-center">
+            {{ total_filtrado }} registro(s)
+        </div>
+    </form>
+
+    <!-- Tabla con scroll vertical -->
+    <div class="tabla-scroll">
+
+        {% if ver == 'ok' %}
+
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-success">
+                    <tr>
+                        <th>Serie</th>
+                        <th>Material</th>
+                        <th>Descripción (SAP)</th>
+                        <th>Status SAP</th>
+                        <th>Orden SAP</th>
+                        <th>Estado en sistema</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for r in filas %}
+                        <tr class="fila-ok">
+                            <td class="fw-semibold">
+                                {% if r.unidad %}
+                                    <a href="{% url 'almacen:unidad_detalle' r.unidad_id %}">
+                                        {{ r.numero_serie }}
+                                    </a>
+                                {% else %}
+                                    {{ r.numero_serie }}
+                                {% endif %}
+                            </td>
+
+                            <td>{{ r.codigo_producto }}</td>
+                            <td>{{ r.descripcion|default:"—" }}</td>
+                            <td>{{ r.status_sap|default:"—" }}</td>
+                            <td>{{ r.orden_sap|default:"—" }}</td>
+
+                            <td>
+                                {% if r.unidad %}
+                                    <span class="badge bg-success">
+                                        {{ r.unidad.get_estado_display }}
+                                    </span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                No hay registros en este grupo.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% elif ver == 'errores' %}
+
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-danger">
+                    <tr>
+                        <th>Fila</th>
+                        <th>Serie</th>
+                        <th>Material</th>
+                        <th>Descripción (SAP)</th>
+                        <th>Problema</th>
+                        <th>Qué hacer</th>
+                        <th>Estado en sistema</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for r in filas %}
+                        <tr class="fila-error">
+                            <td>{{ r.fila|default:"—" }}</td>
+
+                            <td class="fw-semibold">
+                                {% if r.unidad %}
+                                    <a href="{% url 'almacen:unidad_detalle' r.unidad_id %}">
+                                        {{ r.numero_serie|default:"—" }}
+                                    </a>
+                                {% else %}
+                                    {{ r.numero_serie|default:"—" }}
+                                {% endif %}
+                            </td>
+
+                            <td>{{ r.codigo_producto|default:"—" }}</td>
+                            <td>{{ r.descripcion|default:"—" }}</td>
+
+                            <td>
+                                <div class="problema">
+                                    {{ r.get_tipo_error_display }}
+                                </div>
+                                <div class="small text-muted">
+                                    {{ r.detalle }}
+                                </div>
+                            </td>
+
+                            <td class="que-hacer small">
+                                {{ r.accion }}
+                            </td>
+
+                            <td>
+                                {% if r.unidad %}
+                                    <span class="badge bg-secondary">
+                                        {{ r.unidad.get_estado_display }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">No existe</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                No hay problemas en este grupo. 🎉
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% else %}
+
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-warning">
+                    <tr>
+                        <th>Serie</th>
+                        <th>Código interno</th>
+                        <th>Material</th>
+                        <th>Descripción</th>
+                        <th>Estado en sistema</th>
+                        <th>Qué hacer</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for r in filas %}
+                        <tr class="fila-falta">
+                            <td class="fw-semibold">
+                                {% if r.unidad %}
+                                    <a href="{% url 'almacen:unidad_detalle' r.unidad_id %}">
+                                        {{ r.numero_serie|default:"—" }}
+                                    </a>
+                                {% else %}
+                                    {{ r.numero_serie|default:"—" }}
+                                {% endif %}
+                            </td>
+
+                            <td>{{ r.codigo_unidad|default:"—" }}</td>
+                            <td>{{ r.codigo_producto|default:"—" }}</td>
+                            <td>{{ r.descripcion|default:"—" }}</td>
+
+                            <td>
+                                {% if r.unidad %}
+                                    <span class="badge bg-warning text-dark">
+                                        {{ r.unidad.get_estado_display }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">
+                                        Disponible
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td class="que-hacer small">
+                                {{ r.accion }}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                No falta ninguno. 🎉
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -470,6 +470,25 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
         </div>
 
         <div class="campo">
+            <label for="digitador">Registrada por</label>
+            <select id="digitador" name="digitador">
+                <option value="">Todos</option>
+                {% for u in digitadores %}
+                    <option value="{{ u.pk }}" {% if digitador_sel == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="campo">
+            <label for="origen">Origen</label>
+            <select id="origen" name="origen">
+                <option value="">Todos</option>
+                {% for v, l in origenes %}
+                    <option value="{{ v }}" {% if origen_sel == v %}selected{% endif %}>{{ l }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="campo">
             <label for="anio">Año</label>
             <select id="anio" name="anio">
                 <option value="">Todos</option>
@@ -811,6 +830,8 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                         <th>TIPO DE OPERACIÓN</th>
                         <th>ESTADO</th>
                         <th>TÉCNICO</th>
+                        <th>REGISTRADA POR</th>
+                        <th>ORIGEN</th>
                         <th>IVT</th>
                         <th>FECHA</th>
                         <th>OBSERVACIONES</th>
@@ -825,7 +846,8 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                         <tr>
                             <td><a href="?detalle={{ o.numero_orden|urlencode }}" class="orden">{{ o.numero_orden }}</a></td>
                             <td>{{ o.numero_cuenta_contrato|default:"—" }}</td>
-                            <td>{{ o.get_tipo_operacion_display }}</td>
+
+                            <td title="{{ o.tipo_operacion.nombre }}">{{ o.tipo_operacion.etiqueta }}</td>
 
                             <td>
                                 <span class="etq
@@ -841,6 +863,13 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                             </td>
 
                             <td>{% if o.tecnico %}{{ o.tecnico.get_full_name|default:o.tecnico.username }}{% else %}—{% endif %}</td>
+
+                            <td>{% if o.usuario %}{{ o.usuario.get_full_name|default:o.usuario.username }}{% else %}—{% endif %}</td>
+                            <td>
+                            {% if o.origen == 'APP_TECNICO' %}<span class="etq etq-ok">📱 Técnico</span>
+                            {% elif o.origen == 'CARGA_MASIVA' %}<span class="etq">Carga SAP</span>
+                            {% else %}<span class="etq etq-inc">⌨ Digitador</span>{% endif %}
+                            </td>
 
                             <td>
                                 {% for ivt in o.ivts.all %}
@@ -886,7 +915,7 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="11" class="sin-datos">
+                            <td colspan="13" class="sin-datos">
                                 No se encontraron órdenes con los filtros seleccionados.
                                 {% if candidatas %}
                                     <div class="candidatas">
@@ -1069,12 +1098,22 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
 
             <div class="det-dato">
                 <span class="etiqueta">Tipo de operación</span>
-                <span class="valor">{{ operacion.get_tipo_operacion_display }}</span>
+                <span class="valor">{{ operacion.tipo_operacion.etiqueta }}</span>
             </div>
 
             <div class="det-dato">
                 <span class="etiqueta">Estado</span>
                 <span class="valor">{{ operacion.get_estado_display }}</span>
+            </div>
+
+            <div class="det-dato destacado">
+                <span class="etiqueta">Registrada por</span>
+                <span class="valor">{{ operacion.usuario.get_full_name|default:operacion.usuario.username }}</span>
+                <span class="secundario">{{ operacion.get_origen_display }} · {{ operacion.fecha_creacion|date:"d/m/Y H:i" }}</span>
+            </div>
+            <div class="det-dato">
+                <span class="etiqueta">Última modificación</span>
+                <span class="valor">{{ operacion.fecha_modificacion|date:"d/m/Y H:i" }}</span>
             </div>
 
             <div class="det-dato">
@@ -1262,6 +1301,23 @@ a.cel:hover { filter: brightness(.93); box-shadow: 0 0 0 1px currentColor; }
                 </tbody>
 
             </table>
+        </div>
+    </div>
+
+    <div class="det-card">
+        <div class="det-card-header"><h3>Historial de la orden</h3></div>
+        <div class="det-tabla-scroll">
+          <table class="det-tabla">
+            <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
+            <tbody>
+              {% for h in historial %}
+                <tr><td>{{ h.fecha|date:"d/m/Y H:i" }}</td><td>{{ h.usuario_nombre }}</td>
+                    <td>{{ h.get_accion_display }}</td><td>{{ h.detalle|default:"—" }}</td></tr>
+              {% empty %}
+                <tr><td colspan="4" class="det-vacio">Sin historial registrado.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
     </div>
 

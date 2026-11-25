@@ -52,4 +52,9 @@ urlpatterns = [
 
     path("ordenes-sin-ods/", views.OrdenesSinOdsView.as_view(), name="ordenes_sin_ods"),
     path("ordenes-sin-ods/<int:pk>/asignar/", views.AsignarOdsView.as_view(), name="asignar_ods"),
+    path("consola/", views.ConsolaView.as_view(), name="consola"),
+    path("inventario/carga/", views.CargaInventarioView.as_view(), name="carga_inventario"),
+    path("inventario/carga/historial/", views.HistorialCargaInventarioView.as_view(), name="carga_inventario_historial"),
+    path("inventario/carga/<int:pk>/", views.CargaInventarioDetalleView.as_view(), name="carga_inventario_detalle"),
+    path("inventario/carga/plantilla/", views.descargar_plantilla_inventario, name="carga_inventario_plantilla"),
 ]

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titulo %}Consola de actividad{% endblock %}
+
+{% block extra_css %}
+<style>
+.cons-tabs { display:flex; gap:6px; margin-bottom:10px; }
+.cons-filtros { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; align-items:center; }
+.cons-filtros .input { height:32px; font-size:11px; }
+.cons-scroll { max-height:70vh; overflow:auto; background:#fff; border-radius:6px; }
+.cons-scroll table { width:100%; border-collapse:separate; border-spacing:0; font-size:10px; }
+.cons-scroll th { position:sticky; top:0; background:#f1f5f3; padding:6px 9px; text-align:left; font-size:10px; }
+.cons-scroll td { padding:6px 9px; border-bottom:1px solid #e2e8e5; vertical-align:top; }
+.badge-a { padding:2px 8px; border-radius:999px; background:#e0f2fe; color:#075985; font-weight:700; white-space:nowrap; }
+.badge-a.ORDEN_REACTIVADA, .badge-a.PASSWORD_FALLIDA { background:#fee2e2; color:#991b1b; }
+.badge-a.ORDEN_EDITADA { background:#fef3c7; color:#92400e; }
+.badge-a.ORDEN_CREADA { background:#dcfce7; color:#166534; }
+.datos { margin:0; padding-left:14px; color:#64748b; }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+    <div><h1>Consola de actividad</h1>
+</div>
+
+<div class="cons-tabs">
+    <a class="btn btn-secundario" href="{% url 'almacen:movimientos' %}">← Movimientos</a>
+</div>
+
+<form class="cons-filtros" method="get">
+    <input class="input" type="search" name="q" value="{{ q }}" placeholder="Orden, código o texto">
+    <select class="input" name="usuario">
+        <option value="">Todos los usuarios</option>
+        {% for u in usuarios %}
+            <option value="{{ u.pk }}" {% if usuario_sel == u.pk|stringformat:"s" %}selected{% endif %}>
+                {{ u.get_full_name|default:u.username }}</option>
+        {% endfor %}
+    </select>
+    <select class="input" name="accion">
+        <option value="">Todas las acciones</option>
+        {% for v, l in acciones %}
+            <option value="{{ v }}" {% if accion_sel == v %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+    </select>
+    <select class="input" name="tecnico">
+        <option value="">Todos los técnicos</option>
+        {% for t in tecnicos_lista %}
+            <option value="{{ t.pk }}" {% if tecnico_sel == t.pk|stringformat:"s" %}selected{% endif %}>
+                {{ t.get_full_name|default:t.username }}</option>
+        {% endfor %}
+    </select>
+    <input class="input" type="date" name="desde" value="{{ desde }}" title="Desde">
+    <input class="input" type="date" name="hasta" value="{{ hasta }}" title="Hasta">
+    <button class="btn btn-primario" type="submit">Filtrar</button>
+    <a class="btn btn-secundario" href="{% url 'almacen:consola' %}">Limpiar</a>
+</form>
+
+<div class="tarjeta">
+  <div class="cons-scroll">
+    <table>
+      <thead><tr>
+        <th>Fecha y hora</th><th>Usuario</th><th>Acción</th><th>Referencia</th>
+        <th>Técnico</th><th>Observaciones / datos</th><th>IP</th>
+      </tr></thead>
+      <tbody>
+      {% for r in registros %}
+        <tr>
+          <td style="white-space:nowrap">{{ r.fecha|date:"d/m/Y H:i:s" }}</td>
+          <td>{{ r.usuario_nombre|default:"—" }}</td>
+          <td><span class="badge-a {{ r.accion }}">{{ r.get_accion_display }}</span></td>
+          <td><strong>{{ r.referencia|default:"—" }}</strong></td>
+          <td>{% if r.tecnico %}{{ r.tecnico.get_full_name|default:r.tecnico.username }}{% else %}—{% endif %}</td>
+          <td>
+            {{ r.detalle|default:"" }}
+            {% if r.datos %}
+              <ul class="datos">
+                {% for k, v in r.datos.items %}<li><b>{{ k }}:</b> {{ v }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </td>
+          <td>{{ r.ip|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" style="text-align:center;padding:20px">Sin registros con estos filtros.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if is_paginated %}
+<div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+  {% if page_obj.has_previous %}<a class="btn btn-secundario" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">← Anterior</a>{% endif %}
+  <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="btn btn-secundario" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">Siguiente →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

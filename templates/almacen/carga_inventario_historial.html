@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block titulo %}Historial de cargas de inventario{% endblock %}
+
+{% block contenido %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between mb-3">
+        <h1 class="h3">Historial de cargas de inventario</h1>
+        <a class="btn btn-primary" href="{% url 'almacen:carga_inventario' %}">Nueva carga</a>
+    </div>
+
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-3">
+            <select name="categoria" class="form-select">
+                <option value="">Todas las categorías</option>
+                {% for c in categorias %}<option value="{{ c.pk }}" {% if categoria_sel == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2"><input type="date" name="desde" value="{{ desde }}" class="form-control"></div>
+        <div class="col-md-2"><input type="date" name="hasta" value="{{ hasta }}" class="form-control"></div>
+        <div class="col-auto"><button class="btn btn-primary">Filtrar</button></div>
+    </form>
+
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr><th>#</th><th>Fecha</th><th>Categoría</th><th>Archivo</th><th>Usuario</th>
+                <th>Filas</th><th>OK</th><th>Error</th><th>Faltan</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for c in cargas %}
+            <tr>
+                <td>{{ c.pk }}</td>
+                <td>{{ c.fecha|date:"d/m/Y H:i" }}</td>
+                <td>{{ c.categoria }}</td>
+                <td>{{ c.nombre_original }}</td>
+                <td>{{ c.usuario }}</td>
+                <td>{{ c.total_filas }}</td>
+                <td class="text-success">{{ c.filas_ok }}</td>
+                <td class="text-danger">{{ c.filas_error }}</td>
+                <td class="text-warning">{{ c.faltantes_archivo }}</td>
+                <td><a class="btn btn-sm btn-outline-primary" href="{% url 'almacen:carga_inventario_detalle' c.pk %}">Ver</a></td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="10" class="text-center text-muted py-4">Aún no hay cargas.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.has_other_pages %}
+    <nav><ul class="pagination">
+        {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">«</a></li>{% endif %}
+        <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{{ querystring }}&page={{ page_obj.next_page_number }}">»</a></li>{% endif %}
+    </ul></nav>
+    {% endif %}
+</div>
+{% endblock %}

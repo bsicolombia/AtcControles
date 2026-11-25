@@ -1,0 +1,307 @@
+{% comment %}
+  Burbuja flotante de conciliaciones (Five vs SAP y almacén).
+  Se incluye UNA vez en base.html, debajo de la burbuja de inconsistencias:
+
+      {% include "_burbuja_inconsistencias.html" %}
+      {% include "_burbuja_conciliacion.html" %}
+
+  Se coloca sola encima de la burbuja de inconsistencias (si existe).
+{% endcomment %}
+
+{% if burbuja_conc %}
+{% url 'operaciones:conciliacion_sap' as url_sap %}
+
+<div class="bconc" id="bconc" data-total="{{ burbuja_conc.total }}">
+
+  <div class="bconc-globo" id="bconc-globo">
+
+    <button type="button" class="bconc-x" id="bconc-x"
+            aria-label="Ocultar detalle">×</button>
+
+    <div class="bconc-titulo">
+      {% if burbuja_conc.total %}
+        Conciliación: <strong>{{ burbuja_conc.total }}</strong> por revisar
+      {% else %}
+        <strong class="bconc-ok-titulo">✔ Conciliaciones al día</strong>
+      {% endif %}
+    </div>
+
+    <div class="bconc-scroll">
+
+      <!-- INSTALACIÓN: FIVE vs SAP -->
+      <div class="bconc-sec">
+        <a href="{{ url_sap }}?carga=todas">Instalación · Five vs SAP</a>
+      </div>
+      <ul>
+        <li class="{% if not burbuja_conc.sap.pendientes %}cero{% endif %}">
+          <a href="{{ url_sap }}?carga=todas&amp;estado=PENDIENTE">
+            <span>Instalado en Five, pendiente de verificar en SAP</span>
+            <b class="c-amb">{{ burbuja_conc.sap.pendientes }}</b>
+          </a>
+        </li>
+        <li class="{% if not burbuja_conc.sap.ok %}cero{% endif %}">
+          <a href="{{ url_sap }}?carga=todas&amp;estado=OK">
+            <span>Verificado: está en Five y en SAP</span>
+            <b class="c-ver">{{ burbuja_conc.sap.ok }}</b>
+          </a>
+        </li>
+        <li class="{% if not burbuja_conc.sap.error %}cero{% endif %}">
+          <a href="{{ url_sap }}?carga=todas&amp;estado=ERROR">
+            <span>Con error o diferencias</span>
+            <b class="c-rojo">{{ burbuja_conc.sap.error }}</b>
+          </a>
+        </li>
+      </ul>
+
+      <!-- ALMACÉN: una sección por categoría cargada -->
+      {% for a in burbuja_conc.almacen %}
+        {% url 'almacen:carga_inventario_detalle' a.pk as url_det %}
+        <div class="bconc-sec">
+          <a href="{{ url_det }}">
+            Almacén · {{ a.categoria }}
+            <small>carga #{{ a.pk }} · {{ a.fecha|date:"d/m/Y H:i" }}</small>
+          </a>
+        </div>
+        <ul>
+          <li class="{% if not a.ok %}cero{% endif %}">
+            <a href="{{ url_det }}?ver=ok">
+              <span>Coinciden con el sistema</span>
+              <b class="c-ver">{{ a.ok }}</b>
+            </a>
+          </li>
+          <li class="{% if not a.error %}cero{% endif %}">
+            <a href="{{ url_det }}?ver=errores">
+              <span>En el archivo, con problema</span>
+              <b class="c-rojo">{{ a.error }}</b>
+            </a>
+          </li>
+          <li class="{% if not a.faltantes %}cero{% endif %}">
+            <a href="{{ url_det }}?ver=faltantes">
+              <span>Faltan en el archivo</span>
+              <b class="c-amb">{{ a.faltantes }}</b>
+            </a>
+          </li>
+        </ul>
+      {% empty %}
+        <div class="bconc-sec"><a href="{% url 'almacen:carga_inventario' %}">Almacén · sin cargas aún</a></div>
+        <ul><li class="mas">Suba el Excel de SAP del almacén para comparar.</li></ul>
+      {% endfor %}
+
+    </div>
+
+    <span class="bconc-pico"></span>
+  </div>
+
+  <a class="bconc-boton" id="bconc-boton"
+     href="{{ url_sap }}?carga=todas{% if burbuja_conc.destino %}&amp;estado={{ burbuja_conc.destino }}{% endif %}"
+     title="Ver conciliaciones"
+     aria-label="{{ burbuja_conc.total }} puntos por revisar en conciliaciones. Ir a conciliación">
+
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 11l3 3L22 4"/>
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+    </svg>
+
+    {% if burbuja_conc.total %}
+      <span class="bconc-badge">{{ burbuja_conc.total }}</span>
+    {% else %}
+      <span class="bconc-badge bconc-badge-ok">✔</span>
+    {% endif %}
+  </a>
+
+</div>
+
+<style>
+  .bconc {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;            /* el JS lo sube si existe la burbuja de inconsistencias */
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    font-family: inherit;
+  }
+
+  .bconc-boton {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #176b45;
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+    text-decoration: none;
+    animation: bconc-pulso 2.4s ease-in-out infinite;
+  }
+
+  .bconc-boton:hover { background: #115236; }
+
+  .bconc-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 11px;
+    background: #b42318;
+    border: 2px solid #fff;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .bconc-badge-ok { background: #16a34a; }
+
+  .bconc-globo {
+    position: relative;
+    width: 300px;
+    max-width: calc(100vw - 36px);
+    padding: 12px 14px 10px;
+    background: #fff;
+    border: 1px solid #bfe0cd;
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+    font-size: 12px;
+    color: #333;
+  }
+
+  .bconc-globo.oculto { display: none; }
+
+  .bconc-pico {
+    position: absolute;
+    right: 20px;
+    bottom: -7px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-right: 1px solid #bfe0cd;
+    border-bottom: 1px solid #bfe0cd;
+    transform: rotate(45deg);
+  }
+
+  .bconc-titulo {
+    margin-right: 16px;
+    font-size: 13px;
+    color: #14532d;
+  }
+
+  .bconc-titulo strong { font-size: 15px; }
+  .bconc-ok-titulo { color: #15803d; }
+
+  .bconc-scroll {
+    max-height: 50vh;
+    overflow-y: auto;
+    margin-top: 4px;
+  }
+
+  .bconc-sec { margin-top: 10px; }
+
+  .bconc-sec a {
+    display: block;
+    color: #176b45;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .bconc-sec a small {
+    display: block;
+    color: #777;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .bconc-globo ul { list-style: none; margin: 4px 0 0; padding: 0; }
+
+  .bconc-globo li a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    border-top: 1px solid #e3f1ea;
+    color: #333;
+    text-decoration: none;
+  }
+
+  .bconc-globo li a:hover { color: #176b45; }
+  .bconc-globo li.cero { opacity: .5; }
+  .bconc-globo li.mas { padding-top: 4px; color: #777; }
+
+  .bconc-globo li b { font-size: 13px; }
+  .c-ver  { color: #15803d; }
+  .c-rojo { color: #b42318; }
+  .c-amb  { color: #b8860b; }
+
+  .bconc-x {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    border: 0;
+    background: none;
+    color: #999;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .bconc-x:hover { color: #333; }
+
+  @keyframes bconc-pulso {
+    0%, 100% { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 0 rgba(23,107,69,.45); }
+    50%      { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 10px rgba(23,107,69,0); }
+  }
+
+  @media print { .bconc { display: none; } }
+</style>
+
+<script>
+(function () {
+  var cont = document.getElementById("bconc");
+  if (!cont) return;
+
+  var total = cont.getAttribute("data-total");
+  var globo = document.getElementById("bconc-globo");
+  var clave = "bconc_total_oculta";
+
+  // --- Se coloca encima de la burbuja de inconsistencias (si existe) ---
+  var otra = document.getElementById("burbuja-inc");
+  function ubicar() {
+    cont.style.bottom = (otra ? otra.offsetHeight + 28 : 18) + "px";
+  }
+  ubicar();
+  window.addEventListener("resize", ubicar);
+  if (otra && window.ResizeObserver) new ResizeObserver(ubicar).observe(otra);
+
+  // --- Detalle oculto mientras el total no cambie ---
+  try {
+    if (sessionStorage.getItem(clave) === total) globo.classList.add("oculto");
+  } catch (e) {}
+
+  document.getElementById("bconc-x").addEventListener("click", function () {
+    globo.classList.add("oculto");
+    try { sessionStorage.setItem(clave, total); } catch (e) {}
+  });
+
+  // Al pasar el mouse por el botón se vuelve a mostrar el detalle.
+  document.getElementById("bconc-boton").addEventListener("mouseenter", function () {
+    globo.classList.remove("oculto");
+  });
+})();
+</script>
+{% endif %}

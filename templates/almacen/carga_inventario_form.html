@@ -1,0 +1,27 @@
+{% extends "carga_base.html" %}
+
+{% block enlace_historial %}
+<a class="btn btn-outline-primary" href="{% url 'almacen:carga_inventario_historial' %}">Historial de cargas</a>
+{% endblock %}
+
+{% block instrucciones %}
+<strong>Use el export de SAP del almacén.</strong> Columnas obligatorias:
+<code>Material</code> y <code>Número de serie</code>.<br>
+También se leen <code>Status sistema</code> (debe ser <code>ALMA</code>), <code>Descripción</code>,
+<code>Centro</code>, <code>Almacén</code>, <code>Tipo de stock</code> y <code>Orden</code>; las demás columnas se ignoran.<br>
+<span class="small">Se compara contra las unidades <b>disponibles</b> del almacén en la categoría elegida.
+Lo que esté disponible en el sistema y no venga en el archivo se reporta como faltante.</span>
+{% endblock %}
+
+{% block campos_extra %}
+<div class="mb-3">
+    <label class="form-label fw-bold" for="{{ form.categoria.id_for_label }}">{{ form.categoria.label }}</label>
+    {{ form.categoria }}
+    {% for error in form.categoria.errors %}<div class="text-danger mt-1">{{ error }}</div>{% endfor %}
+    <div class="form-text">{{ form.categoria.help_text }}</div>
+</div>
+{% endblock %}
+
+{% block plantilla %}
+<a href="{% url 'almacen:carga_inventario_plantilla' %}" class="btn btn-dark ms-auto">↓ Descargar plantilla Excel</a>
+{% endblock %}

@@ -1,0 +1,214 @@
+{% comment %}
+  Estilo y comportamiento comunes de las burbujas de conciliación (SAP y almacén).
+  Se incluye UNA vez en base.html, DESPUÉS de las tres burbujas.
+  Apila las burbujas de abajo hacia arriba:
+      1) inconsistencias (la existente)  2) instalación SAP  3) almacén
+{% endcomment %}
+
+<style>
+  .bub {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;               /* el JS lo recalcula para apilarlas */
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    font-family: inherit;
+  }
+
+  .bub-boton {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: var(--bub);
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+    text-decoration: none;
+    animation: bub-pulso 2.4s ease-in-out infinite;
+  }
+
+  .bub-boton:hover { background: var(--bub-osc); }
+
+  .bub-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 11px;
+    background: #b42318;
+    border: 2px solid #fff;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .bub-badge-ok { background: #16a34a; }
+
+  .bub-globo {
+    position: relative;
+    width: 300px;
+    max-width: calc(100vw - 36px);
+    padding: 12px 14px 10px;
+    background: #fff;
+    border: 1px solid var(--bub-borde);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+    font-size: 12px;
+    color: #333;
+  }
+
+  .bub-globo.oculto { display: none; }
+
+  .bub-pico {
+    position: absolute;
+    right: 20px;
+    bottom: -7px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-right: 1px solid var(--bub-borde);
+    border-bottom: 1px solid var(--bub-borde);
+    transform: rotate(45deg);
+  }
+
+  .bub-titulo {
+    display: block;
+    margin-right: 16px;
+    font-size: 13px;
+    color: var(--bub-osc);
+    text-decoration: none;
+  }
+
+  .bub-titulo strong { font-size: 15px; }
+
+  .bub-scroll {
+    max-height: 26vh;
+    overflow-y: auto;
+    margin-top: 4px;
+  }
+
+  .bub-sec { margin-top: 8px; }
+
+  .bub-sec a {
+    display: block;
+    color: var(--bub);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .bub-sec a small {
+    display: block;
+    color: #777;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .bub-globo ul { list-style: none; margin: 4px 0 0; padding: 0; }
+
+  .bub-globo li a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    border-top: 1px solid var(--bub-tinte);
+    color: #333;
+    text-decoration: none;
+  }
+
+  .bub-globo li a:hover { color: var(--bub); }
+  .bub-globo li.cero { opacity: .5; }
+  .bub-globo li b { font-size: 13px; }
+
+  .c-ver  { color: #15803d; }
+  .c-rojo { color: #b42318; }
+  .c-amb  { color: #b8860b; }
+
+  .bub-x {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    border: 0;
+    background: none;
+    color: #999;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .bub-x:hover { color: #333; }
+
+  @keyframes bub-pulso {
+    0%, 100% { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 0 var(--bub-pulso); }
+    50%      { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 10px transparent; }
+  }
+
+  @media print { .bub { display: none; } }
+</style>
+
+<script>
+(function () {
+  var burbujas = Array.prototype.slice.call(document.querySelectorAll(".bub"));
+  if (!burbujas.length) return;
+
+  var inc = document.getElementById("burbuja-inc");   // la burbuja de inconsistencias (base de la pila)
+
+  // --- Ocultar / mostrar el detalle de cada burbuja por separado ---
+  burbujas.forEach(function (b) {
+    var clave = "bub_oculta_" + b.getAttribute("data-clave");
+    var total = b.getAttribute("data-total");
+    var globo = b.querySelector(".bub-globo");
+
+    // Si el usuario lo ocultó con este mismo total, sigue oculto.
+    // Si el total cambia, vuelve a mostrarse.
+    try {
+      if (sessionStorage.getItem(clave) === total) globo.classList.add("oculto");
+    } catch (e) {}
+
+    b.querySelector(".bub-x").addEventListener("click", function () {
+      globo.classList.add("oculto");
+      try { sessionStorage.setItem(clave, total); } catch (e) {}
+    });
+
+    // Al pasar el mouse por el botón se vuelve a mostrar el detalle.
+    b.querySelector(".bub-boton").addEventListener("mouseenter", function () {
+      globo.classList.remove("oculto");
+    });
+  });
+
+  // --- Apilar: inconsistencias abajo, luego SAP, luego almacén ---
+  function apilar() {
+    var base = 18;
+    if (inc) base += inc.offsetHeight + 12;
+    burbujas.forEach(function (b) {
+      b.style.bottom = base + "px";
+      base += b.offsetHeight + 12;
+    });
+  }
+
+  apilar();
+  window.addEventListener("resize", apilar);
+
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(apilar);
+    burbujas.forEach(function (b) { ro.observe(b); });
+    if (inc) ro.observe(inc);
+  }
+})();
+</script>

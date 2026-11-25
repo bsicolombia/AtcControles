@@ -1,5 +1,5 @@
 import os
-
+from almacen.models import UnidadSerializada, Categoria,Producto
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
@@ -84,6 +84,15 @@ class TipoOperacion(models.Model):
         help_text="Abreviación de SAP: ZRCM, ZSCO, etc. Puede repetirse.",
     )
     nombre = models.CharField("Descripción ODS", max_length=120, unique=True)
+
+    tipo_con_ods = models.ForeignKey(
+        "self", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="variantes_sin_ods",
+        verbose_name="Tipo cuando tenga ODS",
+        help_text="Solo para tipos «sin ODS»: al asignar la ODS real, "
+                "la orden pasa a este tipo.",
+    )
 
     perfil_estados = models.CharField(
         "Estados permitidos", max_length=10,
@@ -175,8 +184,9 @@ class ActividadMtto(models.Model):
 class Operacion(models.Model):
 
     class Origen(models.TextChoices):
-        MANUAL = "MANUAL", "Registro manual"
+        MANUAL = "MANUAL", "Digitada en el sistema"
         CARGA_MASIVA = "CARGA_MASIVA", "Carga masiva"
+        APP_TECNICO = "APP_TECNICO", "Reportada por el técnico (app)"
 
     class Estado(models.TextChoices):
         CREADA = "CREADA", "Creada"
@@ -451,3 +461,135 @@ class RegistroSAP(models.Model):
 
     def __str__(self):
         return f"Fila {self.fila} - {self.numero_orden} - {self.estado}"
+
+class RegistroActividad(models.Model):
+    class Accion(models.TextChoices):
+        ORDEN_CREADA = "ORDEN_CREADA", "Orden registrada"
+        ORDEN_EDITADA = "ORDEN_EDITADA", "Orden editada"
+        ORDEN_REACTIVADA = "ORDEN_REACTIVADA", "Orden reactivada (eliminada)"
+        ODS_ASIGNADA = "ODS_ASIGNADA", "ODS real asignada"
+        ENTREGA = "ENTREGA", "Entrega de material"
+        DEVOLUCION = "DEVOLUCION", "Devolución de material"
+        INGRESO = "INGRESO", "Ingreso a almacén"
+        IVT = "IVT", "Movimiento de IVT"
+        ESTADO_UNIDAD = "ESTADO_UNIDAD", "Cambio de estado de unidad"
+        INCONSISTENCIA = "INCONSISTENCIA", "Inconsistencia resuelta"
+        CARGA_SAP = "CARGA_SAP", "Carga SAP"
+        PASSWORD_FALLIDA = "PASSWORD_FALLIDA", "Contraseña incorrecta"
+        CARGA_INVENTARIO = "CARGA_INVENTARIO", "Carga de inventario físico"
+
+    ACCIONES_ORDEN = ("ORDEN_CREADA", "ORDEN_EDITADA", "ORDEN_REACTIVADA", "ODS_ASIGNADA")
+
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="actividades",
+    )
+    usuario_nombre = models.CharField(max_length=150, blank=True)   # copia por si borran el usuario
+    accion = models.CharField(max_length=30, choices=Accion.choices, db_index=True)
+    referencia = models.CharField(max_length=60, blank=True, db_index=True)  # nº de orden, código de acta...
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="actividades_como_tecnico",
+    )
+    detalle = models.TextField(blank=True)
+    datos = models.JSONField(default=dict, blank=True)    # antes/después, motivo, etc.
+    ip = models.CharField(max_length=45, blank=True)
+
+    class Meta:
+        ordering = ["-fecha", "-id"]
+        verbose_name = "Registro de actividad"
+        verbose_name_plural = "Registros de actividad"
+
+    def __str__(self):
+        return f"{self.fecha:%d/%m/%Y %H:%M} · {self.usuario_nombre} · {self.get_accion_display()}"
+
+class CargaInventario(models.Model):
+    categoria = models.ForeignKey(
+        Categoria, on_delete=models.PROTECT, related_name="cargas_inventario"
+    )
+    archivo = models.FileField(upload_to="cargas_inventario/%Y/%m/")
+    nombre_original = models.CharField(max_length=255)
+    hash_archivo = models.CharField(max_length=64, blank=True, db_index=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="cargas_inventario",
+    )
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    observaciones = models.TextField(blank=True)
+
+    total_filas = models.PositiveIntegerField(default=0)
+    filas_ok = models.PositiveIntegerField(default=0)
+    filas_error = models.PositiveIntegerField(default=0)
+    faltantes_archivo = models.PositiveIntegerField(default=0)
+    disponibles_sistema = models.PositiveIntegerField(
+        default=0, help_text="Unidades disponibles en el sistema al momento de la carga."
+    )
+
+    class Meta:
+        ordering = ["-fecha", "-id"]
+        verbose_name = "Carga de inventario"
+        verbose_name_plural = "Cargas de inventario"
+
+    def __str__(self):
+        return f"Carga inventario #{self.pk} · {self.categoria} · {self.fecha:%d/%m/%Y %H:%M}"
+
+    @property
+    def coincide_todo(self):
+        return self.filas_error == 0 and self.faltantes_archivo == 0
+
+
+class RegistroInventario(models.Model):
+
+    class Resultado(models.TextChoices):
+        OK = "OK", "Coincide"
+        ERROR = "ERROR", "Con error"
+        FALTANTE = "FALTANTE", "Falta en el archivo"
+
+    class TipoError(models.TextChoices):
+        SERIE_VACIA = "SERIE_VACIA", "Fila sin número de serie"
+        SERIE_DUPLICADA_ARCHIVO = "SERIE_DUPLICADA_ARCHIVO", "Serie repetida en el archivo"
+        PRODUCTO_VACIO = "PRODUCTO_VACIO", "Fila sin código de material"
+        PRODUCTO_NO_EXISTE = "PRODUCTO_NO_EXISTE", "El código de material no existe"
+        PRODUCTO_FUERA_CATEGORIA = "PRODUCTO_FUERA_CATEGORIA", "El material es de otra categoría"
+        PRODUCTO_NO_SERIALIZADO = "PRODUCTO_NO_SERIALIZADO", "El material no se maneja por serial"
+        NO_EXISTE_EN_SISTEMA = "NO_EXISTE_EN_SISTEMA", "La serie no existe en el sistema"
+        SERIE_OTRO_PRODUCTO = "SERIE_OTRO_PRODUCTO", "La serie pertenece a otro material"
+        CODIGO_UNIDAD_NO_COINCIDE = "CODIGO_UNIDAD_NO_COINCIDE", "El código de unidad no corresponde a la serie"
+        ESTADO_NO_DISPONIBLE = "ESTADO_NO_DISPONIBLE", "La unidad no figura disponible en el sistema"
+        FALTANTE_EN_ARCHIVO = "FALTANTE_EN_ARCHIVO", "Disponible en el sistema pero no está en el archivo"
+        STATUS_NO_ALMACEN = "STATUS_NO_ALMACEN", "En SAP no figura en almacén (status distinto de ALMA)"
+
+    carga = models.ForeignKey(
+        CargaInventario, on_delete=models.CASCADE, related_name="registros"
+    )
+    fila = models.PositiveIntegerField(null=True, blank=True)  # null en faltantes
+
+    # Tal como viene en el archivo
+    numero_serie = models.CharField(max_length=100, blank=True, db_index=True)
+    codigo_unidad = models.CharField(max_length=50, blank=True)
+    codigo_producto = models.CharField(max_length=30, blank=True)
+
+    resultado = models.CharField(max_length=10, choices=Resultado.choices, db_index=True)
+    tipo_error = models.CharField(max_length=30, choices=TipoError.choices, blank=True, db_index=True)
+    detalle = models.TextField(blank=True)
+
+    # Relaciones y foto del estado en el sistema
+    producto = models.ForeignKey(Producto, null=True, blank=True, on_delete=models.PROTECT,
+                                 related_name="registros_inventario")
+    unidad = models.ForeignKey(UnidadSerializada, null=True, blank=True, on_delete=models.PROTECT,
+                               related_name="registros_inventario")
+    estado_sistema = models.CharField(max_length=20, blank=True)
+    descripcion = models.CharField(max_length=200, blank=True)
+    status_sap = models.CharField("Status en SAP", max_length=20, blank=True)
+    centro = models.CharField(max_length=10, blank=True)
+    almacen_sap = models.CharField("Almacén SAP", max_length=10, blank=True)
+    tipo_stock = models.CharField(max_length=10, blank=True)
+    orden_sap = models.CharField("Orden en SAP", max_length=30, blank=True)
+
+    class Meta:
+        ordering = ["resultado", "fila", "id"]
+        indexes = [models.Index(fields=["carga", "resultado"])]
+
+    def __str__(self):
+        return f"{self.numero_serie or '—'} · {self.get_resultado_display()}"

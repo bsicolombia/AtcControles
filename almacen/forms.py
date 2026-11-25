@@ -513,13 +513,10 @@ class AsignacionForm(EstiloMixin, forms.Form):
         ).select_related("categoria")
 
         def etiqueta_producto(producto):
-            partes = [
-                producto.nombre,          # ej: Medidor
-                producto.marca,           # ej: Elster
-                producto.medida,          # ej: 1/2"
-            ]
-            texto = " ".join(str(p) for p in partes if p)
-            return f"{texto} · {producto.codigo_producto}"
+            # Código primero: "2000009 · Medidor Elster G10 ..."
+            return f"{producto.codigo_producto} · {producto.nombre_completo}"
+
+        self.fields["producto"].label_from_instance = etiqueta_producto
 
         self.fields["producto"].label_from_instance = etiqueta_producto
 
@@ -1034,3 +1031,35 @@ class EntregaForm(forms.Form):
         required=False, label="Observaciones",
         widget=forms.TextInput(attrs={"placeholder": "Opcional"}),
     )
+
+class CargaInventarioForm(EstiloMixin, forms.Form):
+    categoria = forms.ModelChoiceField(
+        queryset=Categoria.objects.none(),
+        label="Categoría a comparar",
+        empty_label="Seleccione la categoría",
+        help_text="Solo se comparan las unidades disponibles de esta categoría (ej. Medidores).",
+    )
+    archivo = forms.FileField(
+        label="Archivo Excel (.xlsx)",
+        help_text="Máximo 5 MB.",
+        widget=forms.FileInput(attrs={"accept": ".xlsx"}),
+    )
+    observaciones = forms.CharField(
+        label="Observaciones", required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Categorías serializadas = las que tienen prefijo
+        self.fields["categoria"].queryset = (
+            Categoria.objects.filter(estado=True).exclude(prefijo="").order_by("nombre")
+        )
+
+    def clean_archivo(self):
+        f = self.cleaned_data["archivo"]
+        if not f.name.lower().endswith(".xlsx"):
+            raise forms.ValidationError("El archivo debe tener formato .xlsx.")
+        if f.size > 5 * 1024 * 1024:
+            raise forms.ValidationError("El archivo no puede superar 5 MB.")
+        return f

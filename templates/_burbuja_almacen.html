@@ -1,0 +1,82 @@
+{% comment %}
+  Burbuja de conciliación de ALMACÉN: inventario cargado (Excel de SAP) vs sistema.
+  Una sección por categoría (la última carga de cada una).
+{% endcomment %}
+
+{% if burbuja_alm %}
+
+<div class="bub" id="bub-alm" data-clave="alm" data-total="{{ burbuja_alm.total }}"
+     style="--bub:#176b45; --bub-osc:#115236; --bub-borde:#bfe0cd; --bub-tinte:#e3f1ea; --bub-pulso:rgba(23,107,69,.45);">
+
+  <div class="bub-globo">
+
+    <button type="button" class="bub-x" aria-label="Ocultar detalle">×</button>
+
+    <a class="bub-titulo"
+       href="{% url 'almacen:carga_inventario_detalle' burbuja_alm.destino_pk %}?ver={{ burbuja_alm.destino_ver }}">
+      {% if burbuja_alm.total %}
+        Almacén vs SAP: <strong>{{ burbuja_alm.total }}</strong> por revisar
+      {% else %}
+        <strong>✔ Almacén vs SAP al día</strong>
+      {% endif %}
+    </a>
+
+    <div class="bub-scroll">
+      {% for a in burbuja_alm.categorias %}
+        {% url 'almacen:carga_inventario_detalle' a.pk as url_det %}
+
+        <div class="bub-sec">
+          <a href="{{ url_det }}">
+            {{ a.categoria }}
+            <small>carga #{{ a.pk }} · {{ a.fecha|date:"d/m/Y H:i" }}</small>
+          </a>
+        </div>
+
+        <ul>
+          <li class="{% if not a.ok %}cero{% endif %}">
+            <a href="{{ url_det }}?ver=ok">
+              <span>Coinciden con el sistema</span>
+              <b class="c-ver">{{ a.ok }}</b>
+            </a>
+          </li>
+          <li class="{% if not a.error %}cero{% endif %}">
+            <a href="{{ url_det }}?ver=errores">
+              <span>En el archivo, con problema</span>
+              <b class="c-rojo">{{ a.error }}</b>
+            </a>
+          </li>
+          <li class="{% if not a.faltantes %}cero{% endif %}">
+            <a href="{{ url_det }}?ver=faltantes">
+              <span>Faltan en el archivo</span>
+              <b class="c-amb">{{ a.faltantes }}</b>
+            </a>
+          </li>
+        </ul>
+      {% endfor %}
+    </div>
+
+    <span class="bub-pico"></span>
+  </div>
+
+  <a class="bub-boton"
+     href="{% url 'almacen:carga_inventario_detalle' burbuja_alm.destino_pk %}?ver={{ burbuja_alm.destino_ver }}"
+     title="Ver conciliación de almacén"
+     aria-label="{{ burbuja_alm.total }} puntos por revisar en la conciliación de almacén. Ir a la comparación">
+
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 8l-9-5-9 5 9 5 9-5z"/>
+      <path d="M3 8v8l9 5 9-5V8"/>
+      <path d="M12 13v8"/>
+    </svg>
+
+    {% if burbuja_alm.total %}
+      <span class="bub-badge">{{ burbuja_alm.total }}</span>
+    {% else %}
+      <span class="bub-badge bub-badge-ok">✔</span>
+    {% endif %}
+  </a>
+
+</div>
+{% endif %}

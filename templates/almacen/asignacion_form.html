@@ -87,8 +87,27 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     var tsProd = new TomSelect(prod, {
-        placeholder: "Escriba para buscar un producto...",
-        maxOptions: 200
+        placeholder: "Escriba el código o el nombre del producto...",
+        maxOptions: 200,
+        openOnFocus: true,
+        selectOnTab: true,
+        searchField: ["text"],
+        render: {
+            // Lista desplegable: código en negrita + nombre
+            option: function (d, escape) {
+                var partes = (d.text || "").split(" · ");
+                var codigo = partes.shift();
+                return '<div><strong>' + escape(codigo) + '</strong> ' +
+                       '<span style="color:#64748b">' + escape(partes.join(" · ")) + '</span></div>';
+            },
+            // Producto ya seleccionado: se ve el código también
+            item: function (d, escape) {
+                var partes = (d.text || "").split(" · ");
+                var codigo = partes.shift();
+                return '<div><strong>' + escape(codigo) + '</strong> · ' +
+                       escape(partes.join(" · ")) + '</div>';
+            }
+        }
     });
 
     // Estado inicial

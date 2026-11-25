@@ -1,0 +1,70 @@
+{% comment %}
+  Burbuja de conciliación de INSTALACIÓN: Five vs SAP.
+  Se incluye en base.html (ver _burbujas_comun.html).
+{% endcomment %}
+
+{% if burbuja_sap %}
+{% url 'operaciones:conciliacion_sap' as url_sap %}
+
+<div class="bub" id="bub-sap" data-clave="sap" data-total="{{ burbuja_sap.total }}"
+     style="--bub:#1d4ed8; --bub-osc:#1e3a8a; --bub-borde:#c3d3f7; --bub-tinte:#e4ecfd; --bub-pulso:rgba(29,78,216,.45);">
+
+  <div class="bub-globo">
+
+    <button type="button" class="bub-x" aria-label="Ocultar detalle">×</button>
+
+    <a class="bub-titulo" href="{{ url_sap }}?carga=todas">
+      {% if burbuja_sap.total %}
+        Instalación Five vs SAP: <strong>{{ burbuja_sap.total }}</strong> por revisar
+      {% else %}
+        <strong>✔ Instalación Five vs SAP al día</strong>
+      {% endif %}
+    </a>
+
+    <div class="bub-scroll">
+      <ul>
+        <li class="{% if not burbuja_sap.pendientes %}cero{% endif %}">
+          <a href="{{ url_sap }}?carga=todas&amp;estado=PENDIENTE">
+            <span>Instalado en Five, pendiente de verificar en SAP</span>
+            <b class="c-amb">{{ burbuja_sap.pendientes }}</b>
+          </a>
+        </li>
+        <li class="{% if not burbuja_sap.ok %}cero{% endif %}">
+          <a href="{{ url_sap }}?carga=todas&amp;estado=OK">
+            <span>Verificado: está en Five y en SAP</span>
+            <b class="c-ver">{{ burbuja_sap.ok }}</b>
+          </a>
+        </li>
+        <li class="{% if not burbuja_sap.error %}cero{% endif %}">
+          <a href="{{ url_sap }}?carga=todas&amp;estado=ERROR">
+            <span>Con error o diferencias</span>
+            <b class="c-rojo">{{ burbuja_sap.error }}</b>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <span class="bub-pico"></span>
+  </div>
+
+  <a class="bub-boton"
+     href="{{ url_sap }}?carga=todas{% if burbuja_sap.destino %}&amp;estado={{ burbuja_sap.destino }}{% endif %}"
+     title="Ver conciliación de instalación Five vs SAP"
+     aria-label="{{ burbuja_sap.total }} puntos por revisar en la instalación Five vs SAP. Ir a la conciliación">
+
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 11l3 3L22 4"/>
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+    </svg>
+
+    {% if burbuja_sap.total %}
+      <span class="bub-badge">{{ burbuja_sap.total }}</span>
+    {% else %}
+      <span class="bub-badge bub-badge-ok">✔</span>
+    {% endif %}
+  </a>
+
+</div>
+{% endif %}

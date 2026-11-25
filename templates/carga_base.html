@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block contenido %}
+<div class="container mt-4" style="max-width: 860px;">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-1">{{ titulo }}</h1>
+            {% if subtitulo %}<p class="text-muted mb-0">{{ subtitulo }}</p>{% endif %}
+        </div>
+        {% block enlace_historial %}{% endblock %}
+    </div>
+
+    <div class="alert alert-info">{% block instrucciones %}{% endblock %}</div>
+
+    {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %}">
+            {{ message }}
+        </div>
+    {% endfor %}
+
+    <form method="post" enctype="multipart/form-data" class="card card-body">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        {% block campos_extra %}{% endblock %}
+
+        <div class="mb-3">
+            <label class="form-label fw-bold" for="{{ form.archivo.id_for_label }}">Archivo Excel</label>
+            {{ form.archivo }}
+            {% for error in form.archivo.errors %}<div class="text-danger mt-1">{{ error }}</div>{% endfor %}
+            <div class="form-text">Formato permitido: .xlsx</div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">{{ boton }}</button>
+            <a href="{{ cancel_url }}" class="btn btn-secondary">Cancelar</a>
+            {% block plantilla %}{% endblock %}
+        </div>
+    </form>
+</div>
+{% endblock %}

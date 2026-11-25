@@ -46,7 +46,12 @@
     {% for o in ordenes %}
       <tr>
         <td class="ods">{{ o.numero_orden }}</td>
-        <td>{{ o.tipo_operacion.nombre }}</td>
+        <td>
+          {{ o.tipo_operacion.nombre }}
+          {% if o.tipo_operacion.tipo_con_ods %}
+            <small style="display:block;color:#475569">→ {{ o.tipo_operacion.tipo_con_ods.nombre }}</small>
+          {% endif %}
+        </td>
         <td>{{ o.tecnico.get_full_name|default:o.tecnico.username }}</td>
         <td>{{ o.numero_cuenta_contrato }}</td>
         <td>{{ o.fecha_ejecucion|default:o.fecha_operacion|date:"d/m/Y" }}</td>

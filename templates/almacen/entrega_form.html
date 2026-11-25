@@ -98,12 +98,12 @@
       <!-- AGREGAR MATERIAL -->
       <div class="card">
 
-        <label for="sel-producto">Material</label>
+        <label for="sel-producto">Material (escriba el código o el nombre)</label>
         <select id="sel-producto">
           <option value="">Seleccione…</option>
-          <option value="IVT">IVT — Informe de Visita Técnica ({{ ivt_disponibles }} libres)</option>
+          <option value="IVT">IVT · Informe de Visita Técnica ({{ ivt_disponibles }} libres)</option>
           {% for p in productos %}
-            <option value="{{ p.pk }}">{{ p.nombre_completo }}</option>
+            <option value="{{ p.pk }}">{{ p.codigo_producto }} · {{ p.nombre_completo }}</option>
           {% endfor %}
         </select>
 
@@ -231,8 +231,27 @@
   });
 
   var tsProd = new TomSelect($("sel-producto"), {
-    placeholder: "Buscar material…",
-    maxOptions: 300
+    placeholder: "Escriba el código o el nombre del material…",
+    maxOptions: 300,
+    openOnFocus: true,
+    selectOnTab: true,
+    searchField: ["text"],
+    render: {
+      // Lista desplegable: código en negrita + nombre
+      option: function (d, escape) {
+        var partes = (d.text || "").split(" · ");
+        var codigo = partes.shift();
+        return '<div><strong>' + escape(codigo) + '</strong> ' +
+               '<span style="color:#64748b">' + escape(partes.join(" · ")) + '</span></div>';
+      },
+      // Material ya seleccionado: también muestra el código
+      item: function (d, escape) {
+        var partes = (d.text || "").split(" · ");
+        var codigo = partes.shift();
+        return '<div><strong>' + escape(codigo) + '</strong> · ' +
+               escape(partes.join(" · ")) + '</div>';
+      }
+    }
   });
 
   var lineas = JSON.parse($("payload-previo").textContent || "[]") || [];
@@ -412,7 +431,10 @@
 
     msg("");
     info = null;
-    seleccionado = null;
+    seleccionado = {
+      id: valor,
+      nombre: tsProd.options[valor].text.trim()
+    };
 
     $("pane-cant").classList.add("hidden");
     $("pane-serial").classList.add("hidden");

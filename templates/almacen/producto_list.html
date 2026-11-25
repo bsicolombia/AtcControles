@@ -9,8 +9,22 @@
 
 {% block contenido %}
 <div class="cabecera">
-  <div><h1>Materiales</h1><p>Catálogo de lo que maneja el almacén. Un material por cada tipo y medida.</p></div>
-  <div class="acciones"><a class="btn btn-primario" href="{% url 'almacen:producto_crear' %}">Nuevo Material</a></div>
+  <div>
+    <h1>Materiales</h1>
+    <p>
+      Catálogo de lo que maneja el almacén.
+      Un material por cada tipo y medida.
+    </p>
+    <span class="suave">
+      Total de materiales: <strong>{{ total_materiales }}</strong>
+    </span>
+  </div>
+
+  <div class="acciones">
+    <a class="btn btn-primario" href="{% url 'almacen:producto_crear' %}">
+      Nuevo Material
+    </a>
+  </div>
 </div>
 <form class="filtros" method="get">
   <input class="input buscar" type="search" name="q" value="{{ request.GET.q }}" placeholder="Buscar por nombre, código, marca o medida">
