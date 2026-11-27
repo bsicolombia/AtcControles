@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block titulo %}Comparación MB52 #{{ carga.pk }}{% endblock %}
+
+{% block contenido %}
+<style>
+.cstk .grupo { display:block; text-decoration:none; padding:16px 20px; border-radius:12px; border:2px solid transparent; height:100%; }
+.cstk .grupo .num { font-size:2.2rem; font-weight:850; line-height:1; }
+.cstk .g-ok { background:#e8f7ee; color:#14532d; } .cstk .g-ok.activo { border-color:#16a34a; }
+.cstk .g-err { background:#fdecee; color:#991b1b; } .cstk .g-err.activo { border-color:#dc2626; }
+.cstk .g-falta { background:#fff6d6; color:#854d0e; } .cstk .g-falta.activo { border-color:#d97706; }
+.cstk .g-todo { background:#eef2f7; color:#1e293b; } .cstk .g-todo.activo { border-color:#1f3a5f; }
+.cstk .g-vanti { background:#e6f0ff; color:#1e3a8a; } .cstk .g-vanti.activo { border-color:#2563eb; }
+.cstk table { font-size:.8rem; } .cstk thead th { white-space:nowrap; font-size:.74rem; }
+.cstk .fila-error td:first-child { border-left:4px solid #dc2626; }
+.cstk .fila-ok td:first-child { border-left:4px solid #16a34a; }
+.cstk .fila-falta td:first-child { border-left:4px solid #d97706; }
+.cstk .fila-falta { background:#fffdf3; }
+.cstk .dif-pos { color:#b45309; font-weight:800; } .cstk .dif-neg { color:#b42318; font-weight:800; }
+.cstk .problema { font-weight:800; color:#b42318; }
+.cstk .problema-falta { font-weight:800; color:#854d0e; }
+.cstk .tabla-scroll { max-height:70vh; overflow:auto; border:1px solid #dee2e6; border-radius:10px; }
+.cstk .tabla-scroll thead th { position:sticky; top:0; z-index:2; }
+</style>
+
+<div class="container-fluid py-4 cstk">
+
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-1">Comparación MB52 vs CICB</h1>
+            <p class="text-muted small mb-0">
+                Carga #{{ carga.pk }} · {{ carga.fecha|date:"d/m/Y H:i" }} · {{ carga.usuario }} · {{ carga.nombre_original }}
+                {% if carga.archivo %}<a href="{{ carga.archivo.url }}">(descargar original)</a>{% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2 align-items-start">
+            <a class="btn btn-outline-success btn-sm" href="?{{ qs_base }}&export=xlsx">↓ Excel de esta pestaña</a>
+            <a class="btn btn-outline-primary btn-sm" href="{% url 'almacen:carga_stock_historial' %}">Historial</a>
+            <a class="btn btn-primary btn-sm" href="{% url 'almacen:carga_stock' %}">Nueva carga</a>
+        </div>
+    </div>
+
+    <div class="alert alert-info small">
+        <b>CICB espera</b> = disponible en almacén + asignado a técnicos + instalado en órdenes de tipo
+        «{{ carga.tipos_sin_ods }}». Se compara contra <b>Libre utilización</b> de SAP.
+        <br><b>Solo se comparan materiales VANTI:</b> los códigos excluidos (N01…N16, U01, U02, UHH1, C1, C2, CC1, CC2, B1, AC, FA, FM) no se tienen en cuenta.
+    </div>
+
+    <div class="alert alert-info small">
+        <b>CICB espera</b> = disponible en almacén + asignado a técnicos + instalado en órdenes de tipo
+        «{{ carga.tipos_sin_ods }}». Se compara contra <b>Libre utilización</b> de SAP.
+    </div>
+
+    {% if todo_coincide %}
+        <div class="alert alert-success"><b>✔ Todo coincide.</b> Los {{ n_ok }} materiales VANTI cuadran con CICB.</div>
+    {% else %}
+        <div class="alert alert-warning"><b>Hay diferencias.</b>
+            {{ n_ok }} materiales coinciden, {{ n_errores }} tienen diferencia o problema
+            y {{ n_faltantes }} materiales que CICB espera tener no vienen en el archivo.</div>
+    {% endif %}
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6 col-xl">
+            <a href="?ver=ok" class="grupo g-ok {% if ver == 'ok' %}activo{% endif %}">
+                <div class="num">✔ {{ n_ok }}</div>
+                <div class="fw-bold">Coinciden</div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-xl">
+            <a href="?ver=errores" class="grupo g-err {% if ver == 'errores' %}activo{% endif %}">
+                <div class="num">✖ {{ n_errores }}</div>
+                <div class="fw-bold">Con diferencia o problema</div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-xl">
+            <a href="?ver=faltantes" class="grupo g-falta {% if ver == 'faltantes' %}activo{% endif %}">
+                <div class="num">⚠ {{ n_faltantes }}</div>
+                <div class="fw-bold">Faltan en el archivo</div>
+                <div class="small">CICB tiene stock, el MB52 no los trae</div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-xl">
+            <a href="?ver=todos" class="grupo g-todo {% if ver == 'todos' %}activo{% endif %}">
+                <div class="num">{{ n_total }}</div>
+                <div class="fw-bold">Todos los materiales</div>
+            </a>
+        </div>
+        
+    </div>
+
+    {% if ver == 'errores' and resumen_errores %}
+    <div class="card card-body mb-3">
+        <div class="fw-bold small mb-2">Filtrar por tipo de problema</div>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-sm {% if not tipo_error_sel %}btn-dark{% else %}btn-outline-dark{% endif %}"
+               href="?ver=errores{% if q %}&q={{ q|urlencode }}{% endif %}">Todos</a>
+            {% for r in resumen_errores %}
+            <a class="btn btn-sm {% if tipo_error_sel == r.codigo %}btn-danger{% else %}btn-outline-danger{% endif %}"
+               href="?ver=errores&tipo_error={{ r.codigo|urlencode }}{% if q %}&q={{ q|urlencode }}{% endif %}">
+                {{ r.label }} <span class="badge bg-secondary">{{ r.n }}</span></a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="get" class="row g-2 mb-3">
+        <input type="hidden" name="ver" value="{{ ver }}">
+        <input type="hidden" name="tipo_error" value="{{ tipo_error_sel }}">
+        <div class="col-md-5">
+            <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Buscar material o descripción">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary btn-sm">Buscar</button>
+            <a class="btn btn-outline-secondary btn-sm" href="?ver={{ ver }}">Limpiar</a>
+        </div>
+        <div class="col text-end small text-muted align-self-center">{{ total_filtrado }} material(es)</div>
+    </form>
+
+    <div class="tabla-scroll">
+
+    {% if ver == 'faltantes' %}
+
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-warning">
+                <tr>
+                    <th>Material</th>
+                    <th>Descripción</th>
+                    <th class="text-end">CICB disponible</th>
+                    <th class="text-end">CICB asignado</th>
+                    <th class="text-end">Instalado sin ODS</th>
+                    <th class="text-end">CICB espera</th>
+                    <th>Qué hacer</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in filas %}
+                <tr class="fila-falta">
+                    <td class="fw-semibold">{{ r.codigo_producto }}</td>
+                    <td class="small">{{ r.descripcion|default:"—" }}</td>
+                    <td class="text-end">{{ r.five_disponible|floatformat:"-3" }}</td>
+                    <td class="text-end">{{ r.five_asignado|floatformat:"-3" }}</td>
+                    <td class="text-end">{{ r.five_sin_ods|floatformat:"-3" }}</td>
+                    <td class="text-end fw-bold">{{ r.five_total|floatformat:"-3" }}</td>
+                    <td class="small">
+                        <div class="problema-falta">{{ r.get_tipo_error_display }}</div>
+                        <div class="text-muted">{{ r.accion }}</div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7" class="text-center text-muted py-4">No falta ningún material. 🎉</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    {% else %}
+
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Material</th>
+                    <th>Descripción</th>
+                    <th class="text-end">SAP libre</th>
+                    <th class="text-end">CICB disponible</th>
+                    <th class="text-end">CICB asignado</th>
+                    <th class="text-end">Instalado sin ODS</th>
+                    <th class="text-end">CICB espera</th>
+                    <th class="text-end">Diferencia</th>
+                    <th>Resultado</th>
+                    <th class="text-end">Otros SAP</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in filas %}
+                <tr class="{% if r.resultado == 'OK' %}fila-ok{% elif r.tipo_error == 'NO_EN_MB52' %}fila-falta{% else %}fila-error{% endif %}">
+                    <td class="fw-semibold">{{ r.codigo_producto }}</td>
+                    <td class="small">{{ r.descripcion|default:"—" }}</td>
+                    <td class="text-end">{{ r.sap_libre|floatformat:"-3" }}</td>
+                    <td class="text-end">{{ r.five_disponible|floatformat:"-3" }}</td>
+                    <td class="text-end">{{ r.five_asignado|floatformat:"-3" }}</td>
+                    <td class="text-end">{{ r.five_sin_ods|floatformat:"-3" }}</td>
+                    <td class="text-end fw-bold">{{ r.five_total|floatformat:"-3" }}</td>
+                    <td class="text-end {% if r.diferencia > 0 %}dif-pos{% elif r.diferencia < 0 %}dif-neg{% endif %}">
+                        {% if r.diferencia > 0 %}+{% endif %}{{ r.diferencia|floatformat:"-3" }}
+                    </td>
+                    <td>
+                        {% if r.resultado == 'OK' %}
+                            <span class="badge bg-success">Coincide</span>
+                        {% elif r.tipo_error == 'NO_EN_MB52' %}
+                            <div class="problema-falta">{{ r.get_tipo_error_display }}</div>
+                            <div class="small text-muted">{{ r.accion }}</div>
+                        {% else %}
+                            <div class="problema">{{ r.get_tipo_error_display }}</div>
+                            <div class="small text-muted">{{ r.accion }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="text-end small text-muted">
+                        {% if r.sap_calidad or r.sap_bloqueado or r.sap_transito %}
+                            cal {{ r.sap_calidad|floatformat:"-3" }} · blq {{ r.sap_bloqueado|floatformat:"-3" }} · trá {{ r.sap_transito|floatformat:"-3" }}
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="10" class="text-center text-muted py-4">No hay registros para este filtro.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    {% endif %}
+
+    </div>
+</div>
+{% endblock %}

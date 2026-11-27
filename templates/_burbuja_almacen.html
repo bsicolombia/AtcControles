@@ -1,6 +1,5 @@
 {% comment %}
-  Burbuja de conciliación de ALMACÉN: inventario cargado (Excel de SAP) vs sistema.
-  Una sección por categoría (la última carga de cada una).
+  IQ09 · Almacén vs SAP (inventario por serial). Una sección por categoría cargada.
 {% endcomment %}
 
 {% if burbuja_alm %}
@@ -10,14 +9,16 @@
 
   <div class="bub-globo">
 
-    <button type="button" class="bub-x" aria-label="Ocultar detalle">×</button>
+    <button type="button" class="bub-x" aria-label="Cerrar">×</button>
+
+    <div class="bub-nombre">IQ09 · Almacén vs SAP</div>
 
     <a class="bub-titulo"
        href="{% url 'almacen:carga_inventario_detalle' burbuja_alm.destino_pk %}?ver={{ burbuja_alm.destino_ver }}">
       {% if burbuja_alm.total %}
-        Almacén vs SAP: <strong>{{ burbuja_alm.total }}</strong> por revisar
+        <strong>{{ burbuja_alm.total }}</strong> por revisar
       {% else %}
-        <strong>✔ Almacén vs SAP al día</strong>
+        <strong>✔ Todo al día</strong>
       {% endif %}
     </a>
 
@@ -58,10 +59,9 @@
     <span class="bub-pico"></span>
   </div>
 
-  <a class="bub-boton"
-     href="{% url 'almacen:carga_inventario_detalle' burbuja_alm.destino_pk %}?ver={{ burbuja_alm.destino_ver }}"
-     title="Ver conciliación de almacén"
-     aria-label="{{ burbuja_alm.total }} puntos por revisar en la conciliación de almacén. Ir a la comparación">
+  <button type="button" class="bub-boton" aria-expanded="false"
+          title="IQ09 · Almacén vs SAP"
+          aria-label="{{ burbuja_alm.total }} puntos por revisar en IQ09, almacén vs SAP. Abrir detalle">
 
     <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
          stroke="currentColor" stroke-width="2"
@@ -76,7 +76,8 @@
     {% else %}
       <span class="bub-badge bub-badge-ok">✔</span>
     {% endif %}
-  </a>
+    <span class="bub-etq">IQ09</span>
+  </button>
 
 </div>
 {% endif %}

@@ -105,6 +105,8 @@ TEMPLATES = [
                 "almacen.context_processors.inconsistencias_burbuja",
                 "almacen.context_processors.sap_burbuja",
                 "almacen.context_processors.almacen_burbuja",
+                "almacen.context_processors.stock_burbuja",
+                "almacen.context_processors.sin_ods_burbuja"
             ],
         },
     },

@@ -1,0 +1,94 @@
+{% comment %}
+  MB52 · Stock por material vs SAP. Usa _burbujas_comun.html.
+{% endcomment %}
+
+{% if burbuja_stk %}
+{% url 'almacen:carga_stock_detalle' burbuja_stk.pk as url_stk %}
+
+<div class="bub" id="bub-stk" data-clave="stk" data-total="{{ burbuja_stk.total }}"
+     style="--bub:#7c3aed; --bub-osc:#5b21b6; --bub-borde:#d9c9fb; --bub-tinte:#efe7fd; --bub-pulso:rgba(124,58,237,.45);">
+
+  <div class="bub-globo">
+
+    <button type="button" class="bub-x" aria-label="Cerrar">×</button>
+
+    <div class="bub-nombre">MB52 · Stock por material vs SAP</div>
+
+    <a class="bub-titulo" href="{{ url_stk }}?ver={{ burbuja_stk.destino_ver }}">
+      {% if burbuja_stk.total %}
+        <strong>{{ burbuja_stk.total }}</strong> material{{ burbuja_stk.total|pluralize:",es" }} con diferencia
+      {% else %}
+        <strong>✔ Todo al día</strong>
+      {% endif %}
+    </a>
+
+    <div class="bub-scroll">
+      <div class="bub-sec">
+        <a href="{{ url_stk }}?ver=todos">
+          Última carga MB52
+          <small>#{{ burbuja_stk.pk }} · {{ burbuja_stk.fecha|date:"d/m/Y H:i" }} · {{ burbuja_stk.total_materiales }} materiales</small>
+        </a>
+      </div>
+
+      <ul>
+        <li class="{% if not burbuja_stk.ok %}cero{% endif %}">
+          <a href="{{ url_stk }}?ver=ok">
+            <span>Coinciden con Five</span>
+            <b class="c-ver">{{ burbuja_stk.ok }}</b>
+          </a>
+        </li>
+        <li class="{% if not burbuja_stk.error %}cero{% endif %}">
+          <a href="{{ url_stk }}?ver=errores">
+            <span>Con diferencia o problema</span>
+            <b class="c-rojo">{{ burbuja_stk.error }}</b>
+          </a>
+        </li>
+      </ul>
+
+      {% if burbuja_stk.tipos %}
+        <div class="bub-sec"><a href="{{ url_stk }}?ver=errores">Tipos de diferencia</a></div>
+        <ul>
+          {% for t in burbuja_stk.tipos %}
+            <li>
+              <a href="{{ url_stk }}?ver=errores&amp;tipo_error={{ t.codigo }}">
+                <span>{{ t.label }}</span>
+                <b class="c-rojo">{{ t.n }}</b>
+              </a>
+            </li>
+          {% endfor %}
+          {% if burbuja_stk.otros %}
+            <li class="cero">
+              <a href="{{ url_stk }}?ver=errores">
+                <span>y {{ burbuja_stk.otros }} tipo{{ burbuja_stk.otros|pluralize }} más…</span>
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      {% endif %}
+    </div>
+
+    <span class="bub-pico"></span>
+  </div>
+
+  <button type="button" class="bub-boton" aria-expanded="false"
+          title="MB52 · Stock por material vs SAP"
+          aria-label="{{ burbuja_stk.total }} materiales con diferencia en MB52. Abrir detalle">
+
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 2l10 5-10 5L2 7l10-5z"/>
+      <path d="M2 17l10 5 10-5"/>
+      <path d="M2 12l10 5 10-5"/>
+    </svg>
+
+    {% if burbuja_stk.total %}
+      <span class="bub-badge">{{ burbuja_stk.total }}</span>
+    {% else %}
+      <span class="bub-badge bub-badge-ok">✔</span>
+    {% endif %}
+    <span class="bub-etq">MB52</span>
+  </button>
+
+</div>
+{% endif %}

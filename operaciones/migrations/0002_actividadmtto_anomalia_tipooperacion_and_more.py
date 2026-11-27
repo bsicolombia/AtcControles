@@ -119,7 +119,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='registrosap',
             name='resuelto_por',
-            field=models.CharField(blank=True, choices=[('FIVE', 'Se corrigió en Five'), ('SAP', 'Se corrigió en SAP'), ('AMBOS', 'Se corrigió en ambos')], default='', max_length=10),
+            field=models.CharField(blank=True, choices=[('CICB', 'Se corrigió en CICB'), ('SAP', 'Se corrigió en SAP'), ('AMBOS', 'Se corrigió en ambos')], default='', max_length=10),
         ),
         migrations.AddField(
             model_name='registrosap',

@@ -1,3 +1,10 @@
+from .context_processors import invalidar_burbujas_conciliacion, invalidar_burbuja_sin_ods
+from .sin_ods import ordenes_sin_ods_qs, con_cantidades
+from django.db.models.functions import Upper, Trim
+from . import conciliacion_stock
+from .forms import CargaStockForm
+from operaciones.models import CargaStock, RegistroStock
+from django.db.models.functions import Abs
 import logging
 from . import conciliacion_inventario
 from .forms import CargaInventarioForm
@@ -30,6 +37,7 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
+from .config_sap import CODIGOS_EXCLUIDOS_VANTI
 from django.views.decorators.cache import never_cache
 from django.utils.decorators import method_decorator
 from django.shortcuts import  render
@@ -91,6 +99,8 @@ from django.db.models import Sum
 from django.db.models import Min, Max
 from .etiquetas import ETIQUETAS_ERRORES
 
+from django.db.models.functions import Upper
+
 def tecnicos_queryset():
     return (
         User.objects
@@ -101,12 +111,29 @@ def tecnicos_queryset():
     )
     
 def _unidades_conciliadas_sap():
-    """IDs de unidades que SAP ya reportó y que coinciden con Five (en cualquier carga)."""
+    """IDs de unidades que SAP ya reportó y que coinciden con CICB (en cualquier carga)."""
     return set(
         RegistroSAP.objects
         .filter(estado=RegistroSAP.Estado.OK, unidad_serializada__isnull=False)
         .values_list("unidad_serializada_id", flat=True)
     )
+
+def _fijar_pruebas_minimas(operacion, activo):
+    datos = dict(operacion.datos_origen or {})
+    if activo:
+        datos["pruebas_minimas"] = True
+    else:
+        datos.pop("pruebas_minimas", None)
+    if datos != (operacion.datos_origen or {}):
+        operacion.datos_origen = datos
+        operacion.save(update_fields=["datos_origen", "fecha_modificacion"])
+
+def _fijar_actividad(operacion, actividad):
+    """Guarda la actividad de mantenimiento elegida en el formulario."""
+    nuevo = actividad.pk if actividad else None
+    if operacion.actividad_id != nuevo:
+        operacion.actividad = actividad
+        operacion.save(update_fields=["actividad", "fecha_modificacion"])
 # ============================================================
 # UTILIDADES
 # ============================================================
@@ -163,7 +190,7 @@ class FormPageMixin:
         return ctx
     
 # ============================================================
-# FUNCIONES AUXILIARES: ASIGNADO, FIVE Y SAP
+# FUNCIONES AUXILIARES: ASIGNADO, CICB Y SAP
 # ============================================================
 
 def _datos_vacios():
@@ -187,7 +214,7 @@ def _asignado_total_por_producto():
 
 def _five_total_por_tecnico_producto():
     """
-    Total instalado según FIVE, agrupado por técnico y producto.
+    Total instalado según CICB, agrupado por técnico y producto.
 
     - Asignación INSTALADA: cuenta cantidad completa.
     - Otras asignaciones no devueltas: cuenta cantidad_instalada.
@@ -216,7 +243,7 @@ def _five_total_por_tecnico_producto():
     }
 def _five_total_por_producto():
     """
-    Total instalado según FIVE, agrupado por producto.
+    Total instalado según CICB, agrupado por producto.
     - Asignación INSTALADA -> cuenta su cantidad completa
     - Otras (no devueltas) -> cuenta cantidad_instalada
     """
@@ -597,8 +624,6 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
 
         return qs
 
-
-
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
@@ -610,30 +635,70 @@ class InventarioListView(RolRequeridoMixin, BuscarMixin, ListView):
 
         tecnico_sel = request.GET.get("tecnico", "").strip()
 
-        # Mantener únicamente usuarios pertenecientes al grupo TECNICO
         ctx["tecnicos_lista"] = tecnicos_queryset()
-
         ctx["tecnico_sel"] = tecnico_sel
 
         if tecnico_sel.isdigit():
+
             ctx.update(
                 _obtener_contexto_asignaciones(request)
             )
 
         else:
+
             five = _five_total_por_producto()
             sap = _sap_total_por_producto()
             asignado = _asignado_total_por_producto()
 
-            for inventario in ctx["inventarios"]:
+            # Obtener los inventarios que ya vienen filtrados
+            inventarios = list(ctx["inventarios"])
+
+            # Agregar datos de comparación a cada inventario
+            for inventario in inventarios:
+
                 producto_id = inventario.producto_id
 
                 inventario.five = five.get(producto_id, 0)
                 inventario.sap = sap.get(producto_id, 0)
+
                 inventario.asignado_estado = asignado.get(
                     producto_id, 0
                 )
 
+                # NUEVO: Disponible CICB + En poder de técnicos
+                inventario.disponible_vanti = (
+                    (inventario.cantidad_actual or 0)
+                    + (inventario.en_poder_tecnicos or 0)
+                )
+
+            CODIGOS_EXCLUIDOS_VANTI = {
+                "N01", "N02", "N03", "N04", "N05",
+                "N06", "N07", "N08", "N09", "N10",
+                "N11", "N12", "N13", "N14", "N15",
+                "N16", "U01", "U02", "UHH1",
+                "C1", "C2", "CC1", "CC2",
+                "B1", "AC", "FA", "FM",
+            }
+
+            inventarios_vanti = [
+                inv for inv in inventarios
+                if (
+                    inv.producto.codigo_producto or ""
+                ).strip().upper() not in CODIGOS_EXCLUIDOS_VANTI
+            ]
+
+            # ---------- TODOS LOS MATERIALES (como antes) ----------
+            ctx["total_productos"] = len(inventarios)
+            ctx["total_recibido"] = sum(inv.total or 0 for inv in inventarios)
+            ctx["total_existencias"] = sum(inv.cantidad_actual or 0 for inv in inventarios)
+            ctx["total_danado"] = sum(inv.cantidad_danada or 0 for inv in inventarios)
+            ctx["total_asignado"] = sum(inv.asignado_estado or 0 for inv in inventarios)
+
+            # ---------- SOLO VANTI (excluye los códigos de la lista) ----------
+            ctx["total_productos_vanti"] = len(inventarios_vanti)
+            ctx["total_disponible_vanti"] = sum(
+                inv.disponible_vanti for inv in inventarios_vanti
+            )
         return ctx
 
 
@@ -974,9 +1039,9 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
                 if five and sap:
                     resultado = "coinciden"
                 elif five and not sap:
-                    resultado = "pendientes"      # instalado en Five, SAP aún no lo reporta
+                    resultado = "pendientes"      # instalado en CICB, SAP aún no lo reporta
                 else:
-                    resultado = "diferentes"      # SAP dice algo que Five no respalda
+                    resultado = "diferentes"      # SAP dice algo que CICB no respalda
 
                 if resultado == comparacion:
                     ids_validos.append(pk)
@@ -1046,7 +1111,7 @@ class UnidadListView(RolRequeridoMixin, BuscarMixin, ListView):
                     None,
                 )
 
-        # FIVE y SAP por unidad (0 o 1)
+        # CICB y SAP por unidad (0 o 1)
         sap_ok = _unidades_conciliadas_sap()
 
         for unidad in ctx["object_list"]:
@@ -1170,17 +1235,17 @@ class UnidadUpdateView(FormPageMixin, RolRequeridoMixin, UpdateView):
 
 
 # ============================================================
-# CONSOLIDADO DE ASIGNACIONES, FIVE Y SAP
+# CONSOLIDADO DE ASIGNACIONES, CICB Y SAP
 # ============================================================
 def _obtener_contexto_asignaciones(request):
     """
     Consolidado por técnico y material.
 
     ASIGNADOS:    material entregado y no devuelto.
-    FIVE:         cantidad instalada según FIVE.
+    CICB:         cantidad instalada según CICB.
     SAP:          cantidad instalada reportada por SAP.
-    DEBE_TENER:   ASIGNADOS - mayor valor entre FIVE y SAP.
-    DIFERENCIAS:  diferencia absoluta entre FIVE y SAP.
+    DEBE_TENER:   ASIGNADOS - mayor valor entre CICB y SAP.
+    DIFERENCIAS:  diferencia absoluta entre CICB y SAP.
     ERRORES:      una fila por tipo de Inconsistencia pendiente,
                   con su cantidad en la columna del material.
     IVT:          consolidado independiente por técnico.
@@ -1449,7 +1514,7 @@ def _obtener_contexto_asignaciones(request):
         if producto.es_serializado:
             estado = (
                 UnidadSerializada.Estado.INSTALADO
-                if tipo == "FIVE"
+                if tipo == "CICB"
                 else UnidadSerializada.Estado.ASIGNADO
             )
             return f"{base_unidades}?" + urlencode({
@@ -1471,7 +1536,7 @@ def _obtener_contexto_asignaciones(request):
         filas = {
             "ASIGNADOS": [],
             "DEBE_TENER": [],
-            "FIVE": [],
+            "CICB": [],
             "SAP": [],
             "DIFERENCIAS": [],
         }
@@ -1498,7 +1563,7 @@ def _obtener_contexto_asignaciones(request):
 
             filas["ASIGNADOS"].append(celda(asignados, "ASIGNADOS"))
             filas["DEBE_TENER"].append(celda(debe_tener, "DEBE_TENER"))
-            filas["FIVE"].append(celda(five, "FIVE"))
+            filas["CICB"].append(celda(five, "CICB"))
 
             celda_sap = celda(sap, "SAP")
             celda_sap["coincide"] = coincide
@@ -1875,12 +1940,14 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
         tipo, estado = d["tipo_operacion"], d["estado"]
         instala = tipo.instala(estado)
         pide_ivt = tipo.pide_ivt(estado)
+        pruebas_min = bool(d.get("pruebas_minimas"))   
 
         try:
             lineas = _leer_payload(request)
-            if instala and not lineas:
+            if instala and not lineas and not pruebas_min:     # <-- cambia
                 raise services.ErrorInventario(
-                    "Agregue al menos un material o serial para instalar.")
+                    "Agregue al menos un material o serial para instalar, "
+                    "o marque «Pruebas mínimas».")
             if not instala and lineas:
                 raise services.ErrorInventario(
                     "Este tipo de operación / estado no permite instalar material.")
@@ -1907,6 +1974,8 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     anomalia=d["anomalia"], observaciones=d["observaciones"],
                     archivo=d.get("archivo_soporte"),
                 )
+                _fijar_actividad(op, d.get("actividad"))
+                _fijar_pruebas_minimas(op, pruebas_min)
                 if pide_ivt:
                     n_ivt = services.vincular_ivt_o_reportar(
                         numero=d.get("numero_ivt"), operacion=op,
@@ -1914,7 +1983,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                     )
                     if n_ivt:
                         novedades.append(n_ivt)
-                if instala:
+                if instala and lineas:
                     novedades += services.sincronizar_materiales_operacion(
                         operacion=op, payload=lineas, usuario=request.user,
                     )
@@ -1928,6 +1997,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
         except Exception:
             devolver_token(request)      # error inesperado: no pierde el formulario
             raise
+        invalidar_burbuja_sin_ods()
 
         registrar(
             request, RegistroActividad.Accion.ORDEN_CREADA, op.numero_orden,
@@ -1937,6 +2007,7 @@ class TecnicoAsignacionesView(RolRequeridoMixin, TemplateView):
                 "tipo": tipo.nombre,
                 "estado": estado,
                 "piezas": piezas,
+                "pruebas_minimas": pruebas_min,
                 "ivt": str(d.get("numero_ivt") or ""),
                 "inconsistencias": len(novedades),
                 "origen": op.origen,
@@ -2045,6 +2116,7 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
                     observaciones=d.get("observaciones") or "",
                     archivo=d.get("archivo_soporte"),
                 )
+                _fijar_actividad(op, d.get("actividad"))
                 services.instalar(
                     asignacion=self.asignacion,
                     usuario=self.request.user,
@@ -2056,6 +2128,7 @@ class AsignacionInstalarView(FormPageMixin, RolRequeridoMixin, FormView):
         except services.ErrorInventario as e:
             form.add_error(None, str(e))
             return self.form_invalid(form)
+        invalidar_burbuja_sin_ods()
 
         if cantidad:
             self.asignacion.refresh_from_db()
@@ -2245,6 +2318,7 @@ def editar_instalacion(request, pk):
             tipo, estado = d["tipo_operacion"], d["estado"]
             instala = tipo.instala(estado)
             pide_ivt = tipo.pide_ivt(estado)
+            pruebas_min = bool(d.get("pruebas_minimas"))
 
             # Capturar los valores originales ANTES de actualizar.
             antes = {
@@ -2256,9 +2330,10 @@ def editar_instalacion(request, pk):
 
             try:
                 payload = _leer_payload(request) if instala else []
-                if instala and not payload:
+                if instala and not payload and not pruebas_min:     # <-- cambia
                     raise services.ErrorInventario(
-                        "Agregue al menos un material o serial para instalar."
+                        "Agregue al menos un material o serial para instalar, "
+                        "o marque «Pruebas mínimas»."
                     )
 
                 with transaction.atomic():
@@ -2273,12 +2348,13 @@ def editar_instalacion(request, pk):
                         fecha=d["fecha_instalacion"],
                         archivo=d.get("archivo_soporte"),
                     )
-
+                    _fijar_actividad(operacion, d.get("actividad"))
                     novedades = services.sincronizar_materiales_operacion(
                         operacion=operacion,
                         payload=payload,
                         usuario=request.user,
                     )
+                    _fijar_pruebas_minimas(operacion, pruebas_min)
 
                     ivt_numero = str(d.get("numero_ivt") or "").strip()
                     if pide_ivt and ivt_numero:
@@ -2302,6 +2378,7 @@ def editar_instalacion(request, pk):
                 messages.error(request, str(e))
 
             else:
+                invalidar_burbuja_sin_ods()
                 # Se registra siempre que la actualización haya sido exitosa.
                 registrar(
                     request,
@@ -2350,8 +2427,10 @@ def editar_instalacion(request, pk):
                 "numero_orden": operacion.numero_orden,
                 "numero_cuenta_contrato": operacion.numero_cuenta_contrato,
                 "tipo_operacion": operacion.tipo_operacion_id,
+                "actividad": operacion.actividad_id,
                 "estado": operacion.estado,
                 "anomalia": operacion.anomalia_id,
+                "pruebas_minimas": (operacion.datos_origen or {}).get("pruebas_minimas", False),
                 "observaciones": operacion.observaciones,
                 "fecha_instalacion": (
                     operacion.fecha_ejecucion or operacion.fecha_operacion
@@ -3003,19 +3082,14 @@ class TecnicoDevolverView(RolRequeridoMixin, TemplateView):
                 )
             )
 
+        total_devuelto = total_solicitado
+
         registrar(
             request, RegistroActividad.Accion.DEVOLUCION, documento.codigo,
             tecnico=self.tecnico,
             detalle=obs[:300],
             datos={"piezas": total_devuelto},
         )
-
-
-        # ======================================================
-        # 8. CONFIRMACIÓN
-        # ======================================================
-
-        total_devuelto = total_solicitado
 
         messages.success(
             request,
@@ -3076,7 +3150,12 @@ class UnidadesDisponiblesJson(RolRequeridoMixin, View):
                     .order_by("numero_serie", "codigo")
                 )
                 data["unidades"] = [
-                    {"id": u.id, "texto": u.etiqueta} for u in unidades
+                    {
+                        "id": u.id,
+                        "texto": u.etiqueta,
+                        "serial": u.numero_serie or u.codigo
+                    }
+                    for u in unidades
                 ]
                 data["stock"] = len(data["unidades"])
             else:
@@ -3389,8 +3468,6 @@ class EntregaDetailView(RolRequeridoMixin, DetailView):
                 "items__asignacion",
             )
         )
-
-
 class EntregaPdfView(RolRequeridoMixin, View):
     roles_permitidos = ROLES_ALMACEN
 
@@ -3398,13 +3475,10 @@ class EntregaPdfView(RolRequeridoMixin, View):
         from xml.sax.saxutils import escape
 
         from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.pagesizes import LETTER
+        from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.units import cm
-        from reportlab.platypus import (
-            Image, Paragraph, SimpleDocTemplate,
-            Spacer, Table, TableStyle,
-        )
+        from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Table, TableStyle
 
         e = get_object_or_404(
             EntregaMaterial.objects
@@ -3414,432 +3488,572 @@ class EntregaPdfView(RolRequeridoMixin, View):
         )
 
         es_devolucion = e.tipo == EntregaMaterial.Tipo.DEVOLUCION
-
-        titulo_texto = (
-            "ACTA DE DEVOLUCIÓN DE MATERIAL"
+        titulo_izq = (
+            "DEVOLUCION DE MATERIAL A TECNICOS ATC"
             if es_devolucion
-            else "ACTA DE ENTREGA DE MATERIAL"
+            else "ASIGNACION DE MATERIAL A TECNICOS ATC"
         )
+        titulo_der = (
+            "DEVOLUCION DE ACCESORIOS A TECNICOS ATC"
+            if es_devolucion
+            else "ASIGNACION DE ACCESORIOS A TECNICOS ATC"
+        )
+        etiqueta_fecha = "FECHA DEVOLUCION" if es_devolucion else "FECHA ASIGNACION"
 
         nombre_tecnico = escape(str(_nombre(e.tecnico)))
         cedula_tecnico = escape(str(_cedula(e.tecnico)))
-        nombre_almacen = escape(str(_nombre(e.entregado_por)))
-        cedula_almacen = escape(str(_cedula(e.entregado_por)))
+        nombre_asigna = escape(str(_nombre(e.entregado_por)))
+        fecha_txt = e.fecha.strftime("%d/%m/%Y")
+
+        asignados = EntregaExcelView._agrupar_items(e)
 
         buf = BytesIO()
-
+        # Hoja Carta VERTICAL (portrait), aprovechando al máximo el área imprimible
         doc = SimpleDocTemplate(
             buf,
-            pagesize=A4,
-            title=f"{titulo_texto} - {e.codigo}",
-            leftMargin=1.3 * cm,
-            rightMargin=1.3 * cm,
-            topMargin=1.3 * cm,
-            bottomMargin=1.3 * cm,
+            pagesize=LETTER,
+            title=f"Planilla {e.codigo}",
+            leftMargin=0.5 * cm,
+            rightMargin=0.5 * cm,
+            topMargin=0.4 * cm,
+            bottomMargin=0.4 * cm,
         )
 
-        ss = getSampleStyleSheet()
+        gris_hdr = colors.HexColor("#D9E1F2")
+        gris_cat = colors.HexColor("#F2F4F8")
 
-        normal = ParagraphStyle(
-            "NormalDocumento",
-            parent=ss["Normal"],
-            fontSize=8,
-            leading=10,
+        st_tit = ParagraphStyle(
+            "Tit", fontName="Helvetica-Bold", fontSize=12, leading=13.5, alignment=1
+        )
+        st_sub = ParagraphStyle(
+            "Sub", fontName="Helvetica-Bold", fontSize=7.5, leading=8.5, alignment=1
+        )
+        st_hdr = ParagraphStyle(
+            "Hdr", fontName="Helvetica-Bold", fontSize=8.0, leading=9.0
+        )
+        st_txt = ParagraphStyle(
+            "Txt", fontName="Helvetica", fontSize=7.4, leading=8.4
+        )
+        st_txt_b = ParagraphStyle(
+            "TxtB", fontName="Helvetica-Bold", fontSize=7.4, leading=8.4
+        )
+        st_cat = ParagraphStyle(
+            "Cat", fontName="Helvetica-Bold", fontSize=7.5, leading=8.5, alignment=1
+        )
+        st_legal = ParagraphStyle(
+            "Leg", fontName="Helvetica", fontSize=8.0, leading=9.8, alignment=4
         )
 
-        small = ParagraphStyle(
-            "SmallDocumento",
-            parent=normal,
-            fontSize=7,
-            textColor=colors.grey,
-        )
-
-        titulo = ParagraphStyle(
-            "TituloDocumento",
-            parent=ss["Title"],
-            fontSize=13,
-            leading=16,
-            alignment=1,
-        )
-
-        azul = colors.HexColor("#1f3a5f")
-
-        # Encabezado.
-        ruta_logo = finders.find("almacen/img/logo.png")
-        logo = (
-            Image(
-                ruta_logo,
-                width=3.0 * cm,
-                height=1.5 * cm,
-                kind="proportional",
-            )
-            if ruta_logo
-            else ""
-        )
-
-        cabecera = Table(
-            [[
-                logo,
-                Paragraph(titulo_texto, titulo),
-                Paragraph(
-                    f"<b>N.º</b><br/>{escape(str(e.codigo))}"
-                    f"<br/><b>Fecha</b><br/>{e.fecha:%d/%m/%Y}",
-                    normal,
-                ),
-            ]],
-            colWidths=[3.2 * cm, 9.5 * cm, 4.5 * cm],
-        )
-
-        cabecera.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BOX", (2, 0), (2, 0), 0.8, azul),
-            ("LINEBELOW", (0, 0), (-1, 0), 1.2, azul),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ]))
-
-        # Responsables.
-        if es_devolucion:
-            encabezado_izq = "Técnico (devuelve)"
-            encabezado_der = "Recibió en almacén"
-            firma_izq = "Devuelve (Técnico)"
-            firma_der = "Recibe (Almacén)"
-
-            parte_izq = (
-                f"{nombre_tecnico}<br/>C.C. {cedula_tecnico}"
-            )
-            parte_der = (
-                f"{nombre_almacen}<br/>C.C. {cedula_almacen}"
-            )
-        else:
-            encabezado_izq = "Técnico (recibe)"
-            encabezado_der = "Entrega (Almacén)"
-            firma_izq = "Entrega (Almacén)"
-            firma_der = "Recibe (Técnico)"
-
-            parte_izq = (
-                f"{nombre_tecnico}<br/>C.C. {cedula_tecnico}"
-            )
-            parte_der = (
-                f"{nombre_almacen}<br/>C.C. {cedula_almacen}"
-            )
-
-        partes = Table(
-            [
+        def construir_tabla_bloque(titulo_bloque, categorias, es_derecho=False):
+            filas = [
                 [
-                    Paragraph(f"<b>{encabezado_izq}</b>", normal),
-                    Paragraph(f"<b>{encabezado_der}</b>", normal),
+                    "",
+                    Paragraph(f"NUMERO PLANILLA<br/>{escape(str(e.codigo))}", st_sub),
+                    Paragraph(titulo_bloque, st_tit),
+                    "",
+                    "",
                 ],
                 [
-                    Paragraph(parte_izq, normal),
-                    Paragraph(parte_der, normal),
+                    Paragraph("TECNICO", st_sub),
+                    Paragraph(nombre_tecnico, st_hdr),
+                    "",
+                    Paragraph(etiqueta_fecha, st_sub),
+                    Paragraph(fecha_txt, st_sub),
                 ],
-            ],
-            colWidths=[8.6 * cm, 8.6 * cm],
-        )
-
-        partes.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef6")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ])) 
-        # Materiales.
-        if es_devolucion:
-            filas = [[
-                "#", "Código", "Material", "Serial / unidad",
-                "Cant.", "Estado",
-            ]]
-        else:
-            filas = [[
-                "#", "Código", "Material", "Serial / unidad", "Cant.",
-            ]]
-
-        for i, it in enumerate(e.items.all(), 1):
-
-            detalle = it.rango_ivt if it.es_ivt else (it.serial or "—")
-
-            fila = [
-                str(i),
-                escape(str(it.codigo_material)),
-                Paragraph(escape(str(it.nombre_material)), normal),
-                escape(str(detalle)),
-                str(it.cantidad),
+                [
+                    "",
+                    Paragraph("CODIGO MATERIAL", st_sub),
+                    Paragraph("TEXTO MATERIALES", st_sub),
+                    Paragraph("CANTIDAD", st_sub),
+                    Paragraph("SERIAL", st_sub),
+                ],
             ]
 
-            if es_devolucion:
-                fila.append(
-                    escape(str(it.get_estado_retorno_display() or "—"))
+            estilos = [
+                ("GRID", (0, 0), (-1, 2), 0.8, colors.black),
+                ("BACKGROUND", (0, 0), (-1, 0), gris_hdr),
+                ("BACKGROUND", (0, 2), (-1, 2), gris_hdr),
+                ("SPAN", (2, 0), (4, 0)),
+                ("SPAN", (1, 1), (2, 1)),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("TOPPADDING", (0, 0), (-1, -1), 2.3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2.3),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4.0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4.0),
+            ]
+
+            fila_idx = 3
+            for nombre_cat, items_cat in categorias:
+                inicio_cat = fila_idx
+                for cod, texto in items_cat:
+                    info = asignados.get(cod.upper(), {})
+                    cant = info.get("cantidad", "")
+                    serial_txt = ", ".join(info.get("seriales", []))
+                    estilo_fila = st_txt_b if cant else st_txt
+
+                    filas.append([
+                        "",
+                        Paragraph(escape(cod), estilo_fila),
+                        Paragraph(escape(texto), estilo_fila),
+                        Paragraph(str(cant) if cant else "", st_txt_b),
+                        Paragraph(escape(serial_txt), st_txt),
+                    ])
+                    estilos.append(("GRID", (1, fila_idx), (4, fila_idx), 0.4, colors.black))
+                    estilos.append(("ALIGN", (1, fila_idx), (1, fila_idx), "CENTER"))
+                    estilos.append(("ALIGN", (3, fila_idx), (3, fila_idx), "CENTER"))
+                    fila_idx += 1
+
+                fin_cat = fila_idx - 1
+                filas[inicio_cat][0] = Paragraph(nombre_cat, st_cat)
+                if fin_cat > inicio_cat:
+                    estilos.append(("SPAN", (0, inicio_cat), (0, fin_cat)))
+                estilos.append(("BOX", (0, inicio_cat), (0, fin_cat), 0.8, colors.black))
+                estilos.append(("BACKGROUND", (0, inicio_cat), (0, fin_cat), gris_cat))
+
+            if not es_derecho:
+                filas.append(["", "", "", "", ""])
+                filas.append([
+                    "",
+                    "",
+                    Paragraph("<b>FIRMA:</b> ______________________________________________________", st_hdr),
+                    "",
+                    "",
+                ])
+                estilos.append(("SPAN", (2, fila_idx + 1), (4, fila_idx + 1)))
+                estilos.append(("TOPPADDING", (2, fila_idx + 1), (4, fila_idx + 1), 6))
+            else:
+                texto_legal = (
+                    f"Yo <b>{nombre_tecnico or '_______________________________'}</b> "
+                    f"identificado con numero de cedula <b>{cedula_tecnico or '_______________'}</b> "
+                    "de la ciudad _________________ he recibido a partir de la fecha los elementos de trabajo "
+                    "consignados en este formato, asumiendo la responsabilidad sobre el uso y cuidado de las "
+                    "mismas, entiendo que estas son para uso exclusivo de las actividades dispuestas por "
+                    "<b>BSI COLOMBIA S.A.</b> Así mismo autorizo a que sea descontado el valor de los elementos "
+                    "de trabajo en caso de pérdida, robo o cuando se presente un daño en las mismas, siempre y "
+                    "cuando su causa no sea por defecto de fábrica."
                 )
+                filas.append([Paragraph(texto_legal, st_legal), "", "", "", ""])
+                estilos.append(("SPAN", (0, fila_idx), (4, fila_idx)))
+                estilos.append(("BOX", (0, fila_idx), (4, fila_idx + 4), 0.8, colors.black))
+                estilos.append(("TOPPADDING", (0, fila_idx), (4, fila_idx), 5))
+                estilos.append(("BOTTOMPADDING", (0, fila_idx), (4, fila_idx), 5))
 
-            filas.append(fila)
+                filas.append([
+                    "",
+                    Paragraph("<b>FIRMA:</b>", st_hdr),
+                    Paragraph("__________________________________________________________", st_txt),
+                    "",
+                    "",
+                ])
+                estilos.append(("SPAN", (2, fila_idx + 1), (4, fila_idx + 1)))
+                estilos.append(("TOPPADDING", (0, fila_idx + 1), (4, fila_idx + 1), 6))
 
-        if es_devolucion:
-            filas.append([
-                "", "", "", "TOTAL",
-                str(e.total_cantidad), ""
-            ])
+                filas.append([
+                    "",
+                    Paragraph("<b>NOMBRE DE QUIEN ASIGNA:</b>", st_txt_b),
+                    Paragraph(nombre_asigna or "____________________________________", st_txt),
+                    Paragraph("<b>NOMBRE DE QUIEN ASIGNA:</b>", st_txt_b),
+                    Paragraph("_____________________________", st_txt),
+                ])
+                estilos.append(("TOPPADDING", (0, fila_idx + 2), (4, fila_idx + 2), 6))
 
-            anchos = [
-                0.7 * cm, 2.2 * cm, 5.0 * cm,
-                3.8 * cm, 1.2 * cm, 3.0 * cm,
-            ]
+                filas.append([
+                    "",
+                    Paragraph("<b>CARGO:</b>", st_txt_b),
+                    Paragraph("ALMACENISTA", st_txt),
+                    Paragraph("<b>CARGO:</b>", st_txt_b),
+                    Paragraph("_____________________________", st_txt),
+                ])
+                estilos.append(("TOPPADDING", (0, fila_idx + 3), (4, fila_idx + 3), 5))
 
-        else:
-            filas.append([
-                "", "", "", "TOTAL",
-                str(e.total_cantidad)
-            ])
+                filas.append([
+                    "",
+                    Paragraph("<b>FIRMA:</b>", st_txt_b),
+                    Paragraph("____________________________________", st_txt),
+                    Paragraph("<b>FIRMA:</b>", st_txt_b),
+                    Paragraph("_____________________________", st_txt),
+                ])
+                estilos.append(("TOPPADDING", (0, fila_idx + 4), (4, fila_idx + 4), 6))
+                estilos.append(("BOTTOMPADDING", (0, fila_idx + 4), (4, fila_idx + 4), 6))
 
-            anchos = [
-                0.8 * cm, 2.7 * cm, 6.0 * cm,
-                4.5 * cm, 1.8 * cm,
-            ]
+            # Ancho total = 20.59 cm (ocupa todo el ancho útil de Carta vertical)
+            anchos_col = [1.80 * cm, 2.30 * cm, 9.20 * cm, 1.90 * cm, 5.39 * cm]
+            tbl = Table(filas, colWidths=anchos_col)
+            tbl.setStyle(TableStyle(estilos))
+            return tbl
 
-
-        tabla = Table(filas, colWidths=anchos, repeatRows=1)
-
-        tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), azul),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
-            ("ALIGN", (0, 0), (0, -1), "CENTER"),
-            ("ALIGN", (-1, 0), (-1, -1), "CENTER"),
-            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-            (
-                "ROWBACKGROUNDS",
-                (0, 1), (-1, -2),
-                [colors.white, colors.HexColor("#f5f7fa")],
-            ),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ]))
-
-        # Firmas.
-        if es_devolucion:
-            firma_1 = Paragraph(
-                f"<b>{nombre_tecnico}</b><br/>"
-                f"C.C. {cedula_tecnico}<br/>{firma_izq}",
-                normal,
-            )
-            firma_2 = Paragraph(
-                f"<b>{nombre_almacen}</b><br/>"
-                f"C.C. {cedula_almacen}<br/>{firma_der}",
-                normal,
-            )
-        else:
-            firma_1 = Paragraph(
-                f"<b>{nombre_almacen}</b><br/>"
-                f"C.C. {cedula_almacen}<br/>{firma_izq}",
-                normal,
-            )
-            firma_2 = Paragraph(
-                f"<b>{nombre_tecnico}</b><br/>"
-                f"C.C. {cedula_tecnico}<br/>{firma_der}",
-                normal,
-            )
-
-        firmas = Table(
-            [["", ""], [firma_1, firma_2]],
-            colWidths=[8.6 * cm, 8.6 * cm],
-            rowHeights=[1.8 * cm, None],
+        # Página 1 (Frente): Materiales | Página 2 (Respaldo): Accesorios
+        tabla_izq = construir_tabla_bloque(
+            titulo_izq, EntregaExcelView.BLOQUE_IZQUIERDO, es_derecho=False
+        )
+        tabla_der = construir_tabla_bloque(
+            titulo_der, EntregaExcelView.BLOQUE_DERECHO, es_derecho=True
         )
 
-        firmas.setStyle(TableStyle([
-            ("LINEABOVE", (0, 1), (0, 1), 0.8, colors.black),
-            ("LINEABOVE", (1, 1), (1, 1), 0.8, colors.black),
-            ("VALIGN", (0, 1), (-1, 1), "TOP"),
-        ]))
+        doc.build([tabla_izq, PageBreak(), tabla_der])
 
-        story = [
-            cabecera,
-            Spacer(1, 10),
-            partes,
-            Spacer(1, 10),
-            tabla,
-        ]
-
-        if e.observaciones:
-            story.extend([
-                Spacer(1, 8),
-                Paragraph(
-                    f"<b>Observaciones:</b> "
-                    f"{escape(str(e.observaciones))}",
-                    normal,
-                ),
-            ])
-
-        if es_devolucion:
-            texto_declaracion = (
-                "El almacén deja constancia de la recepción de los "
-                "materiales relacionados, según el estado indicado."
-            )
-        else:
-            texto_declaracion = (
-                "El técnico declara recibir los materiales relacionados "
-                "y se hace responsable de su custodia y uso."
-            )
-
-        story.extend([
-            Spacer(1, 12),
-            Paragraph(texto_declaracion, small),
-            Spacer(1, 25),
-            firmas,
-            Spacer(1, 15),
-            Paragraph(
-                f"Documento generado el "
-                f"{timezone.localtime():%d/%m/%Y %H:%M} · {e.codigo}",
-                small,
-            ),
-        ])
-
-        doc.build(story)
-
-        response = HttpResponse(
-            buf.getvalue(),
-            content_type="application/pdf",
-        )
-        response["Content-Disposition"] = (
-            f'inline; filename="{e.codigo}.pdf"'
-        )
+        response = HttpResponse(buf.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{e.codigo}.pdf"'
         return response
-
-
-
+    
 class EntregaExcelView(RolRequeridoMixin, View):
     roles_permitidos = ROLES_ALMACEN
 
+    # Estructura exacta de la planilla izquierda (Materiales)
+    BLOQUE_IZQUIERDO = [
+        ("MEDIDORES", [
+            ("2000005", "Medidor G4,0 Diafragma Izq 6m³/h Digital"),
+            ("2000007", "Medidor G6,0 Diafragma Izq 10m³/hDigital"),
+            ("2000009", "Medidor G10 Diafragma Izq 16m³/h"),
+            ("2000013", "Medidor G40 Diafragma Izq 60m³/h Digital"),
+            ("2000063", "Medidor G25 Diafragma Izq 40m³/h Digital"),
+            ("2000064", "Medidor G2,5 Diafragma Izq 4m³/h Torn"),
+            ("2000905", "Medidor G1,6 Diafragma Der 2,5m³/h Torn"),
+            ("2000906", "Medidor G1,6 Diafragma Izq 2,5m³/h Torn"),
+            ("2000925", "Medidor G4 Diaf. Izq 6m³/h Digital 152mm"),
+            ("2000926", "Medidor G10 Diaf.Izq16m³/h Digital 209mm"),
+            ("2000927", "Medidor G16 Diaf.Izq25m³/h Digital 209mm"),
+            ("2001006", "Medidor G10 Diaf.Izq16m³/h Digital Slim"),
+        ]),
+        ("REGULADORES", [
+            ("2600017", "Reg unica etapa cortexbaja 6m3/h"),
+            ("2600951", "Reg primera etapa C1 0 - 10 m3/h TapaSeg"),
+            ("2600952", "Reg primera etapa C1 0 - 40 m3/h TapaSeg"),
+            ("2600953", "Reg primera etapa C1 11 - 25m3/h TapaSeg"),
+            ("2600954", "Reg primera etapa C2 26 - 40m3/h TapaSeg"),
+            ("2600955", "Reg primera etapa C3>81m3/h RP50 TapaSeg"),
+            ("2600956", "Reg segunda etapa C1 0 - 10 m3/h TapaSeg"),
+            ("2600957", "Reg segunda etapa C1 11 - 20m3/h TapaSeg"),
+            ("2600958", "Reg segunda etapa C2 > 31 m3/h TapaSeg"),
+            ("2600959", 'Reg unica etapa 0 - 4m3/h ½" h-h TapaSeg'),
+            ("2600960", 'Reg unica etapa 0 - 4m3/h ½" h-m26 TapaS'),
+            ("2600961", "Reg unica etapa C1 5 - 10 m3/h TapaSeg"),
+            ("2600962", "Reg unica etapa C2 11 - 25 m3/h TapaSeg"),
+            ("2600963", "Reg unica etapa C3 26 - 40 m3/h TapaSeg"),
+            ("2600964", "Reg unica etapa cortexbaja 6m3/h TapaSeg"),
+        ]),
+        ("VALVULAS", [
+            ("3000072", 'Valv bola BR ½"hNPTx½"hNPT maneral corto'),
+            ("3000074", 'Valv bola BR ½"mNPTx½"hNPT tuerca m26'),
+            ("3000075", 'Valv bola BR ½"mNPTx½"hNPT tuerca m32'),
+            ("3000076", 'Valv bola BR ¾"hNPTx¾"hNPT'),
+            ("3000078", 'Valv bola BR 1/8"mNPT toma de presion'),
+        ]),
+        ("CONECTORES", [
+            ("3000009", "Conector medidor G1,6 - G2,5"),
+            ("3000010", "Conector medidor G1,6 toma de presion"),
+            ("3000012", "Conector medidor G4,0 toma de presion"),
+            ("3000013", 'Conector medidor rosca 1¼"'),
+            ("3000014", 'Conector medidor rosca 1½"'),
+            ("3001513", 'Conector medidor G25 G2 ½"'),
+            ("3001517", 'Conector medidor G25 G2 ½" toma presion'),
+        ]),
+        ("ADAPTADORES", [
+            ("3000003", 'Adaptador BR ¾" mNPT x m26'),
+            ("3000004", 'Adaptador BR elevador ½"m26 x ½"mNPT'),
+        ]),
+        ("T8", [
+            ("T81", "Dispositivo T8 1/2"),
+            ("T82", "Dispositivo T8 3/4"),
+        ]),
+        ("EMPAQUES", [
+            ("EM01", "Empaque 3/4"),
+            ("EM02", "Empaque residencial"),
+            ("EM03", "Empaque universal"),
+        ]),
+    ]
+
+    # Estructura exacta de la planilla derecha (Accesorios)
+    BLOQUE_DERECHO = [
+        ("NIPLES", [
+            ("N01", 'Niple galv ½"x01"'),
+            ("N02", 'Niple galv ½"x01½"'),
+            ("N03", 'Niple galv ½"x02"'),
+            ("N04", 'Niple galv ½"x03"'),
+            ("N05", 'Niple galv ½"x04"'),
+            ("N06", 'Niple galv ½"x05"'),
+            ("N07", 'Niple galv ½"x06"'),
+            ("N08", 'Niple galv ½"x07"'),
+            ("N09", 'Niple galv ¾"x01"'),
+            ("N10", 'Niple galv ¾"x01½"'),
+            ("N11", 'Niple galv ¾"x02"'),
+            ("N12", 'Niple galv ¾"x03"'),
+            ("N13", 'Niple galv ¾"x04"'),
+            ("N14", 'Niple galv ¾"x05"'),
+            ("N15", 'Niple galv ¾"x06"'),
+            ("N16", 'Niple galv ¾"x07"'),
+        ]),
+        ("UNIONES", [
+            ("U01", 'Union galv ½" roscable'),
+            ("U02", 'Union galv ¾" roscable'),
+            ("UHH1", 'Universal ½ plana h-h'),
+        ]),
+        ("CODOS", [
+            ("C1", "Codo ½"),
+            ("C2", "Codo ¾"),
+            ("CC1", "Codo calle ½"),
+            ("CC2", "Codo calle ¾"),
+        ]),
+        ("B", [
+            ("B1", 'Bushing galv ¾" mnpt x ½" hnpt'),
+        ]),
+        ("AC", [
+            ("AC", "Anticorrosivo"),
+        ]),
+        ("PEGANTE", [
+            ("FA", "Fuerza alta"),
+            ("FM", "Fuerza media"),
+        ]),
+    ]
+
+    @staticmethod
+    def _agrupar_items(entrega):
+        """Agrupa cantidades y seriales por código de material."""
+        datos = {}
+        for it in entrega.items.all():
+            cod = str(it.codigo_material or "").strip().upper()
+            if not cod:
+                continue
+            reg = datos.setdefault(cod, {"cantidad": 0, "seriales": []})
+            reg["cantidad"] += it.cantidad
+            serial = it.rango_ivt if it.es_ivt else (it.serial or "").strip()
+            if serial:
+                reg["seriales"].append(str(serial))
+        return datos
+
     def get(self, request, pk):
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.worksheet.pagebreak import Break
+
         e = get_object_or_404(
             EntregaMaterial.objects
             .select_related("tecnico", "entregado_por")
-            .prefetch_related("items__producto"),
+            .prefetch_related("items__producto", "items__unidad"),
             pk=pk,
         )
 
         es_devolucion = e.tipo == EntregaMaterial.Tipo.DEVOLUCION
-
-        titulo = (
-            "ACTA DE DEVOLUCIÓN DE MATERIAL"
+        titulo_izq = (
+            "DEVOLUCION DE MATERIAL A TECNICOS ATC"
             if es_devolucion
-            else "ACTA DE ENTREGA DE MATERIAL"
+            else "ASIGNACION DE MATERIAL A TECNICOS ATC"
         )
+        titulo_der = (
+            "DEVOLUCION DE ACCESORIOS A TECNICOS ATC"
+            if es_devolucion
+            else "ASIGNACION DE ACCESORIOS A TECNICOS ATC"
+        )
+        etiqueta_fecha = "FECHA DEVOLUCION" if es_devolucion else "FECHA ASIGNACION"
+        nombre_tecnico = str(_nombre(e.tecnico))
+        cedula_tecnico = str(_cedula(e.tecnico))
+        nombre_asigna = str(_nombre(e.entregado_por))
+        fecha_txt = e.fecha.strftime("%d/%m/%Y")
+
+        asignados = self._agrupar_items(e)
 
         wb = Workbook()
         ws = wb.active
-        ws.title = "Devolucion" if es_devolucion else "Entrega"
+        ws.title = "ASIG IMPRIMIR"
+        ws.views.sheetView[0].showGridLines = False
 
-        negrita = Font(bold=True)
-        encabezado = PatternFill("solid", fgColor="1F3A5F")
+        thin = Side(style="thin", color="000000")
+        med = Side(style="medium", color="000000")
+        borde_celda = Border(left=thin, right=thin, top=thin, bottom=thin)
+        borde_caja = Border(left=med, right=med, top=med, bottom=med)
 
-        ws["A1"] = titulo
-        ws["A1"].font = Font(bold=True, size=14)
+        fill_gris = PatternFill("solid", fgColor="D9E1F2")
+        fill_cat = PatternFill("solid", fgColor="F2F4F8")
 
-        responsable = (
-            "Recibido por almacén"
-            if es_devolucion
-            else "Entregado por"
+        f_titulo = Font(name="Calibri", size=18, bold=True)
+        f_sub = Font(name="Calibri", size=10, bold=True)
+        f_dato_hdr = Font(name="Calibri", size=11, bold=True)
+        f_cat = Font(name="Calibri", size=13, bold=True)
+        f_item = Font(name="Calibri", size=11, bold=False)
+        f_item_bold = Font(name="Calibri", size=11, bold=True)
+        f_legal = Font(name="Arial", size=11, bold=False)
+        f_firma = Font(name="Calibri", size=12, bold=True)
+
+        def pintar_bloque_encabezado(col_ini, titulo_bloque):
+            ws.cell(2, col_ini + 1, f"NUMERO PLANILLA\n{e.codigo}").font = f_sub
+            ws.cell(2, col_ini + 1).alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True
+            )
+            ws.merge_cells(start_row=2, start_column=col_ini + 2, end_row=2, end_column=col_ini + 8)
+            c_tit = ws.cell(2, col_ini + 2, titulo_bloque)
+            c_tit.font = f_titulo
+            c_tit.alignment = Alignment(horizontal="center", vertical="center")
+
+            for c in range(col_ini, col_ini + 9):
+                ws.cell(2, c).border = borde_caja
+                ws.cell(2, c).fill = fill_gris
+
+            ws.cell(3, col_ini, "TECNICO").font = f_dato_hdr
+            ws.cell(3, col_ini).alignment = Alignment(horizontal="center", vertical="center")
+            ws.merge_cells(start_row=3, start_column=col_ini + 1, end_row=3, end_column=col_ini + 3)
+            ws.cell(3, col_ini + 1, nombre_tecnico).font = f_dato_hdr
+            ws.cell(3, col_ini + 1).alignment = Alignment(horizontal="left", vertical="center")
+
+            ws.merge_cells(start_row=3, start_column=col_ini + 4, end_row=3, end_column=col_ini + 5)
+            ws.cell(3, col_ini + 4, etiqueta_fecha).font = f_dato_hdr
+            ws.cell(3, col_ini + 4).alignment = Alignment(horizontal="center", vertical="center")
+
+            ws.merge_cells(start_row=3, start_column=col_ini + 6, end_row=3, end_column=col_ini + 8)
+            ws.cell(3, col_ini + 6, fecha_txt).font = f_dato_hdr
+            ws.cell(3, col_ini + 6).alignment = Alignment(horizontal="center", vertical="center")
+
+            for c in range(col_ini, col_ini + 9):
+                ws.cell(3, c).border = borde_caja
+
+            ws.cell(4, col_ini, "").border = borde_caja
+            ws.cell(4, col_ini + 1, "CODIGO MATERIAL").font = f_sub
+            ws.cell(4, col_ini + 2, "TEXTO MATERIALES").font = f_sub
+            ws.cell(4, col_ini + 3, "CANTIDAD").font = f_sub
+            ws.merge_cells(start_row=4, start_column=col_ini + 4, end_row=4, end_column=col_ini + 8)
+            ws.cell(4, col_ini + 4, "SERIAL").font = f_sub
+
+            for c in range(col_ini, col_ini + 9):
+                cel = ws.cell(4, c)
+                cel.border = borde_caja
+                cel.fill = fill_gris
+                cel.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        def pintar_filas_materiales(col_ini, categorias):
+            fila = 5
+            for nombre_cat, items_cat in categorias:
+                fila_inicio_cat = fila
+                for cod, texto in items_cat:
+                    info = asignados.get(cod.upper(), {})
+                    cant = info.get("cantidad", "")
+                    serial_txt = ", ".join(info.get("seriales", []))
+
+                    c_cod = ws.cell(fila, col_ini + 1, cod)
+                    c_txt = ws.cell(fila, col_ini + 2, texto)
+                    c_cnt = ws.cell(fila, col_ini + 3, cant if cant else None)
+
+                    ws.merge_cells(
+                        start_row=fila, start_column=col_ini + 4,
+                        end_row=fila, end_column=col_ini + 8,
+                    )
+                    c_ser = ws.cell(fila, col_ini + 4, serial_txt or None)
+
+                    c_cod.font = f_item_bold if cant else f_item
+                    c_txt.font = f_item_bold if cant else f_item
+                    c_cnt.font = f_item_bold
+                    c_ser.font = f_item
+
+                    c_cod.alignment = Alignment(horizontal="center", vertical="center")
+                    c_txt.alignment = Alignment(horizontal="left", vertical="center")
+                    c_cnt.alignment = Alignment(horizontal="center", vertical="center")
+                    c_ser.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+                    for c in range(col_ini + 1, col_ini + 9):
+                        ws.cell(fila, c).border = borde_celda
+
+                    ws.row_dimensions[fila].height = 24
+                    fila += 1
+
+                fila_fin_cat = fila - 1
+                if fila_fin_cat > fila_inicio_cat:
+                    ws.merge_cells(
+                        start_row=fila_inicio_cat, start_column=col_ini,
+                        end_row=fila_fin_cat, end_column=col_ini,
+                    )
+                c_cat = ws.cell(fila_inicio_cat, col_ini, nombre_cat)
+                c_cat.font = f_cat
+                rotacion = 0 if len(nombre_cat) <= 2 else 90
+                c_cat.alignment = Alignment(
+                    horizontal="center", vertical="center",
+                    textRotation=rotacion, wrap_text=True,
+                )
+                for r_cat in range(fila_inicio_cat, fila_fin_cat + 1):
+                    ws.cell(r_cat, col_ini).border = borde_caja
+                    ws.cell(r_cat, col_ini).fill = fill_cat
+
+            return fila
+
+        pintar_bloque_encabezado(2, titulo_izq)
+        pintar_bloque_encabezado(12, titulo_der)
+
+        ws.row_dimensions[2].height = 34
+        ws.row_dimensions[3].height = 28
+        ws.row_dimensions[4].height = 28
+
+        pintar_filas_materiales(2, self.BLOQUE_IZQUIERDO)
+        pintar_filas_materiales(12, self.BLOQUE_DERECHO)
+
+        # Firma pie izquierdo (fila 53)
+        ws.cell(53, 4, "FIRMA:").font = f_firma
+        ws.merge_cells("E53:J53")
+        ws.cell(53, 5, "____________________________________________________").font = f_item
+        ws.row_dimensions[53].height = 24
+
+        # Cláusula legal y firmas en bloque derecho (filas 34 a 50)
+        ws.merge_cells("L34:T37")
+        texto_legal = (
+            f"Yo {nombre_tecnico or '_______________________________'} "
+            f"identificado con numero de cedula {cedula_tecnico or '_______________'} "
+            "de la ciudad _________________ he recibido a partir de la fecha los elementos de trabajo "
+            "consignados en este formato, asumiendo la responsabilidad sobre el uso y cuidado de las "
+            "mismas, entiendo que estas son para uso exclusivo de las actividades dispuestas por "
+            "BSI COLOMBIA S.A. Así mismo autorizo a que sea descontado el valor de los elementos de "
+            "trabajo en caso de pérdida, robo o cuando se presente un daño en las mismas, siempre y "
+            "cuando su causa no sea por defecto de fábrica."
         )
+        c_legal = ws.cell(34, 12, texto_legal)
+        c_legal.font = f_legal
+        c_legal.alignment = Alignment(horizontal="justify", vertical="center", wrap_text=True)
 
-        datos = [
-            ("Documento", e.codigo),
-            ("Fecha", e.fecha.strftime("%d/%m/%Y")),
-            ("Técnico", _nombre(e.tecnico)),
-            ("C.C. técnico", _cedula(e.tecnico)),
-            (responsable, _nombre(e.entregado_por)),
-            ("C.C. responsable", _cedula(e.entregado_por)),
-            ("Observaciones", e.observaciones or ""),
-        ]
+        ws.cell(38, 13, "FIRMA:").font = f_firma
+        ws.merge_cells("N38:T38")
+        ws.cell(38, 14, "____________________________________________________________").font = f_item
 
-        for i, (clave, valor) in enumerate(datos, start=3):
-            ws.cell(i, 1, clave).font = negrita
-            ws.cell(i, 2, valor)
+        ws.cell(41, 13, "NOMBRE DE QUIEN ASIGNA:").font = f_firma
+        ws.cell(42, 14, nombre_asigna or "______________________________________").font = f_item_bold
+        ws.cell(43, 13, "CARGO:").font = f_firma
+        ws.cell(44, 14, "ALMACENISTA").font = f_item
+        ws.cell(46, 13, "FIRMA:").font = f_firma
+        ws.cell(49, 13, "_____________________________________________").font = f_item
 
-        fila = len(datos) + 4
+        ws.cell(41, 17, "NOMBRE DE QUIEN ASIGNA:").font = f_firma
+        ws.cell(42, 18, "_______________________________").font = f_item
+        ws.cell(43, 17, "CARGO:").font = f_firma
+        ws.cell(44, 18, "_______________________________").font = f_item
+        ws.cell(46, 17, "FIRMA:").font = f_firma
+        ws.cell(49, 17, "_______________________________________").font = f_item
 
-        columnas = [
-            "#",
-            "Código",
-            "Material",
-            "Serial / código unidad",
-            "Cantidad",
-        ]
-
-        if es_devolucion:
-            columnas.extend(["Estado de recepción", "Observación"])
-
-        for c, texto in enumerate(columnas, 1):
-            celda = ws.cell(fila, c, texto)
-            celda.font = Font(bold=True, color="FFFFFF")
-            celda.fill = encabezado
-            celda.alignment = Alignment(
-                horizontal="center",
-                vertical="center",
-                wrap_text=True,
-            )
-
-        for i, it in enumerate(e.items.all(), 1):
-            fila += 1
-
-            valores = [
-                i,
-                it.codigo_material,
-                it.nombre_material,
-                it.rango_ivt if it.es_ivt else (it.serial or ""),
-                it.cantidad,
-            ]
-
-            if es_devolucion:
-                valores.extend([
-                    it.get_estado_retorno_display() or "",
-                    it.observacion or "",
-                ])
-
-            for c, valor in enumerate(valores, 1):
-                ws.cell(fila, c, valor)
-
-        fila += 1
-        ws.cell(fila, 4, "TOTAL").font = negrita
-        ws.cell(fila, 5, e.total_cantidad).font = negrita
-
-        fila += 3
-
-        if es_devolucion:
-            ws.cell(
-                fila, 1,
-                "Firma técnico que devuelve: __________________________",
-            )
-            ws.cell(
-                fila, 5,
-                "Firma almacén que recibe: __________________________",
-            )
-        else:
-            ws.cell(
-                fila, 1,
-                "Firma almacén que entrega: __________________________",
-            )
-            ws.cell(
-                fila, 5,
-                "Firma técnico que recibe: __________________________",
-            )
+        for r in range(34, 51):
+            for c in range(12, 21):
+                cel = ws.cell(r, c)
+                cel.border = Border(
+                    left=med if c == 12 else None,
+                    right=med if c == 20 else None,
+                    top=med if r == 34 else None,
+                    bottom=med if r == 50 else None,
+                )
 
         anchos = {
-            "A": 8,
-            "B": 16,
-            "C": 38,
-            "D": 26,
-            "E": 12,
-            "F": 22,
-            "G": 35,
+            "A": 2, "B": 11, "C": 14, "D": 48, "E": 14,
+            "F": 12, "G": 12, "H": 12, "I": 12, "J": 12,
+            "K": 2,
+            "L": 14, "M": 15, "N": 40, "O": 14,
+            "P": 12, "Q": 12, "R": 12, "S": 12, "T": 12,
         }
+        for col_let, w in anchos.items():
+            ws.column_dimensions[col_let].width = w
 
-        for columna, ancho in anchos.items():
-            ws.column_dimensions[columna].width = ancho
-
-        ws.freeze_panes = "A" + str(len(datos) + 5)
-        ws.sheet_view.showGridLines = False
+        # Márgenes estrechos y 2 páginas lado a lado en tamaño Carta
+        ws.page_margins.left = 0.25
+        ws.page_margins.right = 0.25
+        ws.page_margins.top = 0.25
+        ws.page_margins.bottom = 0.25
+        ws.col_breaks.append(Break(id=11))
+        ws.print_area = "B2:T54"
+        ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+        ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.fitToWidth = 2
+        ws.page_setup.fitToHeight = 1
 
         buf = BytesIO()
         wb.save(buf)
@@ -3851,11 +4065,7 @@ class EntregaExcelView(RolRequeridoMixin, View):
                 "spreadsheetml.sheet"
             ),
         )
-
-        response["Content-Disposition"] = (
-            f'attachment; filename="{e.codigo}.xlsx"'
-        )
-
+        response["Content-Disposition"] = f'attachment; filename="{e.codigo}.xlsx"'
         return response
 
 
@@ -4570,6 +4780,8 @@ class ValidarIVTJson(RolRequeridoMixin, View):
 from django.db.models import Count  # ya lo tienes
 from operaciones.models import TipoOperacion
 
+from .sin_ods import ordenes_sin_ods_qs, con_cantidades
+
 class OrdenesSinOdsView(RolRequeridoMixin, TemplateView):
     roles_permitidos = ROLES_DIGITADOR
     template_name = "almacen/ordenes_sin_ods.html"
@@ -4579,28 +4791,38 @@ class OrdenesSinOdsView(RolRequeridoMixin, TemplateView):
         g = self.request.GET
         q, tecnico = g.get("q", "").strip(), g.get("tecnico", "").strip()
 
-        prefijos = list(
-            TipoOperacion.objects.exclude(prefijo_sin_ods="")
-            .values_list("prefijo_sin_ods", flat=True).distinct()
+        qs = (
+            con_cantidades(ordenes_sin_ods_qs())
+            .select_related("tecnico", "tipo_operacion__tipo_con_ods")
+            .order_by("-fecha_operacion", "-id")
         )
-        cond = Q()
-        for p in prefijos:
-            cond |= Q(numero_orden__regex=rf"^{p}[0-9]+$")
-
-        qs = Operacion.objects.filter(cond) if prefijos else Operacion.objects.none()
-        qs = (qs.select_related("tecnico", "tipo_operacion__tipo_con_ods")
-                .annotate(n_materiales=Count(
-                    "materiales", filter=Q(materiales__estado=Asignacion.Estado.INSTALADA)))
-                .order_by("-fecha_operacion", "-id"))
-
         if tecnico.isdigit():
             qs = qs.filter(tecnico_id=int(tecnico))
         if q:
             qs = qs.filter(Q(numero_orden__icontains=q)
                            | Q(numero_cuenta_contrato__icontains=q))
 
-        ctx.update(ordenes=qs, total=qs.count(), q=q, tecnico_sel=tecnico,
-                   tecnicos_lista=tecnicos_queryset())
+        ordenes = list(qs)      # una sola consulta; los totales se calculan en Python
+
+        por_tecnico = {}
+        for o in ordenes:
+            t = por_tecnico.setdefault(o.tecnico_id, {
+                "id": o.tecnico_id,
+                "nombre": o.tecnico.get_full_name() or o.tecnico.username,
+                "ordenes": 0, "piezas": 0,
+            })
+            t["ordenes"] += 1
+            t["piezas"] += o.piezas
+
+        ctx.update(
+            ordenes=ordenes,
+            total=len(ordenes),
+            total_piezas=sum(o.piezas for o in ordenes),
+            sin_material=sum(1 for o in ordenes if not o.piezas),
+            resumen_tecnicos=sorted(por_tecnico.values(),
+                                    key=lambda t: (-t["ordenes"], t["nombre"])),
+            q=q, tecnico_sel=tecnico, tecnicos_lista=tecnicos_queryset(),
+        )
         return ctx
 
 
@@ -4645,6 +4867,7 @@ class AsignarOdsView(RolRequeridoMixin, View):
 
         op.numero_orden = nueva
         op.save(update_fields=campos)
+        invalidar_burbuja_sin_ods()
 
         registrar(
             request, RegistroActividad.Accion.ODS_ASIGNADA, nueva,
@@ -4721,8 +4944,8 @@ class CargaInventarioView(FormPageMixin, RolRequeridoMixin, FormView):
     roles_permitidos = ROLES_ALMACEN
     form_class = CargaInventarioForm
     template_name = "almacen/carga_inventario_form.html"
-    titulo = "Carga de inventario físico"
-    subtitulo = "Compara el listado de medidores contra lo que el sistema tiene disponible en almacén."
+    titulo = "Carga IQ09 · medidores"
+    subtitulo = "Compara el IQ09 (todos los medidores, en cualquier estado) contra el sistema."
     boton = "Cargar y comparar"
     cancel_url = reverse_lazy("almacen:inventario")
 
@@ -4755,7 +4978,7 @@ class CargaInventarioView(FormPageMixin, RolRequeridoMixin, FormView):
                          "ok": carga.filas_ok, "error": carga.filas_error,
                          "faltantes": carga.faltantes_archivo})
         
-        invalidar_burbuja_conciliacion()
+        invalidar_burbujas_conciliacion()
         return redirect("almacen:carga_inventario_detalle", pk=carga.pk)
 
 
@@ -4765,7 +4988,7 @@ def descargar_plantilla_inventario(request):
     ws = wb.active
     ws.title = "Inventario"
     ws.append(["numero_serie", "codigo_producto", "codigo_unidad"])
-    ws.append(["A1234567", "MED-G4", ""])
+    ws.append(["A1234567", "MEDf-G4", ""])
     ws.append(["A1234568", "MED-G4", "DET-00012"])
     resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp["Content-Disposition"] = 'attachment; filename="plantilla_inventario.xlsx"'
@@ -4891,6 +5114,19 @@ class CargaInventarioDetalleView(RolRequeridoMixin, DetailView):
             if v
         })
 
+        en_archivo = self.object.registros.exclude(resultado=RegistroInventario.Resultado.FALTANTE)
+        nombres_estado = dict(UnidadSerializada.Estado.choices)
+
+        resumen_estados = [
+            {"label": nombres_estado.get(x["estado_sistema"], x["estado_sistema"] or "No existe en CICB"),
+             "n": x["n"]}
+            for x in en_archivo.values("estado_sistema").annotate(n=Count("id")).order_by("-n")
+        ]
+        resumen_status = [
+            {"status": x["status_sap"] or "(vacío)", "n": x["n"]}
+            for x in en_archivo.values("status_sap").annotate(n=Count("id")).order_by("-n")
+        ]
+
         ctx.update(
             ver=ver,
             filas=filas,
@@ -4927,5 +5163,205 @@ class CargaInventarioDetalleView(RolRequeridoMixin, DetailView):
             ws.column_dimensions[col].width = ancho
         resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         resp["Content-Disposition"] = f'attachment; filename="comparacion_inventario_{c.pk}.xlsx"'
+        wb.save(resp)
+        return resp
+
+class CargaStockView(FormPageMixin, RolRequeridoMixin, FormView):
+    roles_permitidos = ROLES_ALMACEN
+    form_class = CargaStockForm
+    template_name = "almacen/carga_stock_form.html"
+    titulo = "Carga MB52 · stock por material"
+    subtitulo = "Compara el stock que SAP tiene en el almacén contra lo que CICB espera tener."
+    boton = "Cargar y comparar"
+    cancel_url = reverse_lazy("almacen:inventario")
+
+    def form_valid(self, form):
+        d = form.cleaned_data
+        try:
+            carga = conciliacion_stock.procesar_stock(
+                archivo=d["archivo"], usuario=self.request.user,
+                observaciones=d["observaciones"],
+            )
+        except conciliacion_stock.ErrorArchivo as exc:
+            form.add_error("archivo", str(exc))
+            return self.form_invalid(form)
+        except Exception:
+            logging.getLogger(__name__).exception("Error procesando MB52")
+            form.add_error("archivo", "No fue posible procesar el archivo. "
+                                      "Verifique su contenido e inténtelo nuevamente.")
+            return self.form_invalid(form)
+
+        if carga.archivo_repetido:
+            messages.warning(self.request, "Este mismo archivo ya se había cargado antes.")
+
+        resumen = (f"MB52 #{carga.pk}: {carga.coinciden} materiales coinciden y "
+                   f"{carga.con_diferencia} con diferencia.")
+        (messages.success if carga.coincide_todo else messages.warning)(self.request, resumen)
+
+        registrar(self.request, RegistroActividad.Accion.CARGA_INVENTARIO, f"MB52 #{carga.pk}",
+                  detalle=resumen,
+                  datos={"archivo": carga.nombre_original, "ok": carga.coinciden,
+                         "diferencias": carga.con_diferencia})
+        invalidar_burbujas_conciliacion()
+        return redirect("almacen:carga_stock_detalle", pk=carga.pk)
+_REGEX_EXCLUIDOS = r"^\s*(" + "|".join(sorted(CODIGOS_EXCLUIDOS_VANTI)) + r")\s*$"
+
+class HistorialCargaStockView(RolRequeridoMixin, ListView):
+    roles_permitidos = ROLES_ALMACEN
+    model = CargaStock
+    template_name = "almacen/carga_stock_historial.html"
+    context_object_name = "cargas"
+    paginate_by = 25
+
+    def get_queryset(self):
+        R = RegistroStock
+        # Mismos criterios que CargaStockDetalleView._base()
+        vanti = ~Q(_cod__in=CODIGOS_EXCLUIDOS_VANTI)
+
+        return (
+            CargaStock.objects
+            .select_related("usuario")
+            .annotate(
+                total_vanti=Count(
+                    "registros",
+                    filter=~Q(registros__codigo_producto__iregex=r"^\s*(" + "|".join(sorted(CODIGOS_EXCLUIDOS_VANTI)) + r")\s*$"),
+                ),
+                ok_vanti=Count(
+                    "registros",
+                    filter=Q(registros__resultado=R.Resultado.OK)
+                    & ~Q(registros__codigo_producto__iregex=r"^\s*(" + "|".join(sorted(CODIGOS_EXCLUIDOS_VANTI)) + r")\s*$"),
+                ),
+                dif_vanti=Count(
+                    "registros",
+                    filter=Q(registros__resultado=R.Resultado.ERROR)
+                    & ~Q(registros__tipo_error=R.TipoError.NO_EN_MB52)
+                    & ~Q(registros__codigo_producto__iregex=_REGEX_EXCLUIDOS),
+                ),
+                faltan_vanti=Count(
+                    "registros",
+                    filter=Q(registros__tipo_error=R.TipoError.NO_EN_MB52)
+                    & ~Q(registros__codigo_producto__iregex=_REGEX_EXCLUIDOS),
+                ),
+            )
+            .order_by("-fecha", "-pk")
+        )
+class CargaStockDetalleView(RolRequeridoMixin, DetailView):
+    roles_permitidos = ROLES_ALMACEN
+    model = CargaStock
+    template_name = "almacen/carga_stock_detalle.html"
+    context_object_name = "carga"
+
+    FALTANTE = RegistroStock.TipoError.NO_EN_MB52
+
+    def _base(self):
+        """Registros de la carga SIN los códigos excluidos (solo se compara VANTI)."""
+        return (
+            self.object.registros
+            .annotate(_cod=Upper(Trim("codigo_producto")))
+            .exclude(_cod__in=CODIGOS_EXCLUIDOS_VANTI)
+        )
+
+    def _ver(self):
+        ver = self.request.GET.get("ver", "")
+        if ver in ("ok", "errores", "faltantes", "todos"):
+            return ver
+        regs = self._base()
+        if (regs.filter(resultado=RegistroStock.Resultado.ERROR)
+                .exclude(tipo_error=self.FALTANTE).exists()):
+            return "errores"
+        if regs.filter(tipo_error=self.FALTANTE).exists():
+            return "faltantes"
+        return "ok"
+
+    def _registros(self, ver):
+        g = self.request.GET
+        qs = self._base().select_related("producto")
+        if ver == "ok":
+            qs = qs.filter(resultado=RegistroStock.Resultado.OK)
+        elif ver == "errores":
+            qs = (qs.filter(resultado=RegistroStock.Resultado.ERROR)
+                    .exclude(tipo_error=self.FALTANTE))
+        elif ver == "faltantes":
+            qs = qs.filter(tipo_error=self.FALTANTE)
+        if g.get("tipo_error", "").strip():
+            qs = qs.filter(tipo_error=g["tipo_error"].strip())
+        q = g.get("q", "").strip()
+        if q:
+            qs = qs.filter(Q(codigo_producto__icontains=q) | Q(descripcion__icontains=q))
+        return qs.annotate(_abs=Abs("diferencia")).order_by("-_abs", "codigo_producto")
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if request.GET.get("export") == "xlsx":
+            return self._excel()
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+        ver = self._ver()
+
+        filas = list(self._registros(ver))
+        for r in filas:
+            r.accion = conciliacion_stock.ACCIONES.get(r.tipo_error, "")
+
+        base = self._base()
+        etiquetas = dict(RegistroStock.TipoError.choices)
+        resumen_errores = [
+            {"codigo": x["tipo_error"],
+             "label": etiquetas.get(x["tipo_error"], x["tipo_error"]),
+             "n": x["n"]}
+            for x in (base
+                      .filter(resultado=RegistroStock.Resultado.ERROR)
+                      .exclude(tipo_error=self.FALTANTE)
+                      .values("tipo_error").annotate(n=Count("id")).order_by("-n"))
+        ]
+
+        # Contadores recalculados SOLO con materiales VANTI
+        n_ok = base.filter(resultado=RegistroStock.Resultado.OK).count()
+        n_faltantes = base.filter(tipo_error=self.FALTANTE).count()
+        n_errores = (base.filter(resultado=RegistroStock.Resultado.ERROR)
+                         .exclude(tipo_error=self.FALTANTE).count())
+        n_total = base.count()
+
+        tipo_error, q = g.get("tipo_error", "").strip(), g.get("q", "").strip()
+
+        ctx.update(
+            ver=ver, filas=filas, total_filtrado=len(filas),
+            resumen_errores=resumen_errores, tipo_error_sel=tipo_error, q=q,
+            n_ok=n_ok, n_errores=n_errores, n_faltantes=n_faltantes,
+            n_total=n_total,
+            todo_coincide=(n_errores == 0 and n_faltantes == 0),
+            qs_base=urlencode({k: v for k, v in (
+                ("ver", ver), ("tipo_error", tipo_error), ("q", q)) if v}),
+        )
+        return ctx
+
+
+    def _excel(self):
+        c = self.object
+        ver = self._ver()                      # respeta la pestaña activa
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "MB52 vs CICB"
+        ws.append(["Material", "Descripción", "SAP libre", "CICB disponible", "CICB asignado",
+                   "CICB instalado sin ODS", "CICB total", "Diferencia (SAP - CICB)",
+                   "SAP calidad", "SAP bloqueado", "SAP tránsito", "Problema", "Qué hacer"])
+        for cell in ws[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="1F3A5F")
+        for r in self._registros(ver):
+            ws.append([
+                r.codigo_producto, r.descripcion, r.sap_libre, r.five_disponible, r.five_asignado,
+                r.five_sin_ods, r.five_total, r.diferencia, r.sap_calidad, r.sap_bloqueado,
+                r.sap_transito,
+                r.get_tipo_error_display() if r.tipo_error else "Coincide",
+                conciliacion_stock.ACCIONES.get(r.tipo_error, ""),
+            ])
+        ws.freeze_panes = "A2"
+        for col, ancho in zip("ABCDEFGHIJKLM", (14, 40, 11, 14, 13, 18, 11, 18, 11, 12, 12, 38, 60)):
+            ws.column_dimensions[col].width = ancho
+        resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="mb52_vs_cicb_{c.pk}_{ver}.xlsx"'
         wb.save(resp)
         return resp

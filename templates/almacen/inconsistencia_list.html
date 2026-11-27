@@ -400,11 +400,7 @@
                     <td>
                         {% if i.estado == 'PENDIENTE' %}
                             <span class="etq etq-pend">Pendiente</span>
-                            <form class="resolver-form" method="post" action="{% url 'almacen:inconsistencia_resolver' i.pk %}" style="margin-top:8px">
-                                {% csrf_token %}
-                                <input name="nota" placeholder="Nota (qué se hizo)">
-                                <button>Resolver</button>
-                            </form>
+                            
                         {% else %}
                             <span class="etq etq-ok">Resuelta</span>
                             <div class="resuelta-info">

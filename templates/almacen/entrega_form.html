@@ -61,6 +61,31 @@
   .ent .ivt-resumen { margin-top:8px; font-size:12px; }
   .ent .ivt-resumen ul { margin:4px 0 4px 18px; padding:0; }
 
+  /* ---------- DESPLEGABLE DE SERIALES ---------- */
+.ent .serial-wrap { position:relative; flex:1; min-width:0; }
+.ent .sug {
+  position:absolute; top:calc(100% + 2px); left:0; right:0; z-index:1000;
+  background:#fff; border:1px solid var(--line); border-radius:7px;
+  box-shadow:0 6px 14px rgba(0,0,0,.15);
+  max-height:220px; overflow-y:auto;
+}
+.ent .sug.hidden { display:none !important; }
+.ent .sug-tit {
+  padding:6px 10px; font-size:11px; color:#64748b;
+  background:#f6f8fb; border-bottom:1px solid var(--line);
+  position:sticky; top:0;
+}
+.ent .sug-item {
+  display:flex; justify-content:space-between; gap:10px;
+  padding:7px 10px; cursor:pointer; font-size:13px;
+  border-bottom:1px solid #eee;
+}
+.ent .sug-item:last-child { border-bottom:0; }
+.ent .sug-item:hover, .ent .sug-item.activo { background:#e7f4ec; }
+.ent .sug-item b { color:var(--ac); }
+.ent .sug-item small { color:#64748b; text-align:right; }
+.ent .sug-no { padding:9px 10px; font-size:12px; color:#b54708; font-weight:600; }
+
   @media(max-width:900px) { .ent .top, .ent .main { grid-template-columns:1fr; } }
 </style>
 
@@ -117,14 +142,14 @@
           </div>
           <button type="button" class="btn" id="btn-add-cant">Agregar cantidad</button>
         </div>
-
         <!-- SERIALIZADOS -->
         <div id="pane-serial" class="hidden">
           <div class="row">
-            <div>
-              <label for="in-serial">Serial físico (Enter para validar)</label>
+            <div class="serial-wrap">
+              <label for="in-serial">Serial físico (escriba y elija de la lista)</label>
               <input type="text" id="in-serial" autocomplete="off"
-                     placeholder="Escriba o escanee el serial">
+                    placeholder="Escriba o escanee el serial">
+              <div id="sug-serial" class="sug hidden"></div>
             </div>
             <button type="button" class="btn" id="btn-add-serial">Validar serial</button>
           </div>
@@ -429,70 +454,65 @@
 
   tsProd.on("change", function (valor) {
 
-    msg("");
-    info = null;
-    seleccionado = {
-      id: valor,
-      nombre: tsProd.options[valor].text.trim()
-    };
+  msg("");
+  info = null;
+  seleccionado = null;
+  cerrarSug();
+  $("in-serial").value = "";
 
-    $("pane-cant").classList.add("hidden");
-    $("pane-serial").classList.add("hidden");
-    $("pane-ivt").classList.add("hidden");
-    $("stock").textContent = "";
-    $("stock").className = "msg";
+  $("pane-cant").classList.add("hidden");
+  $("pane-serial").classList.add("hidden");
+  $("pane-ivt").classList.add("hidden");
+  $("stock").textContent = "";
+  $("stock").className = "msg";
 
-    if (!valor) return;
+  if (!valor) return;
 
-    /* ----- IVT ----- */
-    if (valor === "IVT") {
+  /* ----- IVT ----- */
+  if (valor === "IVT") {
+    seleccionado = { id: "IVT", nombre: "Informe de Visita Técnica (IVT)" };
+    $("pane-ivt").classList.remove("hidden");
 
-      seleccionado = { id: "IVT", nombre: "Informe de Visita Técnica (IVT)" };
+    var libresN = totalLibres();
+    $("stock").textContent = "IVT libres en almacén: " + libresN;
+    $("stock").className = "msg " + (libresN > 0 ? "ok" : "err");
 
-      $("pane-ivt").classList.remove("hidden");
+    pintarLibres();
+    siguienteIvt();
+    $("in-ivt-ini").focus();
+    return;
+  }
 
-      var libresN = totalLibres();
-      $("stock").textContent = "IVT libres en almacén: " + libresN;
-      $("stock").className = "msg " + (libresN > 0 ? "ok" : "err");
+  /* ----- materiales normales / serializados ----- */
+  seleccionado = {
+    id: valor,
+    nombre: tsProd.getItem(valor).textContent.trim()
+  };
 
-      pintarLibres();
-      siguienteIvt();
-      $("in-ivt-ini").focus();
+  fetch(urlInfo + "?producto=" + encodeURIComponent(valor))
+    .then(function (r) {
+      if (!r.ok) throw new Error("Error consultando material");
+      return r.json();
+    })
+    .then(function (d) {
 
-      return;
-    }
+      info = d;
 
-    /* ----- materiales normales / serializados ----- */
-    seleccionado = {
-      id: valor,
-      nombre: tsProd.getItem(valor).textContent.trim()
-    };
+      var ya = enLinea(valor) ? cantLinea(enLinea(valor)) : 0;
+      pintarStock(d.stock - ya);
 
-    fetch(urlInfo + "?producto=" + encodeURIComponent(valor))
-      .then(function (r) {
-        if (!r.ok) throw new Error("Error consultando material");
-        return r.json();
-      })
-      .then(function (d) {
-
-        info = d;
-
-        var ya = enLinea(valor) ? cantLinea(enLinea(valor)) : 0;
-        pintarStock(d.stock - ya);
-
+      if (d.serializado) {
+        $("pane-serial").classList.remove("hidden");
+        $("in-serial").focus();
+      } else {
         $("pane-cant").classList.remove("hidden");
         $("in-cantidad").value = 1;
-
-        if (d.serializado) {
-          $("pane-serial").classList.remove("hidden");
-          $("in-serial").value = "";
-          $("in-serial").focus();
-        }
-      })
-      .catch(function () {
-        msg("No se pudo consultar el stock del material.", false);
-      });
-  });
+      }
+    })
+    .catch(function () {
+      msg("No se pudo consultar el stock del material.", false);
+    });
+});
 
   function pintarStock(disp) {
     var s = $("stock");
@@ -551,62 +571,192 @@
 
   function validarSerial() {
 
-    if (!seleccionado || !info || !info.serializado) return;
+  if (!seleccionado || !info || !info.serializado) return;
 
-    var serial = $("in-serial").value.trim();
-    if (!serial) return;
+  var serial = $("in-serial").value.trim();
+  if (!serial) return;
 
-    if (disponible() <= 0) return msg("No hay unidades disponibles.", false);
+  cerrarSug();
 
-    var l = enLinea(seleccionado.id);
-    if (l && l.unidades.some(function (u) {
-      return u.serial.toLowerCase() === serial.toLowerCase();
-    })) {
-      return msg("Ese serial ya está en la lista.", false);
-    }
+  if (disponible() <= 0) return msg("No hay unidades disponibles.", false);
 
-    fetch(urlSerial +
-          "?producto=" + encodeURIComponent(seleccionado.id) +
-          "&serial=" + encodeURIComponent(serial))
-      .then(function (r) {
-        if (!r.ok) throw new Error("Error validando serial");
-        return r.json();
-      })
-      .then(function (d) {
-
-        if (!d.ok) {
-          msg("✗ " + d.mensaje, false);
-          $("in-serial").select();
-          return;
-        }
-
-        var linea = asegurarLinea();
-
-        if (linea.unidades.some(function (u) { return u.id === d.id; })) {
-          return msg("Ese serial ya está en la lista.", false);
-        }
-
-        linea.unidades.push({ id: d.id, serial: d.serial });
-
-        msg("✓ " + d.serial + " — " + d.mensaje, true);
-        pintarStock(disponible());
-
-        $("in-serial").value = "";
-        $("in-serial").focus();
-        $("in-cantidad").value = linea.unidades.length;
-
-        render();
-      })
-      .catch(function () {
-        msg("No se pudo validar. Intente de nuevo.", false);
-      });
+  var l = enLinea(seleccionado.id);
+  if (l && l.unidades.some(function (u) {
+    return String(u.serial).toLowerCase() === serial.toLowerCase();
+  })) {
+    return msg("Ese serial ya está en la lista.", false);
   }
+
+  fetch(urlSerial +
+        "?producto=" + encodeURIComponent(seleccionado.id) +
+        "&serial=" + encodeURIComponent(serial))
+    .then(function (r) {
+      if (!r.ok) throw new Error("Error validando serial");
+      return r.json();
+    })
+    .then(function (d) {
+
+      if (!d.ok) {
+        msg("✗ " + d.mensaje, false);
+        $("in-serial").select();
+        return;
+      }
+
+      var linea = asegurarLinea();
+
+      if (linea.unidades.some(function (u) { return u.id === d.id; })) {
+        return msg("Ese serial ya está en la lista.", false);
+      }
+
+      linea.unidades.push({ id: d.id, serial: d.serial });
+
+      msg("✓ " + d.serial + " — " + d.mensaje, true);
+      pintarStock(disponible());
+
+      $("in-serial").value = "";
+      cerrarSug();
+      $("in-serial").focus();
+
+      render();
+    })
+    .catch(function () {
+      msg("No se pudo validar. Intente de nuevo.", false);
+    });
+}
+
 
   $("btn-add-serial").addEventListener("click", validarSerial);
 
-  $("in-serial").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") { e.preventDefault(); validarSerial(); }
+  /* ---------- desplegable de seriales ---------- */
+
+var sugLista = [];
+var sugIdx = -1;
+
+function cerrarSug() {
+  var box = $("sug-serial");
+  if (!box) return;
+  box.innerHTML = "";
+  box.classList.add("hidden");
+  sugLista = [];
+  sugIdx = -1;
+}
+
+function marcarSug() {
+  var items = $("sug-serial").querySelectorAll(".sug-item");
+  items.forEach(function (el, i) {
+    el.classList.toggle("activo", i === sugIdx);
+    if (i === sugIdx) el.scrollIntoView({ block: "nearest" });
   });
+}
+
+function elegirSug(u) {
+  $("in-serial").value = u.serial;
+  cerrarSug();
+  validarSerial();            // valida contra el servidor y lo agrega
+}
+
+function sugerir() {
+  var box = $("sug-serial");
+  box.innerHTML = "";
+  sugLista = [];
+  sugIdx = -1;
+
+  if (!info || !info.serializado || !seleccionado) {
+    box.classList.add("hidden");
+    return;
+  }
+
+  var txt = $("in-serial").value.trim().toLowerCase();
+  if (!txt) { box.classList.add("hidden"); return; }
+
+  var l = enLinea(seleccionado.id);
+  var usados = l ? l.unidades.map(function (u) { return String(u.id); }) : [];
+
+  sugLista = (info.unidades || []).filter(function (u) {
+    if (usados.indexOf(String(u.id)) !== -1) return false;
+    return String(u.serial || "").toLowerCase().indexOf(txt) !== -1 ||
+           String(u.texto || "").toLowerCase().indexOf(txt) !== -1;
+  });
+
+  // los que EMPIEZAN con lo escrito van primero
+  sugLista.sort(function (a, b) {
+    var pa = String(a.serial || "").toLowerCase().indexOf(txt) === 0 ? 0 : 1;
+    var pb = String(b.serial || "").toLowerCase().indexOf(txt) === 0 ? 0 : 1;
+    return pa - pb;
+  });
+
+  box.classList.remove("hidden");
+
+  if (!sugLista.length) {
+    var no = document.createElement("div");
+    no.className = "sug-no";
+    no.textContent = "No hay seriales disponibles que coincidan.";
+    box.appendChild(no);
+    return;
+  }
+
+  var t = document.createElement("div");
+  t.className = "sug-tit";
+  t.textContent = sugLista.length + " coincidencia(s) — elija una:";
+  box.appendChild(t);
+
+  sugLista.slice(0, 30).forEach(function (u) {
+    var it = document.createElement("div");
+    it.className = "sug-item";
+
+    var b = document.createElement("b");
+    b.textContent = u.serial;
+    it.appendChild(b);
+
+    if (u.texto && u.texto !== u.serial) {
+      var sm = document.createElement("small");
+      sm.textContent = u.texto;
+      it.appendChild(sm);
+    }
+
+    // mousedown (no click) para que el input no pierda el foco antes
+    it.addEventListener("mousedown", function (ev) {
+      ev.preventDefault();
+      elegirSug(u);
+    });
+    box.appendChild(it);
+  });
+
+  if (sugLista.length > 30) {
+    var mas = document.createElement("div");
+    mas.className = "sug-tit";
+    mas.textContent = "Hay " + (sugLista.length - 30) + " más. Siga escribiendo para filtrar.";
+    box.appendChild(mas);
+  }
+}
+
+$("in-serial").addEventListener("input", sugerir);
+$("in-serial").addEventListener("focus", sugerir);
+
+$("in-serial").addEventListener("keydown", function (e) {
+  var n = Math.min(sugLista.length, 30);
+
+  if (e.key === "ArrowDown" && n) {
+    e.preventDefault();
+    sugIdx = (sugIdx + 1) % n;
+    marcarSug();
+  } else if (e.key === "ArrowUp" && n) {
+    e.preventDefault();
+    sugIdx = sugIdx <= 0 ? n - 1 : sugIdx - 1;
+    marcarSug();
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    if (sugIdx >= 0 && sugLista[sugIdx]) elegirSug(sugLista[sugIdx]);
+    else validarSerial();
+  } else if (e.key === "Escape") {
+    cerrarSug();
+  }
+});
+
+// Cerrar al hacer clic fuera
+document.addEventListener("click", function (e) {
+  if (!e.target.closest(".serial-wrap")) cerrarSug();
+});
 
   /* ---------- pintar ---------- */
 

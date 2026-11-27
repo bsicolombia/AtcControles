@@ -271,7 +271,7 @@
 }
 
 /* =========================================================
-   COMPARACIÓN FIVE / SAP
+   COMPARACIÓN CICB / SAP
 ========================================================= */
 
 .tabla-general .cantidad {
@@ -812,20 +812,20 @@ main,
     name="comparacion"
     onchange="this.form.submit()"
 >
-    <option value="">Todos: SAP y FIVE</option>
+    <option value="">Todos: SAP y CICB</option>
 
     <option
         value="coinciden"
         {% if comparacion_sel == "coinciden" %}selected{% endif %}
     >
-        ✓ SAP y FIVE coinciden
+        ✓ SAP y CICB coinciden
     </option>
 
     <option
         value="diferentes"
         {% if comparacion_sel == "diferentes" %}selected{% endif %}
     >
-        ✕ SAP y FIVE diferentes
+        ✕ SAP y CICB diferentes
     </option>
 </select>
 
@@ -868,13 +868,23 @@ main,
     </div>
 
     <div class="contador-card">
+        <span>Materiales encontrados VANTI</span>
+        <strong>{{ total_productos_vanti }}</strong>
+    </div>
+
+    <div class="contador-card">
         <span>Total recibido</span>
         <strong>{{ total_recibido }}</strong>
     </div>
 
     <div class="contador-card">
-        <span>Disponible en almacén</span>
+        <span>Disponible en CICB</span>
         <strong>{{ total_existencias }}</strong>
+    </div>
+
+    <div class="contador-card">
+        <span>Disponible para VANTI</span>
+        <strong>{{ total_disponible_vanti }}</strong>
     </div>
 
     <div class="contador-card alerta">
@@ -1009,13 +1019,13 @@ main,
 {% endfor %}
                             </tr>
 
-                            <!-- INSTALADO SEGÚN FIVE -->
+                            <!-- INSTALADO SEGÚN CICB -->
                             <tr class="fila-five">
                                 <td class="concepto five">
-                                    INSTALADO<br>SEGÚN FIVE
+                                    INSTALADO<br>SEGÚN CICB
                                 </td>
 
-                                {% for celda in tecnico_data.filas.FIVE %}
+                                {% for celda in tecnico_data.filas.CICB %}
     <td class="valor">
         {% if celda.url %}
             <a href="{{ celda.url }}" class="enlace-cantidad">
@@ -1048,9 +1058,9 @@ main,
                                             <strong>{{ celda.cantidad }}</strong>
 
                                             {% if celda.coincide %}
-                                                <span title="SAP coincide con FIVE">✓</span>
+                                                <span title="SAP coincide con CICB">✓</span>
                                             {% else %}
-                                                <span title="SAP no coincide con FIVE">✕</span>
+                                                <span title="SAP no coincide con CICB">✕</span>
                                             {% endif %}
                                         </div>
                                     </td>
@@ -1127,11 +1137,12 @@ main,
                             <th>Material</th>
                             <th>Tipo material</th>
                             <th class="num">Total<br>recibido</th>
-                            <th class="num">Disponible<br>almacén</th>
+                            <th class="num">Disponible<br>CICB</th>
+                            <th class="num">Cantidad disponible<br>para VANTI</th>
                             <th class="num">Dañado<br>almacén</th>
                             <th class="num">Asignado<br>técnico</th>
                             <th class="num">En poder<br>técnicos</th>
-                            <th class="num">Instalado<br>FIVE</th>
+                            <th class="num">Instalado<br>CICB</th>
                             <th class="num">Instalado<br>SAP</th>
                             <th class="num">Inventario<br>almacén</th>
                             <th class="num">Mínimo</th>
@@ -1178,6 +1189,15 @@ main,
                                     </strong>
                                 </td>
 
+                                <!-- NUEVA: Cantidad disponible para VANTI -->
+                                <td class="num">
+                                    {% if i.disponible_vanti > 0 %}
+                                        <strong class="dato-principal">{{ i.disponible_vanti }}</strong>
+                                    {% else %}
+                                        <span class="cero">0</span>
+                                    {% endif %}
+                                </td>
+
                                 <td class="num">
                                     {% if i.cantidad_danada > 0 %}
                                         <strong class="dato-danado">
@@ -1204,7 +1224,9 @@ main,
                                     {% endif %}
                                 </td>
 
-                                <!-- FIVE -->
+                                
+
+                                <!-- CICB -->
                                 <td class="cantidad {% if i.five == i.sap %}coincide{% else %}no-coincide{% endif %}">
                                     {% if i.five > 0 %}
                                         <strong>{{ i.five }}</strong>
@@ -1219,9 +1241,9 @@ main,
                                         <strong>{{ i.sap|default:0 }}</strong>
 
                                         {% if i.five == i.sap %}
-                                            <span title="SAP coincide con FIVE">✓</span>
+                                            <span title="SAP coincide con CICB">✓</span>
                                         {% else %}
-                                            <span title="SAP no coincide con FIVE">✕</span>
+                                            <span title="SAP no coincide con CICB">✕</span>
                                         {% endif %}
                                     </div>
                                 </td>

@@ -12,14 +12,33 @@
   .sinods button, .sinods .btn { padding:5px 10px; border:0; border-radius:6px; background:#1f3a5f; color:#fff; cursor:pointer; text-decoration:none; }
   .sinods .ods { font-weight:700; color:#b54708; }
   .sinods .msg { padding:8px 12px; border:1px solid #d9dee7; border-radius:8px; margin-bottom:6px; }
+  .sinods .resumen { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:10px 0; }
+.sinods .tarjeta { border:1px solid #d9dee7; border-radius:8px; padding:8px 12px; background:#fff; }
+.sinods .tarjeta span { display:block; font-size:12px; color:#64748b; }
+.sinods .tarjeta strong { font-size:22px; color:#b54708; }
+.sinods .tarjeta.alerta strong { color:#b42318; }
+.sinods .chips a { display:inline-block; margin:2px 4px 2px 0; padding:3px 10px; border:1px solid #f5d9a8; background:#fdf1dc; color:#92400e; border-radius:12px; text-decoration:none; font-size:12px; }
 </style>
 {% endblock %}
 
 {% block contenido %}
 <div class="sinods">
   <h2>Órdenes sin ODS <small>({{ total }})</small></h2>
+  <div class="resumen">
+  <div class="tarjeta"><span>Órdenes sin ODS</span><strong>{{ total }}</strong></div>
+  <div class="tarjeta"><span>Piezas instaladas</span><strong>{{ total_piezas }}</strong></div>
+  <div class="tarjeta {% if sin_material %}alerta{% endif %}">
+    <span>Órdenes sin material</span><strong>{{ sin_material }}</strong>
+  </div>
+</div>
 
-  {% for m in messages %}<div class="msg">{{ m }}</div>{% endfor %}
+{% if resumen_tecnicos %}
+<div class="chips">
+  {% for t in resumen_tecnicos %}
+    <a href="?tecnico={{ t.id }}">{{ t.nombre }} · {{ t.ordenes }} orden{{ t.ordenes|pluralize:",es" }} · {{ t.piezas }} pzs</a>
+  {% endfor %}
+</div>
+{% endif %}
 
   <form method="get" class="filtros">
     <input type="text" name="q" value="{{ q }}" placeholder="Orden o cuenta contrato">
@@ -39,7 +58,7 @@
     <thead>
       <tr>
         <th>ODS temporal</th><th>Tipo</th><th>Técnico</th><th>Cuenta</th>
-        <th>Fecha</th><th>Estado</th><th>Material</th><th>Asignar ODS real</th><th></th>
+        <th>Fecha</th><th>Estado</th><th>Piezas</th><th>Asignar ODS real</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -56,7 +75,7 @@
         <td>{{ o.numero_cuenta_contrato }}</td>
         <td>{{ o.fecha_ejecucion|default:o.fecha_operacion|date:"d/m/Y" }}</td>
         <td>{{ o.get_estado_display }}</td>
-        <td class="n">{{ o.n_materiales }}</td>
+        <td class="n">{{ o.piezas }}</td>
         <td>
           <form method="post" action="{% url 'almacen:asignar_ods' o.pk %}" style="display:flex;gap:4px">
             {% csrf_token %}

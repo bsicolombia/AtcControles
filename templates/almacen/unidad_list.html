@@ -286,7 +286,7 @@
     overflow-wrap: anywhere;
 }
 
-/* CANTIDADES FIVE / SAP */
+/* CANTIDADES CICB / SAP */
 .cantidad-enlace {
     display: inline-block;
     min-width: 19px;
@@ -479,7 +479,7 @@
     font-weight: 700;
 }
 
-/* Cantidades FIVE y SAP */
+/* Cantidades CICB y SAP */
 .tabla-wrap a.cantidad-enlace,
 .tabla-wrap a.cantidad-enlace:visited {
     color: #2563eb;
@@ -655,7 +655,7 @@
     </select>
 
 
-    <!-- COMPARACIÓN FIVE / SAP -->
+    <!-- COMPARACIÓN CICB / SAP -->
 
     <select
         class="input"
@@ -663,7 +663,7 @@
         onchange="this.form.submit()"
     >
 
-        <option value="">Todos (FIVE / SAP)</option>
+        <option value="">Todos (CICB / SAP)</option>
 
         <option
             value="coinciden"
@@ -671,7 +671,7 @@
                 selected
             {% endif %}
         >
-            ✓ FIVE y SAP coinciden
+            ✓ CICB y SAP coinciden
         </option>
 
         <option
@@ -680,7 +680,7 @@
                 selected
             {% endif %}
         >
-            ✕ FIVE y SAP no coinciden
+            ✕ CICB y SAP no coinciden
         </option>
 
     </select>
@@ -771,7 +771,7 @@
 
                         <th>Estado</th>
 
-                        <th>FIVE</th>
+                        <th>CICB</th>
 
                         <th>SAP</th>
 
@@ -962,7 +962,7 @@
                             </td>
 
 
-                            <!-- FIVE -->
+                            <!-- CICB -->
 
                             <td class="num">
 
@@ -984,7 +984,7 @@
                                 <a
                                     class="cantidad-enlace {% if u.estado_sap == 'ok' %}cantidad-ok{% elif u.estado_sap == 'error' %}cantidad-error{% endif %}"
                                     href="{% url 'almacen:asignaciones' %}?tecnico={{ u.asignacion_relevante.tecnico_id|default:'' }}&q={{ u.codigo|urlencode }}"
-                                    title="{% if u.estado_sap == 'ok' %}FIVE y SAP coinciden{% elif u.estado_sap == 'error' %}FIVE y SAP no coinciden{% else %}Aún no aplica{% endif %}"
+                                    title="{% if u.estado_sap == 'ok' %}CICB y SAP coinciden{% elif u.estado_sap == 'error' %}CICB y SAP no coinciden{% else %}Aún no aplica{% endif %}"
                                 >
                                     {{ u.sap }}
                                 </a>

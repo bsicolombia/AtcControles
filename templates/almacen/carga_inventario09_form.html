@@ -1,0 +1,9 @@
+{% block instrucciones %}
+<strong>Use el reporte IQ09 de SAP</strong> (todos los medidores, en cualquier estado).
+Columnas obligatorias: <code>Material</code> y <code>Número de serie</code>.<br>
+También se leen <code>Status sistema</code>, <code>Descripción</code> y <code>Orden</code>.
+Las demás columnas se ignoran.<br>
+<span class="small">Se compara contra <b>todos</b> los medidores de la categoría en CICB:
+si existe, si el material coincide, si el status y la orden de SAP concuerdan con el estado
+y la orden de instalación en CICB, y cuáles de CICB no vienen en el archivo.</span>
+{% endblock %}

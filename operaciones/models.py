@@ -127,6 +127,11 @@ class TipoOperacion(models.Model):
     def etiqueta(self):
         return f"{self.codigo_ods} · {self.nombre}" if self.codigo_ods else self.nombre
 
+    @property
+    def tipo_actividades(self):
+        """Tipo cuyas actividades aplican: las de su versión con ODS, si es «sin ODS»."""
+        return self.tipo_con_ods or self
+    
     # ---- reglas que antes estaban repartidas por todo el código ----
     def estados_validos(self):
         E = Operacion.Estado
@@ -139,8 +144,8 @@ class TipoOperacion(models.Model):
         return self.instala_material and estado in Operacion.ESTADOS_QUE_INSTALAN
 
     def pide_ivt(self, estado):
-        """¿Esta combinación tipo + estado exige IVT?"""
-        return self.requiere_ivt and estado in Operacion.ESTADOS_QUE_REQUIEREN_IVT
+        """El IVT es obligatorio en toda operación."""
+        return True
 
 def contexto_tipos():
     return {
@@ -149,6 +154,7 @@ def contexto_tipos():
                 "instala": t.instala_material,
                 "ivt": t.requiere_ivt,
                 "sin_ods": t.prefijo_sin_ods,
+                "act_tipo": str(t.tipo_con_ods_id or t.pk),
                 "estados": [[e.value, e.label] for e in t.estados_validos()],
             }
             for t in TipoOperacion.objects.filter(activo=True)
@@ -254,6 +260,15 @@ class Operacion(models.Model):
     estado = models.CharField(
         max_length=20, choices=Estado.choices, default=Estado.PENDIENTE
     )
+
+        # --- Actividad de mantenimiento (depende del tipo de operación) ---
+    actividad = models.ForeignKey(
+        "operaciones.ActividadMtto",
+        on_delete=models.PROTECT,
+        related_name="operaciones",
+        null=True,
+        blank=True,
+    )
     # null=True: las operaciones antiguas y las de carga masiva no la traen
     anomalia = models.ForeignKey(
         Anomalia,
@@ -262,6 +277,7 @@ class Operacion(models.Model):
         null=True,
         blank=True,
     )
+
 
     # --- Fechas ---
     fecha_operacion = models.DateField(default=timezone.localdate)
@@ -329,6 +345,10 @@ class Operacion(models.Model):
                     f"{self.get_estado_display()}."
                 )
 
+        if (self.actividad_id and self.tipo_operacion_id
+                and self.actividad.tipo_id != self.tipo_operacion.tipo_actividades.pk):
+            errores["actividad"] = "La actividad no corresponde al tipo de operación."
+
         if errores:
             raise ValidationError(errores)
         
@@ -379,7 +399,7 @@ class RegistroSAP(models.Model):
         IGNORADO = "IGNORADO", "Ya conciliado antes"
 
     RESUELTO_POR = [
-        ("FIVE", "Se corrigió en Five"),
+        ("CICB", "Se corrigió en CICB"),
         ("SAP", "Se corrigió en SAP"),
         ("AMBOS", "Se corrigió en ambos"),
     ]
@@ -408,7 +428,7 @@ class RegistroSAP(models.Model):
     diagnostico = models.TextField(blank=True, default="")
     comparacion = models.JSONField(default=dict, blank=True)
 
-    # --- Relaciones con Five ---
+    # --- Relaciones con CICB ---
     operacion = models.ForeignKey(
         "operaciones.Operacion",
         null=True, blank=True,
@@ -559,6 +579,8 @@ class RegistroInventario(models.Model):
         ESTADO_NO_DISPONIBLE = "ESTADO_NO_DISPONIBLE", "La unidad no figura disponible en el sistema"
         FALTANTE_EN_ARCHIVO = "FALTANTE_EN_ARCHIVO", "Disponible en el sistema pero no está en el archivo"
         STATUS_NO_ALMACEN = "STATUS_NO_ALMACEN", "En SAP no figura en almacén (status distinto de ALMA)"
+        STATUS_NO_COINCIDE = "STATUS_NO_COINCIDE", "El status de SAP no coincide con el estado en CICB"
+        ORDEN_NO_COINCIDE = "ORDEN_NO_COINCIDE", "La orden de SAP no coincide con la de CICB"
 
     carga = models.ForeignKey(
         CargaInventario, on_delete=models.CASCADE, related_name="registros"
@@ -569,6 +591,7 @@ class RegistroInventario(models.Model):
     numero_serie = models.CharField(max_length=100, blank=True, db_index=True)
     codigo_unidad = models.CharField(max_length=50, blank=True)
     codigo_producto = models.CharField(max_length=30, blank=True)
+    orden_five = models.CharField("Orden en CICB", max_length=30, blank=True)
 
     resultado = models.CharField(max_length=10, choices=Resultado.choices, db_index=True)
     tipo_error = models.CharField(max_length=30, choices=TipoError.choices, blank=True, db_index=True)
@@ -593,3 +616,74 @@ class RegistroInventario(models.Model):
 
     def __str__(self):
         return f"{self.numero_serie or '—'} · {self.get_resultado_display()}"
+
+class CargaStock(models.Model):
+    """Una carga del reporte MB52 de SAP (stock por material)."""
+    archivo = models.FileField(upload_to="cargas_stock/%Y/%m/")
+    nombre_original = models.CharField(max_length=255)
+    hash_archivo = models.CharField(max_length=64, blank=True, db_index=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                related_name="cargas_stock")
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    observaciones = models.TextField(blank=True)
+
+    total_materiales = models.PositiveIntegerField(default=0)
+    coinciden = models.PositiveIntegerField(default=0)
+    con_diferencia = models.PositiveIntegerField(default=0)
+    tipos_sin_ods = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["-fecha", "-id"]
+        verbose_name = "Carga de stock MB52"
+        verbose_name_plural = "Cargas de stock MB52"
+
+    def __str__(self):
+        return f"MB52 #{self.pk} · {self.fecha:%d/%m/%Y %H:%M}"
+
+    @property
+    def coincide_todo(self):
+        return self.con_diferencia == 0
+
+
+class RegistroStock(models.Model):
+
+    class Resultado(models.TextChoices):
+        OK = "OK", "Coincide"
+        ERROR = "ERROR", "Con diferencia"
+
+    class TipoError(models.TextChoices):
+        MATERIAL_NO_EXISTE = "MATERIAL_NO_EXISTE", "El material no existe en el sistema"
+        SAP_MAYOR = "SAP_MAYOR", "SAP tiene más de lo que CICB espera"
+        SAP_MENOR = "SAP_MENOR", "SAP tiene menos de lo que CICB espera"
+        NO_EN_MB52 = "NO_EN_MB52", "CICB espera stock y el material no viene en el MB52"
+        CANTIDAD_INVALIDA = "CANTIDAD_INVALIDA", "Cantidad ilegible en el archivo"
+
+    carga = models.ForeignKey(CargaStock, on_delete=models.CASCADE, related_name="registros")
+    fila = models.PositiveIntegerField(null=True, blank=True)
+
+    codigo_producto = models.CharField(max_length=30, db_index=True)
+    descripcion = models.CharField(max_length=200, blank=True)
+    producto = models.ForeignKey("almacen.Producto", null=True, blank=True,
+                                 on_delete=models.PROTECT, related_name="registros_stock")
+
+    # Lo que dice SAP (MB52)
+    sap_libre = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    sap_calidad = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    sap_bloqueado = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    sap_transito = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+
+    # Lo que espera CICB
+    five_disponible = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    five_asignado = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    five_sin_ods = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    five_total = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+
+    diferencia = models.DecimalField(max_digits=14, decimal_places=3, default=0)  # SAP - CICB
+
+    resultado = models.CharField(max_length=10, choices=Resultado.choices, db_index=True)
+    tipo_error = models.CharField(max_length=30, choices=TipoError.choices, blank=True, db_index=True)
+    detalle = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["codigo_producto"]
+        indexes = [models.Index(fields=["carga", "resultado"])]

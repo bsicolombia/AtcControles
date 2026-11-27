@@ -69,6 +69,31 @@
   .ent .bloque.ser input:focus, .ent .bloque.ser select:focus { outline:2px solid #7a3db855; }
   .ent .campo-ivt input { border-color:#1f3a5f; background:#f3f7fc; font-weight:700; }
   .ent .campo-ivt label { color:#1f3a5f; }
+
+  /* ---------- DESPLEGABLE DE SERIALES ---------- */
+.ent .serial-wrap { position:relative; flex:1; min-width:0; }
+.ent .sug {
+  position:absolute; top:calc(100% + 2px); left:0; right:0; z-index:1000;
+  background:#fff; border:1px solid var(--line); border-radius:7px;
+  box-shadow:0 6px 14px rgba(0,0,0,.15);
+  max-height:220px; overflow-y:auto;
+}
+.ent .sug.hidden { display:none !important; }
+.ent .sug-tit {
+  padding:6px 10px; font-size:11px; color:#64748b;
+  background:#f6f8fb; border-bottom:1px solid var(--line);
+  position:sticky; top:0;
+}
+.ent .sug-item {
+  display:flex; justify-content:space-between; gap:10px;
+  padding:7px 10px; cursor:pointer; font-size:13px;
+  border-bottom:1px solid #eee;
+}
+.ent .sug-item:last-child { border-bottom:0; }
+.ent .sug-item:hover, .ent .sug-item.activo { background:#e7f4ec; }
+.ent .sug-item b { color:var(--ac); }
+.ent .sug-item small { color:#64748b; text-align:right; }
+.ent .sug-no { padding:9px 10px; font-size:12px; color:#b54708; font-weight:600; }
   @media(max-width:900px){ .ent .main { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
@@ -126,7 +151,7 @@
 
       {% if form.numero_ivt %}
         <div class="campo-ivt {% if form.numero_ivt.errors %}campo-error{% endif %}">
-          <label for="{{ form.numero_ivt.id_for_label }}">N.º de IVT</label>
+          <label for="{{ form.numero_ivt.id_for_label }}">N.º de IVT *</label>
           {{ form.numero_ivt }}
           {% for error in form.numero_ivt.errors %}<div class="msg err">⚠ {{ error }}</div>{% endfor %}
         </div>
@@ -186,13 +211,17 @@
 
             <label for="in-serial">Serial o código</label>
             <div class="row">
-              <div><input type="text" id="in-serial" autocomplete="off" placeholder="Escriba o escanee y Enter"></div>
-              <button type="button" class="btn" id="btn-add-serial">Validar</button>
+                <div class="serial-wrap">
+                    <input type="text" id="in-serial" autocomplete="off"
+                        placeholder="Escriba o escanee y elija de la lista">
+                    <div id="sug-serial" class="sug hidden"></div>
+                </div>
+                <button type="button" class="btn" id="btn-add-serial">Validar</button>
             </div>
-          </div>
 
           <div class="msg" id="msg"></div>
           <div class="pend sep" id="resumen-pend"></div>
+        </div>
         </div>
 
         <div class="card">
@@ -214,19 +243,18 @@
       <div class="scroll"><table id="informe"></table></div>
     </div>
 
-    <div class="foot">
+     <div class="foot">
       <a href="{{ cancelar_url }}" class="btn sec">Cancelar</a>
       <span>
         <span id="n-inc"></span>
         <b id="total-gen">0</b> pieza(s) a instalar
         &nbsp;
-        <button class="btn" id="btn-guardar" type="submit">Guardar cambios</button>
+        <button class="btn" id="btn-guardar" type="submit">Guardar Orden</button>
       </span>
     </div>
   </form>
 </div>
 {% endblock %}
-
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 {{ modo_edicion|json_script:"modo-edicion" }}
@@ -377,13 +405,42 @@
         }, 0);
     }
 
+    // Tipo de novedad del IVT escrito ("" = correcto o vacío)
+    var ivtTipo = "";
+
+    // Panel "Pendiente por instalar"
+    function resumen() {
+        var box = $("resumen-pend");
+        if (!box) return;
+        box.innerHTML = "";
+
+        var conPend = pend.filter(function (p) {
+            return (parseInt(p.pendiente, 10) || 0) > 0;
+        });
+
+        if (!conPend.length) {
+            box.textContent = "No hay material por cantidad asignado pendiente.";
+            return;
+        }
+
+        var t = document.createElement("div");
+        t.textContent = "Pendiente por instalar:";
+        box.appendChild(t);
+
+        conPend.forEach(function (p) {
+            var s = document.createElement("span");
+            var d = Math.max(disponible(p.id), 0);
+            s.textContent = p.nombre + ": " + d;
+            if (!d) s.className = "cero";
+            box.appendChild(s);
+        });
+    }
+
     /* ================= TIPO + ESTADO ================= */
 
     var CFG = leerJSON("config-tipos", {});
     var EJEC = leerJSON("estados-ejecutados", []);
-    var IVT_EST = leerJSON("estados-ivt", []);
     if (!Array.isArray(EJEC)) EJEC = [];
-    if (!Array.isArray(IVT_EST)) IVT_EST = [];
 
     var tipoSel = $("id_tipo_operacion");
     var estadoSel = $("id_estado");
@@ -393,15 +450,18 @@
 
     function cfgTipo() { return (tipoSel && CFG[tipoSel.value]) || null; }
 
+    function pruebasMinimas() {
+        var c = $("id_pruebas_minimas");
+        return !!c && c.checked;
+    }
+
     function instalaAhora() {
         var c = cfgTipo();
         return !!c && c.instala && !!estadoSel && instalan.indexOf(estadoSel.value) !== -1;
     }
 
-    function pideIvtAhora() {
-        var c = cfgTipo();
-        return !!c && c.ivt && !!estadoSel && IVT_EST.indexOf(estadoSel.value) !== -1;
-    }
+    // El IVT es obligatorio siempre
+    function pideIvtAhora() { return true; }
 
     function ajustarEstados() {
         var c = cfgTipo();
@@ -417,6 +477,54 @@
         if (c.estados.some(function (p) { return p[0] === actual; })) {
             estadoSel.value = actual;
         }
+    }
+
+    var actividadSel = $("id_actividad");
+    var todasActividades = [];
+    var actividadInicial = "";
+
+    if (actividadSel) {
+        actividadInicial = actividadSel.value;
+        Array.from(actividadSel.options).forEach(function (op) {
+            if (op.value) {
+                todasActividades.push({
+                    value: op.value,
+                    text: op.textContent,
+                    tipo: op.getAttribute("data-tipo")
+                });
+            }
+        });
+    }
+
+    function filtrarActividades() {
+        if (!actividadSel || !tipoSel) return;
+
+        var c = cfgTipo();
+        var tipo = String(c ? c.act_tipo : tipoSel.value);
+        var actual = actividadSel.value || actividadInicial;
+        actividadInicial = "";
+
+        actividadSel.innerHTML = "";
+
+        var vacia = document.createElement("option");
+        vacia.value = "";
+        vacia.textContent = "Seleccione una actividad";
+        actividadSel.appendChild(vacia);
+
+        var hay = 0;
+        todasActividades.forEach(function (a) {
+            if (a.tipo !== tipo) return;
+            var o = document.createElement("option");
+            o.value = a.value;
+            o.textContent = a.text;
+            o.setAttribute("data-tipo", a.tipo);
+            if (a.value === actual) o.selected = true;
+            actividadSel.appendChild(o);
+            hay++;
+        });
+
+        // Si el tipo no tiene actividades, se oculta el campo
+        actividadSel.parentNode.style.display = hay ? "" : "none";
     }
 
     function filtrarAnomalias() {
@@ -447,7 +555,7 @@
         if (campoIvtBox) campoIvtBox.style.display = pideIvtAhora() ? "" : "none";
     }
 
-    // Tipos "sin ODS" (p. ej. WM-Reparación): el número de orden puede ir vacío
+    // Tipos "sin ODS": el número de orden puede ir vacío
     function ajustarOrden() {
         if (!campoOrden || modoEdicion) return;
         var c = cfgTipo();
@@ -456,7 +564,7 @@
         campoOrden.placeholder = sin ? "Vacío = se genera " + c.sin_ods + "0001…" : "";
     }
 
-    // Si el tipo/estado no instala material (p. ej. Detección de Fugas), se vacía la lista
+    // Si el tipo/estado no instala material, se vacía la lista
     function limpiarSiNoInstala() {
         if (!instalaAhora() && lineas.length) {
             lineas.length = 0;
@@ -469,6 +577,7 @@
     function refrescarTodo() {
         ajustarEstados();
         filtrarAnomalias();
+        filtrarActividades();
         limpiarSiNoInstala();
         evaluarEstado();
         ajustarOrden();
@@ -680,6 +789,7 @@
         l.unidades.push(unidad);
 
         $("in-serial").value = "";
+        sugerir();
         $("in-serial").focus();
 
         ocultarCajaProd();
@@ -688,12 +798,106 @@
         return true;
     }
 
+    var sugLista = [];
+    var sugIdx = -1;
+
+    function cerrarSug() {
+        var box = $("sug-serial");
+        if (!box) return;
+        box.innerHTML = "";
+        box.classList.add("hidden");
+        sugLista = [];
+        sugIdx = -1;
+    }
+
+    function marcarSug() {
+        var items = $("sug-serial").querySelectorAll(".sug-item");
+        items.forEach(function (el, i) {
+            el.classList.toggle("activo", i === sugIdx);
+            if (i === sugIdx) el.scrollIntoView({ block: "nearest" });
+        });
+    }
+
+    function elegirSug(s) {
+        if (agregarUnidad(s.producto, s.nombre, { id: s.id, serial: s.serial })) {
+            msg("✓ " + s.serial + " · " + s.nombre + " — lo tiene asignado.", "ok");
+        }
+        cerrarSug();
+    }
+
+    function sugerir() {
+        var box = $("sug-serial");
+        if (!box) return;
+
+        box.innerHTML = "";
+        sugLista = [];
+        sugIdx = -1;
+
+        var txt = $("in-serial").value.trim().toLowerCase();
+        if (!txt) { box.classList.add("hidden"); return; }
+
+        sugLista = seriales.filter(function (s) {
+            if (idUsado(s.id)) return false;
+            return String(s.serial || "").toLowerCase().indexOf(txt) !== -1 ||
+                   String(s.codigo || "").toLowerCase().indexOf(txt) !== -1;
+        });
+
+        sugLista.sort(function (a, b) {
+            var pa = String(a.serial || "").toLowerCase().indexOf(txt) === 0 ? 0 : 1;
+            var pb = String(b.serial || "").toLowerCase().indexOf(txt) === 0 ? 0 : 1;
+            return pa - pb;
+        });
+
+        box.classList.remove("hidden");
+
+        if (!sugLista.length) {
+            var no = document.createElement("div");
+            no.className = "sug-no";
+            no.textContent = "Ningún serial asignado a este técnico coincide. " +
+                             "Si pulsa Enter/Validar, se consultará y podría quedar como inconsistencia.";
+            box.appendChild(no);
+            return;
+        }
+
+        var t = document.createElement("div");
+        t.className = "sug-tit";
+        t.textContent = sugLista.length + " asignado(s) al técnico — elija uno:";
+        box.appendChild(t);
+
+        sugLista.slice(0, 30).forEach(function (s) {
+            var it = document.createElement("div");
+            it.className = "sug-item";
+
+            var b = document.createElement("b");
+            b.textContent = s.serial;
+            it.appendChild(b);
+
+            var sm = document.createElement("small");
+            sm.textContent = s.nombre;
+            it.appendChild(sm);
+
+            it.addEventListener("mousedown", function (ev) {
+                ev.preventDefault();
+                elegirSug(s);
+            });
+            box.appendChild(it);
+        });
+
+        if (sugLista.length > 30) {
+            var mas = document.createElement("div");
+            mas.className = "sug-tit";
+            mas.textContent = "Hay " + (sugLista.length - 30) + " más. Siga escribiendo para filtrar.";
+            box.appendChild(mas);
+        }
+    }
+
     function validarSerial() {
         var txt = $("in-serial").value.trim();
 
         if (!txt) return msg("Escriba o escanee un serial.");
 
         var low = txt.toLowerCase();
+        cerrarSug();
 
         if (serialUsado(low)) {
             msg("✗ Ese serial ya está en la lista.");
@@ -809,10 +1013,24 @@
     if ($("btn-add-serial")) $("btn-add-serial").addEventListener("click", validarSerial);
 
     if ($("in-serial")) {
+
         $("in-serial").addEventListener("keydown", function (e) {
-            if (e.key === "Enter") {
+            var n = Math.min(sugLista.length, 30);
+
+            if (e.key === "ArrowDown" && n) {
                 e.preventDefault();
-                validarSerial();
+                sugIdx = (sugIdx + 1) % n;
+                marcarSug();
+            } else if (e.key === "ArrowUp" && n) {
+                e.preventDefault();
+                sugIdx = sugIdx <= 0 ? n - 1 : sugIdx - 1;
+                marcarSug();
+            } else if (e.key === "Enter") {
+                e.preventDefault();
+                if (sugIdx >= 0 && sugLista[sugIdx]) elegirSug(sugLista[sugIdx]);
+                else validarSerial();
+            } else if (e.key === "Escape") {
+                cerrarSug();
             }
         });
 
@@ -820,8 +1038,15 @@
             if (serialPendiente && this.value.trim().toLowerCase() !== serialPendiente) {
                 ocultarCajaProd();
             }
+            sugerir();
         });
+
+        $("in-serial").addEventListener("focus", sugerir);
     }
+
+    document.addEventListener("click", function (e) {
+        if (!e.target.closest(".serial-wrap")) cerrarSug();
+    });
 
     /* ================= TABLA ================= */
 
@@ -941,68 +1166,6 @@
         if ($("payload-ui")) $("payload-ui").value = JSON.stringify(lineas);
     }
 
-    /* ================= RESUMEN PENDIENTES ================= */
-
-    function resumen() {
-        var box = $("resumen-pend");
-        if (!box) return;
-
-        box.innerHTML = "";
-
-        var t = document.createElement("div");
-        var titulo = document.createElement("b");
-        titulo.textContent = "En poder del técnico (pendiente)";
-        t.appendChild(titulo);
-        box.appendChild(t);
-
-        var hay = false;
-
-        pend.forEach(function (p) {
-            if (p.pendiente <= 0) return;
-
-            hay = true;
-
-            var rest = Math.max(disponible(p.id), 0);
-            var s = document.createElement("span");
-
-            if (!rest) s.className = "cero";
-
-            s.textContent = p.nombre + ": " + rest;
-            box.appendChild(s);
-        });
-
-        var usados = {};
-
-        lineas.forEach(function (l) {
-            if (l.serializado) {
-                l.unidades.forEach(function (u) {
-                    if (u.id !== null && u.id !== undefined) usados[String(u.id)] = 1;
-                });
-            }
-        });
-
-        var porProd = {};
-
-        seriales.forEach(function (s) {
-            if (!usados[String(s.id)]) {
-                porProd[s.nombre] = (porProd[s.nombre] || 0) + 1;
-            }
-        });
-
-        Object.keys(porProd).forEach(function (n) {
-            hay = true;
-            var s = document.createElement("span");
-            s.textContent = n + ": " + porProd[n];
-            box.appendChild(s);
-        });
-
-        if (!hay) {
-            var v = document.createElement("div");
-            v.textContent = "Sin material pendiente.";
-            box.appendChild(v);
-        }
-    }
-
     /* ================= INFORME ================= */
 
     function informe() {
@@ -1073,6 +1236,77 @@
         }
     }
 
+    /* ================= VALIDAR IVT ================= */
+
+    var campoIvt = $("id_numero_ivt");
+    var tempIvt = null;
+    var ultimoIvt = null;      // null = aún no validado
+    var avisoIvt = null;
+
+    function pintarIvt(texto, nivel) {
+        if (!avisoIvt) return;
+        avisoIvt.textContent = texto || "";
+        avisoIvt.className = "msg " + (texto ? nivel : "");
+    }
+
+    // Devuelve una promesa que termina cuando el IVT ya fue validado
+    function validarIvt() {
+        if (!campoIvt) return Promise.resolve();
+
+        var n = campoIvt.value.trim();
+        if (n === ultimoIvt) return Promise.resolve();
+
+        ultimoIvt = n;
+        ivtTipo = "";
+
+        if (!n) {
+            pintarIvt("");
+            return Promise.resolve();
+        }
+
+        pintarIvt("Validando IVT…", "ok");
+
+        return fetch(
+            urlIvt + "?tecnico=" + encodeURIComponent(tecnicoId) +
+            "&numero=" + encodeURIComponent(n) + opIvt
+        )
+            .then(function (r) {
+                if (!r.ok) throw new Error("HTTP " + r.status);
+                return r.json();
+            })
+            .then(function (d) {
+                if (campoIvt.value.trim() !== n) return;   // ya cambió el número
+
+                if (d.ok) {
+                    ivtTipo = "";
+                    pintarIvt(d.mensaje || "✓ IVT correcto.", "ok");
+                    return;
+                }
+
+                ivtTipo = d.tipo || "IVT";
+                var estado = tipos[ivtTipo] || "IVT con novedad";
+                var detalle = (d.mensaje || "").replace(/^⚠\s*/, "");
+                pintarIvt("⚠ " + estado + ". " + detalle, "warn");
+            })
+            .catch(function (error) {
+                console.error("Error validando IVT:", error);
+                ultimoIvt = null;
+                pintarIvt("No se pudo validar el IVT.", "err");
+            });
+    }
+
+    if (campoIvt) {
+        avisoIvt = document.createElement("div");
+        avisoIvt.className = "msg";
+        campoIvt.parentNode.appendChild(avisoIvt);
+
+        campoIvt.addEventListener("input", function () {
+            clearTimeout(tempIvt);
+            tempIvt = setTimeout(validarIvt, 400);
+        });
+        campoIvt.addEventListener("blur", validarIvt);
+    }
+
     /* ================= ENVÍO ================= */
 
     var formulario = $("form-instalar");
@@ -1088,9 +1322,9 @@
         formulario.addEventListener("submit", function (e) {
             var instala = instalaAhora();
 
-            if (instala && !lineas.length) {
+            if (instala && !lineas.length && !pruebasMinimas()) {   // <-- cambia
                 e.preventDefault();
-                msg("✗ Agregue al menos un material o serial antes de registrar.");
+                msg("✗ Agregue al menos un material o serial, o marque «Pruebas mínimas».");
                 return;
             }
 
@@ -1099,17 +1333,38 @@
                 render();
             }
 
-            var k = nInc();
-
-            if (
-                k &&
-                !confirm(
-                    "Hay " + k +
-                    " inconsistencia(s). Se registrarán para revisión del almacén. ¿Continuar?"
-                )
-            ) {
+            // Si el IVT aún no se validó (o está validando), espera y vuelve a enviar
+            if (campoIvt && campoIvt.value.trim() !== ultimoIvt) {
                 e.preventDefault();
+                clearTimeout(tempIvt);
+                validarIvt().then(function () {
+                    formulario.requestSubmit();
+                });
                 return;
+            }
+
+            // Alerta única con Aceptar / Cancelar
+            var k = nInc();
+            var lineasAlerta = [];
+
+            if (k) {
+                lineasAlerta.push("• Materiales con inconsistencia: " + k);
+            }
+            if (ivtTipo) {
+                lineasAlerta.push("• IVT: " + (tipos[ivtTipo] || ivtTipo));
+            }
+
+            if (lineasAlerta.length) {
+                var ok = confirm(
+                    "⚠ Esta orden tiene inconsistencias:\n\n" +
+                    lineasAlerta.join("\n") +
+                    "\n\nSe guardará y quedarán registradas para revisión del almacén.\n\n" +
+                    "¿Desea aceptar y guardar?"
+                );
+                if (!ok) {
+                    e.preventDefault();
+                    return;
+                }
             }
 
             $("payload").value = JSON.stringify(construirPayload());
@@ -1122,6 +1377,7 @@
 
     ajustarEstados();
     filtrarAnomalias();
+    filtrarActividades();
     evaluarEstado();
     ajustarOrden();
     render();
@@ -1130,35 +1386,8 @@
     var resumenErr = document.querySelector(".campo-error, .card.errores");
     if (resumenErr) resumenErr.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    /* ================= VALIDAR IVT ================= */
-
-    var campoIvt = $("id_numero_ivt");
-
-    if (campoIvt) {
-        var avisoIvt = document.createElement("div");
-        avisoIvt.className = "msg";
-        campoIvt.parentNode.appendChild(avisoIvt);
-
-        campoIvt.addEventListener("blur", function () {
-            var n = campoIvt.value.trim();
-
-            if (!n) {
-                avisoIvt.textContent = "";
-                return;
-            }
-
-            fetch(
-                urlIvt + "?tecnico=" + encodeURIComponent(tecnicoId) +
-                "&numero=" + encodeURIComponent(n) + opIvt
-            )
-                .then(function (r) { return r.json(); })
-                .then(function (d) {
-                    avisoIvt.textContent = d.mensaje;
-                    avisoIvt.className = "msg " + (d.ok ? "ok" : "err");
-                })
-                .catch(function () {});
-        });
-    }
+    // Al abrir (edición o recarga con error) ya muestra el estado del IVT
+    if (campoIvt && campoIvt.value.trim()) validarIvt();
 
     /* ================= ORDEN YA REGISTRADA ================= */
 

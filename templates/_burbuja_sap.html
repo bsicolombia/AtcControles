@@ -1,6 +1,5 @@
 {% comment %}
-  Burbuja de conciliación de INSTALACIÓN: Five vs SAP.
-  Se incluye en base.html (ver _burbujas_comun.html).
+  MB51 · Instalación Five vs SAP (carga SAP). Usa _burbujas_comun.html.
 {% endcomment %}
 
 {% if burbuja_sap %}
@@ -11,13 +10,16 @@
 
   <div class="bub-globo">
 
-    <button type="button" class="bub-x" aria-label="Ocultar detalle">×</button>
+    <button type="button" class="bub-x" aria-label="Cerrar">×</button>
 
-    <a class="bub-titulo" href="{{ url_sap }}?carga=todas">
+    <div class="bub-nombre">MB51 · Instalación Five vs SAP</div>
+
+    <a class="bub-titulo"
+       href="{{ url_sap }}?carga=todas{% if burbuja_sap.destino %}&amp;estado={{ burbuja_sap.destino }}{% endif %}">
       {% if burbuja_sap.total %}
-        Instalación Five vs SAP: <strong>{{ burbuja_sap.total }}</strong> por revisar
+        <strong>{{ burbuja_sap.total }}</strong> por revisar
       {% else %}
-        <strong>✔ Instalación Five vs SAP al día</strong>
+        <strong>✔ Todo al día</strong>
       {% endif %}
     </a>
 
@@ -47,10 +49,9 @@
     <span class="bub-pico"></span>
   </div>
 
-  <a class="bub-boton"
-     href="{{ url_sap }}?carga=todas{% if burbuja_sap.destino %}&amp;estado={{ burbuja_sap.destino }}{% endif %}"
-     title="Ver conciliación de instalación Five vs SAP"
-     aria-label="{{ burbuja_sap.total }} puntos por revisar en la instalación Five vs SAP. Ir a la conciliación">
+  <button type="button" class="bub-boton" aria-expanded="false"
+          title="MB51 · Instalación Five vs SAP"
+          aria-label="{{ burbuja_sap.total }} puntos por revisar en MB51, instalación Five vs SAP. Abrir detalle">
 
     <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
          stroke="currentColor" stroke-width="2"
@@ -64,7 +65,8 @@
     {% else %}
       <span class="bub-badge bub-badge-ok">✔</span>
     {% endif %}
-  </a>
+    <span class="bub-etq">MB51</span>
+  </button>
 
 </div>
 {% endif %}

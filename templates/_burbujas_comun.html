@@ -1,8 +1,9 @@
 {% comment %}
-  Estilo y comportamiento comunes de las burbujas de conciliación (SAP y almacén).
-  Se incluye UNA vez en base.html, DESPUÉS de las tres burbujas.
-  Apila las burbujas de abajo hacia arriba:
-      1) inconsistencias (la existente)  2) instalación SAP  3) almacén
+  Estilo y comportamiento comunes de TODAS las burbujas (.bub).
+  Se incluye UNA vez en base.html, DESPUÉS de las cuatro burbujas.
+  - Se abren con clic (no con el cursor encima).
+  - Se arrastran; la posición se guarda en el navegador.
+  - Las que no se han movido se apilan solas en la esquina inferior derecha.
 {% endcomment %}
 
 <style>
@@ -10,13 +11,13 @@
     position: fixed;
     right: 18px;
     bottom: 18px;               /* el JS lo recalcula para apilarlas */
+    width: 54px;
+    height: 54px;
     z-index: 900;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 10px;
     font-family: inherit;
   }
+
+  .bub.abierta { z-index: 910; }
 
   .bub-boton {
     position: relative;
@@ -25,15 +26,48 @@
     justify-content: center;
     width: 54px;
     height: 54px;
+    padding: 0;
+    border: 0;
     border-radius: 50%;
     background: var(--bub);
     color: #fff;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
     box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
-    text-decoration: none;
     animation: bub-pulso 2.4s ease-in-out infinite;
   }
 
   .bub-boton:hover { background: var(--bub-osc); }
+  .bub-boton svg { pointer-events: none; }
+
+  .bub.abierta .bub-boton,
+  .bub.arrastrando .bub-boton { animation: none; }
+
+  .bub.arrastrando .bub-boton {
+    cursor: grabbing;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
+  }
+
+  /* Nombre del reporte, siempre visible */
+  .bub-etq {
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    transform: translateX(-50%);
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid var(--bub);
+    color: var(--bub-osc);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .03em;
+    line-height: 13px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
 
   .bub-badge {
     position: absolute;
@@ -51,12 +85,17 @@
     line-height: 18px;
     text-align: center;
     box-sizing: border-box;
+    pointer-events: none;
   }
 
   .bub-badge-ok { background: #16a34a; }
 
+  /* ---------- Globo ---------- */
   .bub-globo {
-    position: relative;
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 12px);
     width: 300px;
     max-width: calc(100vw - 36px);
     padding: 12px 14px 10px;
@@ -68,7 +107,11 @@
     color: #333;
   }
 
-  .bub-globo.oculto { display: none; }
+  .bub.abierta .bub-globo { display: block; }
+
+  /* Si no cabe arriba, se abre hacia abajo; si no cabe a la izquierda, hacia la derecha */
+  .bub.abajo .bub-globo { bottom: auto; top: calc(100% + 12px); }
+  .bub.izq .bub-globo { right: auto; left: 0; }
 
   .bub-pico {
     position: absolute;
@@ -82,14 +125,35 @@
     transform: rotate(45deg);
   }
 
+  .bub.izq .bub-pico { right: auto; left: 20px; }
+
+  .bub.abajo .bub-pico {
+    bottom: auto;
+    top: -7px;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 1px solid var(--bub-borde);
+    border-top: 1px solid var(--bub-borde);
+  }
+
+  .bub-nombre {
+    margin-right: 18px;
+    color: var(--bub);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+  }
+
   .bub-titulo {
     display: block;
-    margin-right: 16px;
+    margin: 2px 18px 0 0;
     font-size: 13px;
     color: var(--bub-osc);
     text-decoration: none;
   }
 
+  .bub-titulo:hover { text-decoration: underline; }
   .bub-titulo strong { font-size: 15px; }
 
   .bub-scroll {
@@ -154,6 +218,31 @@
 
   .bub-x:hover { color: #333; }
 
+  .bub-pie {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--bub-tinte);
+    font-size: 10.5px;
+    color: #888;
+  }
+
+  .bub-reset {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--bub);
+    font-size: 10.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .bub-reset:hover { text-decoration: underline; }
+
   @keyframes bub-pulso {
     0%, 100% { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 0 var(--bub-pulso); }
     50%      { box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 10px transparent; }
@@ -167,48 +256,179 @@
   var burbujas = Array.prototype.slice.call(document.querySelectorAll(".bub"));
   if (!burbujas.length) return;
 
-  var inc = document.getElementById("burbuja-inc");   // la burbuja de inconsistencias (base de la pila)
+  var TAM = 54, GAP = 12, MARGEN = 8, UMBRAL = 5;
+  var posiciones = {};   // clave -> {x, y}: solo las que el usuario movió
 
-  // --- Ocultar / mostrar el detalle de cada burbuja por separado ---
+  /* ---------- posición guardada ---------- */
+  function leer(clave) {
+    try {
+      var v = JSON.parse(localStorage.getItem("bub_pos_" + clave));
+      if (v && isFinite(v.x) && isFinite(v.y)) return v;
+    } catch (e) {}
+    return null;
+  }
+  function guardar(clave, p) {
+    try { localStorage.setItem("bub_pos_" + clave, JSON.stringify(p)); } catch (e) {}
+  }
+  function borrar(clave) {
+    try { localStorage.removeItem("bub_pos_" + clave); } catch (e) {}
+  }
+
+  /* ---------- colocar ---------- */
+  function limitar(p) {
+    return {
+      x: Math.min(Math.max(p.x, MARGEN), Math.max(window.innerWidth - TAM - MARGEN, MARGEN)),
+      y: Math.min(Math.max(p.y, MARGEN), Math.max(window.innerHeight - TAM - MARGEN, MARGEN))
+    };
+  }
+
+  function colocar(b, p) {
+    p = limitar(p);
+    b.style.left = p.x + "px";
+    b.style.top = p.y + "px";
+    b.style.right = "auto";
+    b.style.bottom = "auto";
+  }
+
+  // Las no movidas se apilan abajo a la derecha; las movidas van donde se dejaron
+  function apilar() {
+    var base = 18;
+    burbujas.forEach(function (b) {
+      var p = posiciones[b.getAttribute("data-clave")];
+      if (p) { colocar(b, p); return; }
+      b.style.left = "auto";
+      b.style.top = "auto";
+      b.style.right = "18px";
+      b.style.bottom = base + "px";
+      base += TAM + GAP;
+    });
+  }
+
+  /* ---------- abrir / cerrar ---------- */
+  function ubicarGlobo(b) {
+    var globo = b.querySelector(".bub-globo");
+    b.classList.remove("abajo", "izq");
+
+    var r = b.getBoundingClientRect();
+    var alto = globo.offsetHeight + 16;
+    var ancho = globo.offsetWidth;
+    var arriba = r.top;
+    var abajo = window.innerHeight - r.bottom;
+
+    b.classList.toggle("abajo", arriba < alto && abajo > arriba);
+    b.classList.toggle("izq", r.right - ancho < MARGEN);
+  }
+
+  function cerrar(b) {
+    b.classList.remove("abierta");
+    b.querySelector(".bub-boton").setAttribute("aria-expanded", "false");
+  }
+
+  function cerrarTodas(excepto) {
+    burbujas.forEach(function (b) { if (b !== excepto) cerrar(b); });
+  }
+
+  function abrir(b) {
+    cerrarTodas(b);
+    b.classList.add("abierta");
+    b.querySelector(".bub-boton").setAttribute("aria-expanded", "true");
+    ubicarGlobo(b);
+  }
+
+  /* ---------- cada burbuja ---------- */
   burbujas.forEach(function (b) {
-    var clave = "bub_oculta_" + b.getAttribute("data-clave");
-    var total = b.getAttribute("data-total");
+    var clave = b.getAttribute("data-clave");
+    var boton = b.querySelector(".bub-boton");
     var globo = b.querySelector(".bub-globo");
 
-    // Si el usuario lo ocultó con este mismo total, sigue oculto.
-    // Si el total cambia, vuelve a mostrarse.
-    try {
-      if (sessionStorage.getItem(clave) === total) globo.classList.add("oculto");
-    } catch (e) {}
+    var guardada = leer(clave);
+    if (guardada) posiciones[clave] = guardada;
 
-    b.querySelector(".bub-x").addEventListener("click", function () {
-      globo.classList.add("oculto");
-      try { sessionStorage.setItem(clave, total); } catch (e) {}
+    // Pie del globo: ayuda y "volver a su lugar"
+    var pie = document.createElement("div");
+    pie.className = "bub-pie";
+    pie.innerHTML =
+      '<span>Arrastre el botón para moverla</span>' +
+      '<button type="button" class="bub-reset">↺ Volver a su lugar</button>';
+    globo.insertBefore(pie, globo.querySelector(".bub-pico"));
+
+    pie.querySelector(".bub-reset").addEventListener("click", function () {
+      delete posiciones[clave];
+      borrar(clave);
+      apilar();
+      if (b.classList.contains("abierta")) ubicarGlobo(b);
     });
 
-    // Al pasar el mouse por el botón se vuelve a mostrar el detalle.
-    b.querySelector(".bub-boton").addEventListener("mouseenter", function () {
-      globo.classList.remove("oculto");
+    b.querySelector(".bub-x").addEventListener("click", function () { cerrar(b); });
+
+    // Clic (o Enter/Espacio) abre y cierra; un arrastre no cuenta como clic
+    var huboArrastre = false;
+    boton.addEventListener("click", function () {
+      if (huboArrastre) { huboArrastre = false; return; }
+      if (b.classList.contains("abierta")) cerrar(b); else abrir(b);
+    });
+
+    // Arrastrar
+    var inicio = null;
+
+    boton.addEventListener("pointerdown", function (e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      huboArrastre = false;
+      var r = b.getBoundingClientRect();
+      inicio = { px: e.clientX, py: e.clientY, x: r.left, y: r.top, mov: false, ult: null };
+      try { boton.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    boton.addEventListener("pointermove", function (e) {
+      if (!inicio) return;
+      var dx = e.clientX - inicio.px, dy = e.clientY - inicio.py;
+
+      if (!inicio.mov) {
+        if (Math.hypot(dx, dy) < UMBRAL) return;
+        inicio.mov = true;
+        huboArrastre = true;
+        b.classList.add("arrastrando");
+      }
+
+      inicio.ult = limitar({ x: inicio.x + dx, y: inicio.y + dy });
+      colocar(b, inicio.ult);
+    });
+
+    function soltar(e) {
+      if (!inicio) return;
+      var movio = inicio.mov, p = inicio.ult;
+      inicio = null;
+      try { boton.releasePointerCapture(e.pointerId); } catch (err) {}
+      b.classList.remove("arrastrando");
+
+      if (movio && p) {
+        posiciones[clave] = p;
+        guardar(clave, p);
+        apilar();
+        if (b.classList.contains("abierta")) ubicarGlobo(b);
+      }
+    }
+
+    boton.addEventListener("pointerup", soltar);
+    boton.addEventListener("pointercancel", soltar);
+  });
+
+  /* ---------- cierre global ---------- */
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest(".bub")) cerrarTodas(null);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") cerrarTodas(null);
+  });
+
+  window.addEventListener("resize", function () {
+    apilar();
+    burbujas.forEach(function (b) {
+      if (b.classList.contains("abierta")) ubicarGlobo(b);
     });
   });
 
-  // --- Apilar: inconsistencias abajo, luego SAP, luego almacén ---
-  function apilar() {
-    var base = 18;
-    if (inc) base += inc.offsetHeight + 12;
-    burbujas.forEach(function (b) {
-      b.style.bottom = base + "px";
-      base += b.offsetHeight + 12;
-    });
-  }
-
   apilar();
-  window.addEventListener("resize", apilar);
-
-  if (window.ResizeObserver) {
-    var ro = new ResizeObserver(apilar);
-    burbujas.forEach(function (b) { ro.observe(b); });
-    if (inc) ro.observe(inc);
-  }
 })();
 </script>

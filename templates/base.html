@@ -51,7 +51,7 @@
             {% if puede_ver_almacen %}
 
                 <!-- 1. RESUMEN GENERAL -->
-                <details class="nav-seccion" open>
+                <details class="nav-seccion" data-nav="resumen">
                     <summary class="nav-grupo">
                         <span>1. Resumen General</span>
                         <span class="nav-flecha">⌄</span>
@@ -107,6 +107,24 @@
                             D. Resumen IVT
                         </a>
 
+                        <a href="{% url 'operaciones:consulta_orden' %}"
+                        class="{% if u == 'consulta_orden' %}activo{% endif %}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <circle cx="10.5" cy="10.5" r="6.5"/>
+                                <path d="m16 16 5 5M8 10h5M8 13h3"/>
+                            </svg>
+                            E. Consultar Órdenes
+                        </a>
+
+                        <a href="{% url 'almacen:ordenes_sin_ods' %}"
+                        class="{% if u == 'ordenes_sin_ods' %}activo{% endif %}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <circle cx="10.5" cy="10.5" r="6.5"/>
+                                <path d="m16 16 5 5M8 10h5M8 13h3"/>
+                            </svg>
+                            F. Órdenes sin ODS
+                        </a>
+
                     </div>
                 </details>
 
@@ -115,7 +133,7 @@
 
             <!-- 2. CONSOLIDACIÓN -->
             {% if es_admin or es_coordinador %}
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="consolidacion">
                     <summary class="nav-grupo">
                         <span>2. Consolidación / Errores</span>
                         <span class="nav-flecha">⌄</span>
@@ -148,7 +166,7 @@
 
             <!-- 3. ASIGNACIÓN -->
             {% if request.user.is_authenticated %}
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="asignacion">
                     <summary class="nav-grupo">
                         <span>3. Asignación</span>
                         <span class="nav-flecha">⌄</span>
@@ -162,7 +180,7 @@
                                 <path d="M3 7h18v13H3z"/>
                                 <path d="M8 7V4h8v3M8 13l3 3 5-5"/>
                             </svg>
-                            A. Entregas / Devoluciones
+                            A. Asignaciones
                         </a>
 
                         <a href="{% url 'almacen:entregas' %}"
@@ -171,7 +189,7 @@
                                 <path d="M3 7h18v13H3z"/>
                                 <path d="M8 7V4h8v3M8 13l3 3 5-5"/>
                             </svg>
-                            A. Entregas / Devoluciones
+                            B.Entregas / Devoluciones
                         </a>
 
                         <a href="{% url 'almacen:inconsistencias' %}"
@@ -180,7 +198,7 @@
                                 <path d="M12 9v4M12 17h.01"/>
                                 <circle cx="12" cy="12" r="9"/>
                             </svg>
-                            B. Inconsistencias
+                            C. Inconsistencias
                         </a>
 
                     </div>
@@ -190,7 +208,7 @@
 
             <!-- 4. REGISTRO DE MATERIALES -->
             {% if puede_ver_almacen %}
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="registro"> 
                     <summary class="nav-grupo">
                         <span>4. Registro Materiales</span>
                         <span class="nav-flecha">⌄</span>
@@ -220,7 +238,7 @@
 
 
                 <!-- 5. MOVIMIENTOS -->
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="movimientos">
                     <summary class="nav-grupo">
                         <span>5. Movimientos</span>
                         <span class="nav-flecha">⌄</span>
@@ -239,7 +257,7 @@
 
 
                 <!-- 6. GRUPOS POR MATERIAL -->
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="grupos"> 
                     <summary class="nav-grupo">
                         <span>6. Grupos por Material</span>
                         <span class="nav-flecha">⌄</span>
@@ -263,9 +281,9 @@
 
             <!-- 7. CARGA SAP -->
             {% if es_admin or es_coordinador %}
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="carga-sap">
                     <summary class="nav-grupo">
-                        <span>7. Carga SAP</span>
+                        <span>7. Carga SAP INSTALACIÓN</span>
                         <span class="nav-flecha">⌄</span>
                     </summary>
 
@@ -276,7 +294,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/>
                             </svg>
-                            A. Carga SAP
+                            A. Carga SAP MB51
                         </a>
 
                         <a href="{% url 'operaciones:carga_sap_historial' %}"
@@ -285,25 +303,7 @@
                                 <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
                                 <path d="M3 3v5h5M12 7v5l3 2"/>
                             </svg>
-                            B. Historial de Cargas
-                        </a>
-
-                        <a href="{% url 'operaciones:consulta_orden' %}"
-                        class="{% if u == 'consulta_orden' %}activo{% endif %}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                <circle cx="10.5" cy="10.5" r="6.5"/>
-                                <path d="m16 16 5 5M8 10h5M8 13h3"/>
-                            </svg>
-                            C. Consultar Órdenes
-                        </a>
-
-                        <a href="{% url 'almacen:ordenes_sin_ods' %}"
-                        class="{% if u == 'ordenes_sin_ods' %}activo{% endif %}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                <circle cx="10.5" cy="10.5" r="6.5"/>
-                                <path d="m16 16 5 5M8 10h5M8 13h3"/>
-                            </svg>
-                            D. Órdenes sin ODS
+                            B. Historial de Cargas MB51
                         </a>
 
                     </div>
@@ -312,29 +312,24 @@
 
             <!-- 7. CARGA SAP -->
             {% if es_admin or es_coordinador %}
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="carga-almacen">
                     <summary class="nav-grupo">
                         <span>8. Carga SAP Almacen</span>
                         <span class="nav-flecha">⌄</span>
                     </summary>
 
                     <div class="nav-submenu">
-
-                        <a href="{% url 'almacen:carga_inventario' %}"
-                        class="{% if u == 'carga_sap' %}activo{% endif %}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/>
-                            </svg>
-                            A. Carga SAP Almacen
+                        <a href="{% url 'almacen:carga_inventario' %}" class="{% if u == 'carga_inventario' %}activo{% endif %}">
+                            A. Carga IQ09 (medidores)
                         </a>
-
-                        <a href="{% url 'almacen:carga_inventario_historial' %}"
-                        class="{% if u == 'carga_sap_historial' %}activo{% endif %}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
-                                <path d="M3 3v5h5M12 7v5l3 2"/>
-                            </svg>
-                            B. Historial de Cargas Almacen
+                        <a href="{% url 'almacen:carga_inventario_historial' %}" class="{% if u == 'carga_inventario_historial' %}activo{% endif %}">
+                            B. Historial IQ09
+                        </a>
+                        <a href="{% url 'almacen:carga_stock' %}" class="{% if u == 'carga_stock' %}activo{% endif %}">
+                            C. Carga MB52 (stock)
+                        </a>
+                        <a href="{% url 'almacen:carga_stock_historial' %}" class="{% if u == 'carga_stock_historial' %}activo{% endif %}">
+                            D. Historial MB52
                         </a>
 
                     </div>
@@ -345,7 +340,7 @@
 
             <!-- ADMINISTRACIÓN -->
             {% if es_admin %}
-                <details class="nav-seccion">
+                <details class="nav-seccion" data-nav="admin"> 
                     <summary class="nav-grupo">
                         <span>Administración</span>
                         <span class="nav-flecha">⌄</span>
@@ -395,6 +390,70 @@
         </div>
 
     </aside>
+    </aside>
+
+<script>
+(function () {
+  var KEY_ABIERTOS = "nav_abiertos";
+  var KEY_SCROLL = "nav_scroll";
+
+  var lateral = document.getElementById("menu-lateral");
+  var nav = lateral.querySelector(".nav");
+  var secciones = nav.querySelectorAll("details.nav-seccion[data-nav]");
+
+  // Elemento que realmente tiene el scroll
+  function getScroller() {
+    return (nav.scrollHeight > nav.clientHeight + 1) ? nav : lateral;
+  }
+
+  // 1. Restaurar secciones abiertas
+  var abiertos = null;
+  try { abiertos = JSON.parse(localStorage.getItem(KEY_ABIERTOS)); } catch (e) {}
+
+  if (Array.isArray(abiertos)) {
+    secciones.forEach(function (d) {
+      d.open = abiertos.indexOf(d.dataset.nav) !== -1;
+    });
+  } else if (secciones[0]) {
+    secciones[0].open = true;
+  }
+
+  // Abrir la sección de la página actual
+  var activo = nav.querySelector("a.activo");
+  if (activo) {
+    var padre = activo.closest("details.nav-seccion");
+    if (padre) padre.open = true;
+  }
+
+  // 2. Restaurar scroll (ya con las secciones abiertas)
+  var guardado = parseInt(sessionStorage.getItem(KEY_SCROLL), 10);
+  if (!isNaN(guardado)) {
+    nav.scrollTop = guardado;
+    lateral.scrollTop = guardado;
+  }
+
+  // 3. Guardar abiertos al abrir/cerrar
+  function guardarAbiertos() {
+    var lista = [];
+    secciones.forEach(function (d) { if (d.open) lista.push(d.dataset.nav); });
+    localStorage.setItem(KEY_ABIERTOS, JSON.stringify(lista));
+  }
+  setTimeout(function () {
+    secciones.forEach(function (d) {
+      d.addEventListener("toggle", guardarAbiertos);
+    });
+  }, 0);
+
+  // 4. Guardar scroll al hacer clic en cualquier enlace del menú
+  function guardarScroll() {
+    sessionStorage.setItem(KEY_SCROLL, getScroller().scrollTop);
+  }
+  lateral.addEventListener("click", function (e) {
+    if (e.target.closest("a")) guardarScroll();
+  });
+  window.addEventListener("pagehide", guardarScroll);
+})();
+</script>
 
 
     <!-- VELO -->
@@ -454,8 +513,10 @@
 
 </div>
 {% include "_burbuja_inconsistencias.html" %}
-{% include "_burbuja_sap.html" %}
+{% include "_burbuja_sin_ods.html" %}
+{% include "_burbuja_stock.html" %}
 {% include "_burbuja_almacen.html" %}
+{% include "_burbuja_sap.html" %}
 {% include "_burbujas_comun.html" %}
 {% endwith %}
 {% endblock %}
@@ -479,6 +540,57 @@ document.addEventListener("submit", function (e) {
    .forEach(function (b) { b.disabled = true; });
 
 });
+</script>
+<script>
+(function () {
+  var KEY_ABIERTOS = "nav_abiertos";
+  var KEY_SCROLL = "nav_scroll";
+  var nav = document.querySelector(".nav");
+  if (!nav) return;
+
+  var secciones = nav.querySelectorAll("details.nav-seccion[data-nav]");
+
+  // Leer estado guardado
+  var abiertos;
+  try { abiertos = JSON.parse(localStorage.getItem(KEY_ABIERTOS)); } catch (e) {}
+
+  if (Array.isArray(abiertos)) {
+    secciones.forEach(function (d) {
+      d.open = abiertos.indexOf(d.dataset.nav) !== -1;
+    });
+  } else {
+    // Primera vez: abrir el primero por defecto
+    if (secciones[0]) secciones[0].open = true;
+  }
+
+  // Asegurar que la sección de la página actual esté abierta
+  var activo = nav.querySelector("a.activo");
+  if (activo) {
+    var padre = activo.closest("details.nav-seccion");
+    if (padre) padre.open = true;
+  }
+
+  // Restaurar scroll del menú
+  var scrollGuardado = parseInt(localStorage.getItem(KEY_SCROLL), 10);
+  if (!isNaN(scrollGuardado)) nav.scrollTop = scrollGuardado;
+
+  // Guardar al abrir/cerrar una sección
+  function guardarAbiertos() {
+    var lista = [];
+    secciones.forEach(function (d) { if (d.open) lista.push(d.dataset.nav); });
+    localStorage.setItem(KEY_ABIERTOS, JSON.stringify(lista));
+  }
+  secciones.forEach(function (d) {
+    d.addEventListener("toggle", guardarAbiertos);
+  });
+
+  // Guardar scroll antes de salir de la página
+  function guardarScroll() {
+    localStorage.setItem(KEY_SCROLL, nav.scrollTop);
+  }
+  nav.addEventListener("scroll", guardarScroll);
+  window.addEventListener("beforeunload", guardarScroll);
+})();
 </script>
 </body>
 </html>

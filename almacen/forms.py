@@ -11,6 +11,10 @@ from operaciones.models import (
     Anomalia, Operacion, SIN_ANOMALIA,
     EXTENSIONES_SOPORTE, validar_tamano_archivo, TipoOperacion
 )
+from operaciones.models import (
+    Anomalia, Operacion, SIN_ANOMALIA, ActividadMtto,
+    EXTENSIONES_SOPORTE, validar_tamano_archivo, TipoOperacion
+)
 
 class EstiloMixin:
     """Aplica las clases CSS del diseño a todos los campos."""
@@ -566,7 +570,18 @@ class AsignacionForm(EstiloMixin, forms.Form):
 
         return data
 
+class ActividadSelect(forms.Select):
+    """Expone a qué tipo de operación pertenece cada actividad."""
 
+    def create_option(self, name, value, label, selected, index,
+                      subindex=None, attrs=None):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs
+        )
+        instancia = getattr(value, "instance", None)
+        if instancia:
+            option["attrs"]["data-tipo"] = str(instancia.tipo_id)
+        return option
 class AnomaliaSelect(forms.Select):
     """Expone las reglas de aplicación de cada anomalía al JavaScript."""
 
@@ -609,6 +624,14 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
         queryset=TipoOperacion.objects.filter(activo=True),
         empty_label="Seleccione un tipo de operación",
         required=True,
+    )
+
+    actividad = forms.ModelChoiceField(
+        label="Actividad de mantenimiento",
+        queryset=ActividadMtto.objects.none(),
+        empty_label="Seleccione una actividad",
+        required=False,          # la obligatoriedad se valida en clean()
+        widget=ActividadSelect(),
     )
 
     estado = forms.ChoiceField(
@@ -672,6 +695,7 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
 
     field_order = [
         "tipo_operacion",
+        "actividad",
         "estado",
         "numero_orden",
         "numero_cuenta_contrato",
@@ -690,6 +714,20 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
             .filter(activa=True)
             .order_by("codigo")
         )
+
+        self.fields["actividad"].queryset = (
+            ActividadMtto.objects
+            .filter(activa=True, tipo__activo=True)
+            .select_related("tipo")
+            .order_by("tipo__orden", "codigo", "descripcion")
+        )
+        self.fields["actividad"].label_from_instance = (
+            lambda a: f"{a.codigo} · {a.descripcion}"
+        )
+
+        self.fields["archivo_soporte"].label = "Soporte (PDF o imagen) *"
+        if not (self.operacion and self.operacion.archivo_soporte):
+            self.fields["archivo_soporte"].widget.attrs["required"] = True
 
         sin = self.fields["anomalia"].queryset.filter(
             codigo=SIN_ANOMALIA
@@ -723,11 +761,36 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
         if tipo and estado and estado not in {e.value for e in tipo.estados_validos()}:
             self.add_error("estado", f"«{tipo.nombre}» no admite este estado.")
 
+        actividad = data.get("actividad")
+        if tipo:
+            tipo_act = tipo.tipo_actividades
+            tiene_actividades = ActividadMtto.objects.filter(
+                tipo=tipo_act, activa=True
+            ).exists()
+            if actividad and actividad.tipo_id != tipo_act.pk:
+                self.add_error("actividad", "Esa actividad no corresponde al tipo de operación.")
+            elif tiene_actividades and not actividad:
+                self.add_error("actividad", "Seleccione la actividad de mantenimiento.")
+            elif not tiene_actividades:
+                data["actividad"] = None
+
+
         previos = (
             Operacion.Estado.CREADA,
             Operacion.Estado.PENDIENTE,
             Operacion.Estado.ASIGNADA,
         )
+
+                # ---- Soporte obligatorio (con o sin número de orden) ----
+        existente = self.operacion
+        if existente is None and orden:
+            existente = Operacion.objects.filter(numero_orden=orden).first()
+
+        if not data.get("archivo_soporte") and not (existente and existente.archivo_soporte):
+            self.add_error(
+                "archivo_soporte",
+                "Adjunte el soporte (PDF o imagen) de la orden.",
+            )
 
         # ---- Sin número de orden ----
         if not orden:
@@ -753,10 +816,6 @@ class DatosOperacionForm(EstiloMixin, forms.Form):
                     "Si necesita corregirla, solicítelo al administrador.",
                 )
                 return data
-
-        if not data.get("archivo_soporte") and not (existente and existente.archivo_soporte):
-            self.add_error("archivo_soporte", "Adjunte el soporte (PDF o imagen) de la orden.")
-
         return data
 
 def configurar_campo_anomalia(form):
@@ -853,14 +912,20 @@ class InstalacionMasivaForm(DatosOperacionForm):
     numero_ivt = forms.IntegerField(
         label="N.º de IVT",
         min_value=1,
+        required=True,
+        error_messages={"required": "Indique el IVT de la visita."},
+        help_text="Obligatorio en todas las órdenes.",
+    )
+
+    pruebas_minimas = forms.BooleanField(
+        label="Pruebas mínimas (guardar sin material)",
         required=False,
-        help_text=(
-            "Obligatorio cuando la orden instala material."
-        ),
+        help_text="Márquelo solo si la orden se registra sin instalar material.",
     )
 
     field_order = [
         "tipo_operacion",
+        "actividad",
         "estado",
         "numero_orden",
         "numero_cuenta_contrato",
@@ -868,6 +933,7 @@ class InstalacionMasivaForm(DatosOperacionForm):
         "fecha_instalacion",
         "anomalia",
         "archivo_soporte",
+        "pruebas_minimas",
         "observaciones",
     ]
 
@@ -876,13 +942,6 @@ class InstalacionMasivaForm(DatosOperacionForm):
 
         super().__init__(*args, **kwargs)
 
-
-    def clean(self):
-        data = super().clean()
-        tipo, estado = data.get("tipo_operacion"), data.get("estado")
-        if tipo and estado and tipo.pide_ivt(estado) and not data.get("numero_ivt"):
-            self.add_error("numero_ivt", "Indique el IVT de la visita.")
-        return data
 # ---------------------------------------------------------
 # IVT
 # ---------------------------------------------------------
@@ -1062,4 +1121,22 @@ class CargaInventarioForm(EstiloMixin, forms.Form):
             raise forms.ValidationError("El archivo debe tener formato .xlsx.")
         if f.size > 5 * 1024 * 1024:
             raise forms.ValidationError("El archivo no puede superar 5 MB.")
+        return f
+
+class CargaStockForm(EstiloMixin, forms.Form):
+    archivo = forms.FileField(
+        label="Archivo MB52 (.xlsx)",
+        widget=forms.FileInput(attrs={"accept": ".xlsx"}),
+    )
+    observaciones = forms.CharField(
+        label="Observaciones", required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def clean_archivo(self):
+        f = self.cleaned_data["archivo"]
+        if not f.name.lower().endswith(".xlsx"):
+            raise forms.ValidationError("El archivo debe tener formato .xlsx.")
+        if f.size > 10 * 1024 * 1024:
+            raise forms.ValidationError("El archivo no puede superar 10 MB.")
         return f

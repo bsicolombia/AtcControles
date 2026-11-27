@@ -1,0 +1,62 @@
+{% if burbuja_sods %}
+{% url 'almacen:ordenes_sin_ods' as url_sods %}
+
+<div class="bub" id="bub-sods" data-clave="sods" data-total="{{ burbuja_sods.total }}"
+     style="--bub:#d97706; --bub-osc:#b45309; --bub-borde:#f5d9a8; --bub-tinte:#fdf1dc; --bub-pulso:rgba(217,119,6,.45);">
+
+  <div class="bub-globo">
+    <button type="button" class="bub-x" aria-label="Cerrar">×</button>
+
+    <div class="bub-nombre">Órdenes sin ODS</div>
+
+    <a class="bub-titulo" href="{{ url_sods }}">
+      <strong>{{ burbuja_sods.total }}</strong>
+      {% if burbuja_sods.total == 1 %}orden espera{% else %}órdenes esperan{% endif %} su ODS real
+    </a>
+
+    <div class="bub-scroll">
+      <ul>
+        <li>
+          <a href="{{ url_sods }}"><span>Piezas instaladas en ellas</span>
+            <b class="c-ver">{{ burbuja_sods.piezas }}</b></a>
+        </li>
+        <li class="{% if not burbuja_sods.sin_material %}cero{% endif %}">
+          <a href="{{ url_sods }}"><span>Sin material registrado</span>
+            <b class="c-rojo">{{ burbuja_sods.sin_material }}</b></a>
+        </li>
+      </ul>
+
+      {% if burbuja_sods.tecnicos %}
+        <div class="bub-sec"><a href="{{ url_sods }}">Por técnico</a></div>
+        <ul>
+          {% for t in burbuja_sods.tecnicos %}
+            <li>
+              <a href="{{ url_sods }}?tecnico={{ t.id }}">
+                <span>{{ t.nombre }}</span><b class="c-rojo">{{ t.n }}</b>
+              </a>
+            </li>
+          {% endfor %}
+          {% if burbuja_sods.otros %}
+            <li class="cero"><a href="{{ url_sods }}">
+              <span>y {{ burbuja_sods.otros }} técnico{{ burbuja_sods.otros|pluralize }} más…</span></a></li>
+          {% endif %}
+        </ul>
+      {% endif %}
+    </div>
+
+    <span class="bub-pico"></span>
+  </div>
+
+  <button type="button" class="bub-boton" aria-expanded="false"
+          title="Órdenes sin ODS"
+          aria-label="{{ burbuja_sods.total }} órdenes sin ODS. Abrir detalle">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M12 9.5h.01"/>
+    </svg>
+    <span class="bub-badge">{{ burbuja_sods.total }}</span>
+    <span class="bub-etq">SIN ODS</span>
+  </button>
+</div>
+{% endif %}

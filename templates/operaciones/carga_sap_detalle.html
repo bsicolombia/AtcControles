@@ -13,7 +13,7 @@
             </p>
         </div>
         <div class="d-flex gap-2 align-self-start">
-            <a class="btn btn-outline-primary" href="{% url 'operaciones:conciliacion_sap' %}?carga={{ carga.pk }}">Ver Five vs SAP</a>
+            <a class="btn btn-outline-primary" href="{% url 'operaciones:conciliacion_sap' %}?carga={{ carga.pk }}">Ver CICB vs SAP</a>
             <a class="btn btn-outline-secondary" href="{% url 'operaciones:carga_sap_historial' %}">Historial</a>
         </div>
     </div>
@@ -117,7 +117,7 @@
                 <td>
                     {% if r.comparacion %}
                     <button class="btn btn-sm btn-outline-secondary" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#cmp{{ r.pk }}">Five vs SAP</button>
+                            data-bs-toggle="collapse" data-bs-target="#cmp{{ r.pk }}">CICB vs SAP</button>
                     {% endif %}
                 </td>
             </tr>
@@ -125,7 +125,7 @@
             <tr class="collapse" id="cmp{{ r.pk }}">
                 <td colspan="8" class="bg-light">
                     <table class="table table-sm table-bordered mb-0 w-auto">
-                        <thead><tr><th>Campo</th><th>Five</th><th>SAP</th><th></th></tr></thead>
+                        <thead><tr><th>Campo</th><th>CICB</th><th>SAP</th><th></th></tr></thead>
                         <tbody>
                         {% for campo, c in r.comparacion.items %}
                             <tr class="{% if c.ok %}table-success{% else %}table-danger{% endif %}">

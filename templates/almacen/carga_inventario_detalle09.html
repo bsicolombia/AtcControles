@@ -1,0 +1,84 @@
+    <div class="card card-body mb-3">
+        <div class="small mb-1"><b>Medidores del archivo según su estado en CICB:</b>
+            {% for r in resumen_estados %}<span class="badge bg-secondary me-1">{{ r.label }}: {{ r.n }}</span>{% endfor %}
+        </div>
+        <div class="small"><b>Status en SAP:</b>
+            {% for r in resumen_status %}<span class="badge bg-light text-dark border me-1">{{ r.status }}: {{ r.n }}</span>{% endfor %}
+        </div>
+    </div>
+
+        <div class="table-responsive">
+    {% if ver == 'ok' %}
+        <table class="table table-sm align-middle">
+            <thead class="table-success">
+                <tr><th>Serie</th><th>Material</th><th>Descripción (SAP)</th>
+                    <th>Status SAP</th><th>Estado en CICB</th><th>Orden SAP</th><th>Orden CICB</th></tr>
+            </thead>
+            <tbody>
+            {% for r in filas %}
+                <tr class="fila-ok">
+                    <td class="fw-semibold">{% if r.unidad %}<a href="{% url 'almacen:unidad_detalle' r.unidad_id %}">{{ r.numero_serie }}</a>{% else %}{{ r.numero_serie }}{% endif %}</td>
+                    <td>{{ r.codigo_producto }}</td>
+                    <td class="small">{{ r.descripcion|default:"—" }}</td>
+                    <td>{{ r.status_sap|default:"—" }}</td>
+                    <td><span class="badge bg-success">{{ r.unidad.get_estado_display|default:"—" }}</span></td>
+                    <td>{{ r.orden_sap|default:"—" }}</td>
+                    <td>{{ r.orden_five|default:"—" }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7" class="text-center text-muted py-4">No hay registros en este grupo.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    {% elif ver == 'errores' %}
+        <table class="table table-sm align-middle">
+            <thead class="table-danger">
+                <tr><th>Fila</th><th>Serie</th><th>Material</th><th>Problema</th><th>Qué hacer</th>
+                    <th>Status SAP</th><th>Estado en CICB</th><th>Orden SAP</th><th>Orden CICB</th></tr>
+            </thead>
+            <tbody>
+            {% for r in filas %}
+                <tr class="fila-error">
+                    <td>{{ r.fila|default:"—" }}</td>
+                    <td class="fw-semibold">{% if r.unidad %}<a href="{% url 'almacen:unidad_detalle' r.unidad_id %}">{{ r.numero_serie|default:"—" }}</a>{% else %}{{ r.numero_serie|default:"—" }}{% endif %}</td>
+                    <td>{{ r.codigo_producto|default:"—" }}<div class="small text-muted">{{ r.descripcion }}</div></td>
+                    <td>
+                        <div class="problema">{{ r.get_tipo_error_display }}</div>
+                        <div class="small text-muted">{{ r.detalle }}</div>
+                    </td>
+                    <td class="que-hacer small">{{ r.accion }}</td>
+                    <td>{{ r.status_sap|default:"—" }}</td>
+                    <td>{% if r.unidad %}<span class="badge bg-secondary">{{ r.unidad.get_estado_display }}</span>{% else %}<span class="text-muted">No existe</span>{% endif %}</td>
+                    <td>{{ r.orden_sap|default:"—" }}</td>
+                    <td>{{ r.orden_five|default:"—" }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">No hay problemas en este grupo. 🎉</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    {% else %}
+        <table class="table table-sm align-middle">
+            <thead class="table-warning">
+                <tr><th>Serie</th><th>Código interno</th><th>Material</th><th>Estado en CICB</th>
+                    <th>Orden CICB</th><th>Qué hacer</th></tr>
+            </thead>
+            <tbody>
+            {% for r in filas %}
+                <tr class="fila-falta">
+                    <td class="fw-semibold">{% if r.unidad %}<a href="{% url 'almacen:unidad_detalle' r.unidad_id %}">{{ r.numero_serie|default:"—" }}</a>{% else %}{{ r.numero_serie|default:"—" }}{% endif %}</td>
+                    <td>{{ r.codigo_unidad|default:"—" }}</td>
+                    <td>{{ r.codigo_producto }}<div class="small text-muted">{{ r.descripcion }}</div></td>
+                    <td><span class="badge bg-warning text-dark">{{ r.unidad.get_estado_display|default:"—" }}</span></td>
+                    <td>{{ r.orden_five|default:"—" }}</td>
+                    <td class="que-hacer small">{{ r.accion }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6" class="text-center text-muted py-4">No falta ninguno. 🎉</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+    </div>

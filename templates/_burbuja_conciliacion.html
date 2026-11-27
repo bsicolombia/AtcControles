@@ -1,5 +1,5 @@
 {% comment %}
-  Burbuja flotante de conciliaciones (Five vs SAP y almacén).
+  Burbuja flotante de conciliaciones (CICB vs SAP y almacén).
   Se incluye UNA vez en base.html, debajo de la burbuja de inconsistencias:
 
       {% include "_burbuja_inconsistencias.html" %}
@@ -28,20 +28,20 @@
 
     <div class="bconc-scroll">
 
-      <!-- INSTALACIÓN: FIVE vs SAP -->
+      <!-- INSTALACIÓN: CICB vs SAP -->
       <div class="bconc-sec">
-        <a href="{{ url_sap }}?carga=todas">Instalación · Five vs SAP</a>
+        <a href="{{ url_sap }}?carga=todas">Instalación · CICB vs SAP</a>
       </div>
       <ul>
         <li class="{% if not burbuja_conc.sap.pendientes %}cero{% endif %}">
           <a href="{{ url_sap }}?carga=todas&amp;estado=PENDIENTE">
-            <span>Instalado en Five, pendiente de verificar en SAP</span>
+            <span>Instalado en CICB, pendiente de verificar en SAP</span>
             <b class="c-amb">{{ burbuja_conc.sap.pendientes }}</b>
           </a>
         </li>
         <li class="{% if not burbuja_conc.sap.ok %}cero{% endif %}">
           <a href="{{ url_sap }}?carga=todas&amp;estado=OK">
-            <span>Verificado: está en Five y en SAP</span>
+            <span>Verificado: está en CICB y en SAP</span>
             <b class="c-ver">{{ burbuja_conc.sap.ok }}</b>
           </a>
         </li>

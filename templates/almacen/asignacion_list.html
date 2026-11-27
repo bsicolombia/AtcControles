@@ -30,7 +30,7 @@
     --g1-celda: #f3f7ff;
     --g1-borde: #2563eb;
 
-    /* Grupo 2: FIVE + SAP + DIFERENCIAS (verde) */
+    /* Grupo 2: CICB + SAP + DIFERENCIAS (verde) */
     --g2-concepto: #d6eedd;
     --g2-celda: #f2faf5;
     --g2-borde: #16a34a;
@@ -322,7 +322,7 @@
 }
 
 /* =========================================================
-   GRUPO 2 · FIVE + SAP + DIFERENCIAS  (mismo color: verde)
+   GRUPO 2 · CICB + SAP + DIFERENCIAS  (mismo color: verde)
 ========================================================= */
 .tabla-consolidada tr.fila-five td.concepto,
 .tabla-consolidada tr.fila-sap td.concepto,
@@ -349,7 +349,7 @@
 .sap-resultado.sap-error span,
 .sap-resultado.sap-error strong { color: var(--dif-texto); font-weight: 800; }
 
-/* Celda SAP que no coincide con FIVE -> ROJA */
+/* Celda SAP que no coincide con CICB -> ROJA */
 .tabla-consolidada tr.fila-sap td.valor:has(.sap-error) {
     background: var(--dif-alerta);
     box-shadow: inset 0 0 0 1px #f87171;
@@ -889,7 +889,7 @@
     ============================================================ -->
     <div class="cabecera">
         <div>
-            <h1>ASIGNACION MATERIAL | DIGITACION FIVE VS SAP | DETECTOR DE ERRORES</h1>
+            <h1>ASIGNACION MATERIAL | DIGITACION CICB VS SAP | DETECTOR DE ERRORES</h1>
             <p>
                 Control consolidado del material entregado a cada técnico,
                 instalaciones registradas y material que debe conservar.
@@ -1143,11 +1143,11 @@
                                 {% endfor %}
                             </tr>
 
-                            <!-- FIVE -->
+                            <!-- CICB -->
                             <tr class="fila-five">
-                                <td class="concepto">INSTALADO<br>SEGÚN FIVE</td>
+                                <td class="concepto">INSTALADO<br>SEGÚN CICB</td>
 
-                                {% for celda in tecnico_data.filas.FIVE %}
+                                {% for celda in tecnico_data.filas.CICB %}
                                     <td class="valor">
                                         {% if celda.url %}
                                             <a href="{{ celda.url }}" class="enlace-cantidad">
@@ -1169,9 +1169,9 @@
                                         <div class="sap-resultado {% if celda.coincide %}sap-ok{% else %}sap-error{% endif %}">
                                             <strong>{{ celda.cantidad }}</strong>
                                             {% if celda.coincide %}
-                                                <span title="SAP coincide con FIVE">✓</span>
+                                                <span title="SAP coincide con CICB">✓</span>
                                             {% else %}
-                                                <span title="SAP no coincide con FIVE">✕</span>
+                                                <span title="SAP no coincide con CICB">✕</span>
                                             {% endif %}
                                         </div>
                                     </td>
@@ -1180,7 +1180,7 @@
 
                             <!-- DIFERENCIAS -->
                             <tr class="fila-diferencias">
-                                <td class="concepto">DIFERENCIAS<br>FIVE VS SAP</td>
+                                <td class="concepto">DIFERENCIAS<br>CICB VS SAP</td>
 
                                 {% for celda in tecnico_data.filas.DIFERENCIAS %}
                                     <td class="valor {% if celda.cantidad > 0 %}celda-dif{% endif %}">

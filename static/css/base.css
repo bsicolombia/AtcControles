@@ -1002,7 +1002,15 @@ tbody tr:last-child td {
 .nav-seccion + .nav-seccion {
     margin-top: 5px;
 }
-
+.lateral {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.nav {
+  flex: 1;
+  overflow-y: auto;
+}
 /* ---------- RESPONSIVE: TABLET ---------- */
 
 @media (max-width: 1000px) and (min-width: 761px) {

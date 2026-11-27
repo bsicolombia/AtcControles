@@ -1,0 +1,13 @@
+{% extends "carga_base.html" %}
+
+{% block enlace_historial %}
+<a class="btn btn-outline-primary" href="{% url 'almacen:carga_stock_historial' %}">Historial MB52</a>
+{% endblock %}
+
+{% block instrucciones %}
+<strong>Use el reporte MB52 de SAP</strong> (stock por material).
+Columnas obligatorias: <code>Material</code> y <code>Libre utilización</code>.<br>
+<span class="small">Se compara el stock libre de SAP contra lo que CICB espera por material:
+<b>disponible en almacén + asignado a técnicos + instalado en órdenes «sin ODS»</b>.
+Las demás columnas (calidad, bloqueado, tránsito) se guardan solo como información.</span>
+{% endblock %}

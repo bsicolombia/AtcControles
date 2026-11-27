@@ -240,7 +240,7 @@ class CargaSAPView(FormPageMixin, RolRequeridoMixin, FormView):
     form_class = CargaSAPForm
     template_name = "operaciones/carga_sap_form.html"
     titulo = "Carga masiva SAP"
-    subtitulo = "Compara órdenes, cuentas contrato, medidores y cantidades de SAP contra Five."
+    subtitulo = "Compara el consumo de material por orden (MB51) contra lo instalado en CICB."
     boton = "Cargar y validar"
     cancel_url = reverse_lazy("almacen:asignaciones")
 
@@ -276,11 +276,8 @@ class CargaSAPView(FormPageMixin, RolRequeridoMixin, FormView):
                   datos={"ok": carga.filas_ok, "error": carga.filas_error,
                          "ignoradas": carga.filas_ignoradas})
         
-        invalidar_burbuja_conciliacion()
-
-
-        cache.delete(CLAVE_CACHE)
-
+        from almacen.context_processors import invalidar_burbujas_conciliacion
+        invalidar_burbujas_conciliacion()
         return HttpResponseRedirect(
             reverse("operaciones:carga_sap_detalle", kwargs={"pk": carga.pk})
         )
@@ -407,12 +404,12 @@ class CargaSAPDetalleView(QuerystringMixin, RolRequeridoMixin, DetailView):
 
 
 # ------------------------------------------------------------------
-# Five vs SAP
+# CICB vs SAP
 # ------------------------------------------------------------------
 
 
 # ------------------------------------------------------------------
-# Five vs SAP
+# CICB vs SAP
 # ------------------------------------------------------------------
 
 
@@ -448,7 +445,7 @@ class ConciliacionSAPView(
 
         # --------------------------------------------------
         # Base de registros SAP
-        # No incluir PENDIENTE aquí: viene de FIVE.
+        # No incluir PENDIENTE aquí: viene de CICB.
         # --------------------------------------------------
         qs = (
             RegistroSAP.objects
@@ -500,7 +497,7 @@ class ConciliacionSAPView(
         ).count()
 
         # --------------------------------------------------
-        # PENDIENTES FIVE
+        # PENDIENTES CICB
         # --------------------------------------------------
         pendientes = list(
             services_sap.instalados_sin_sap()
@@ -552,7 +549,7 @@ class ConciliacionSAPView(
         # --------------------------------------------------
         # FILTRO DE RESULTADO
         # OK y ERROR muestran SAP.
-        # PENDIENTE muestra instalaciones FIVE sin conciliar.
+        # PENDIENTE muestra instalaciones CICB sin conciliar.
         # --------------------------------------------------
         if estado == "PENDIENTE":
             resultados = qs.none()

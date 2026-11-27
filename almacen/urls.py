@@ -57,4 +57,7 @@ urlpatterns = [
     path("inventario/carga/historial/", views.HistorialCargaInventarioView.as_view(), name="carga_inventario_historial"),
     path("inventario/carga/<int:pk>/", views.CargaInventarioDetalleView.as_view(), name="carga_inventario_detalle"),
     path("inventario/carga/plantilla/", views.descargar_plantilla_inventario, name="carga_inventario_plantilla"),
+    path("stock/carga/", views.CargaStockView.as_view(), name="carga_stock"),
+    path("stock/carga/historial/", views.HistorialCargaStockView.as_view(), name="carga_stock_historial"),
+    path("stock/carga/<int:pk>/", views.CargaStockDetalleView.as_view(), name="carga_stock_detalle"),
 ]

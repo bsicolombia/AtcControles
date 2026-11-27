@@ -373,7 +373,7 @@ class Inventario(models.Model):
 
     @property
     def instalado_five(self):
-        """Total de material instalado según FIVE, excluyendo devueltas."""
+        """Total de material instalado según CICB, excluyendo devueltas."""
         total = 0
 
         for a in self.producto.asignaciones.all():
